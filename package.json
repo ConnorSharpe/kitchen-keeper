@@ -1,0 +1,14 @@
+{
+  "name": "kitchen-keeper",
+  "version": "1.0.0",
+  "description": "AI-Powered Home Food Waste Management System",
+  "scripts": {
+    "postinstall": "npm install --prefix server && npm install --prefix client",
+    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "build": "npm run build --prefix client",
+    "start": "node server/index.js"
+  },
+  "devDependencies": {
+    "concurrently": "^8.0.0"
+  }
+}
