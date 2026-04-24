@@ -15,7 +15,9 @@
       "Bash(node server/node_modules/drizzle-kit/bin.cjs push)",
       "Bash(node -e ' *)",
       "Bash(timeout 8 node index.js)",
-      "Bash(timeout 8 node server/index.js)"
+      "Bash(timeout 8 node server/index.js)",
+      "Bash(node -e \"require\\('C:/Users/conno/source/repos/kitchen-keeper/server/node_modules/bcrypt'\\); console.log\\('ok'\\)\")",
+      "Bash(node -e \"console.log\\(require\\('C:/Users/conno/source/repos/kitchen-keeper/server/node_modules/bcrypt/package.json'\\).version\\)\")"
     ]
   }
 }
