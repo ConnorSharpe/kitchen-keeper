@@ -112,6 +112,16 @@ export function toggleFreeze(userId, id) {
   return { status: 'ok', item: db.select().from(pantryItems).where(eq(pantryItems.id, id)).get() };
 }
 
+// Inserts multiple items atomically. A single bad item won't leave partial rows.
+export function bulkCreate(userId, items) {
+  const insertMany = db.transaction((rows) =>
+    rows.map((item) =>
+      db.insert(pantryItems).values({ ...item, userId }).returning().get()
+    )
+  );
+  return insertMany(items);
+}
+
 // Counts items saved from waste since the given ISO date string.
 // Defaults to start of the current week (Monday 00:00 UTC).
 export function getWasteSaved(userId, since) {

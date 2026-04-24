@@ -65,7 +65,12 @@ export default function PantryTable({ items, onEdit, onMarkUsed, onToggleFreeze,
                 <td className="px-4 py-3 whitespace-nowrap">
                   <div className="flex items-center gap-2">
                     <ActionButton onClick={() => onEdit(item)} title="Edit" label="Edit" />
-                    <ActionButton onClick={() => onMarkUsed(item.id)} title="Mark as used" label="Used" />
+                    <ActionButton
+                      onClick={() => onMarkUsed(item.id)}
+                      title="Mark as used (I cooked this)"
+                      label="✓ Used"
+                      success
+                    />
                     <ActionButton
                       onClick={() => onToggleFreeze(item.id)}
                       title={item.isFrozen ? 'Unfreeze' : 'Freeze'}
@@ -73,7 +78,7 @@ export default function PantryTable({ items, onEdit, onMarkUsed, onToggleFreeze,
                     />
                     <ActionButton
                       onClick={() => onDelete(item.id)}
-                      title="Delete"
+                      title="Delete (I threw this away)"
                       label="Delete"
                       danger
                     />
@@ -101,16 +106,17 @@ function StatusLabel({ status, isFrozen }) {
   return <span className={`text-xs font-medium ${cls}`}>{text}</span>;
 }
 
-function ActionButton({ onClick, label, title, danger = false }) {
+function ActionButton({ onClick, label, title, danger = false, success = false }) {
+  const cls = danger
+    ? 'text-red-500 hover:bg-red-50 hover:text-red-700'
+    : success
+    ? 'text-green-600 hover:bg-green-50 hover:text-green-800'
+    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700';
   return (
     <button
       onClick={onClick}
       title={title}
-      className={`text-xs px-2 py-1 rounded transition-colors ${
-        danger
-          ? 'text-red-500 hover:bg-red-50 hover:text-red-700'
-          : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
-      }`}
+      className={`text-xs px-2 py-1 rounded transition-colors ${cls}`}
     >
       {label}
     </button>

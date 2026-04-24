@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { usePantryContext } from '../../context/PantryContext.jsx';
 
 const navClass = ({ isActive }) =>
   `flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -10,6 +11,8 @@ const navClass = ({ isActive }) =>
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
+  const { expiringItems } = usePantryContext();
+  const expiringCount = expiringItems.length;
 
   return (
     <aside className="w-56 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col h-screen sticky top-0">
@@ -18,9 +21,23 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+        {/* Dashboard is the primary surface — use `end` so it only matches exactly `/` */}
+        <NavLink to="/" end className={navClass}>
+          <span aria-hidden>🏠</span>
+          Dashboard
+        </NavLink>
+
         <NavLink to="/pantry" className={navClass}>
           <span aria-hidden>🥦</span>
           Pantry
+          {expiringCount > 0 && (
+            <span
+              className="ml-auto text-xs bg-amber-500 text-white rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center leading-tight"
+              aria-label={`${expiringCount} items expiring soon`}
+            >
+              {expiringCount}
+            </span>
+          )}
         </NavLink>
       </nav>
 

@@ -1,9 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext.jsx';
 import ProtectedRoute from './components/layout/ProtectedRoute.jsx';
 import AppLayout from './components/layout/AppLayout.jsx';
 import LoginPage from './pages/LoginPage.jsx';
+import DashboardPage from './pages/DashboardPage.jsx';
 import PantryPage from './pages/PantryPage.jsx';
 
 export default function App() {
@@ -17,7 +18,7 @@ export default function App() {
           {/* All authenticated routes live under ProtectedRoute → AppLayout */}
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
-              <Route index element={<Navigate to="/pantry" replace />} />
+              <Route index element={<DashboardPage />} />
               <Route path="/pantry" element={<PantryPage />} />
             </Route>
           </Route>

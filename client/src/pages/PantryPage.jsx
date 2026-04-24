@@ -3,10 +3,12 @@ import toast from 'react-hot-toast';
 import { usePantry } from '../hooks/usePantry.js';
 import PantryTable from '../components/pantry/PantryTable.jsx';
 import AddItemModal from '../components/pantry/AddItemModal.jsx';
+import ReceiptUpload from '../components/pantry/ReceiptUpload.jsx';
 
 export default function PantryPage() {
-  const { items, loading, addItem, updateItem, removeItem, markUsed, toggleFreeze } = usePantry();
+  const { items, loading, addItem, updateItem, removeItem, markUsed, toggleFreeze, refresh } = usePantry();
   const [modalItem, setModalItem] = useState(undefined); // undefined = closed, null = add, item = edit
+  const [showReceiptUpload, setShowReceiptUpload] = useState(false);
 
   const handleSave = async (body) => {
     if (modalItem) {
@@ -55,12 +57,20 @@ export default function PantryPage() {
             {items.length} {items.length === 1 ? 'item' : 'items'}
           </p>
         </div>
-        <button
-          onClick={() => setModalItem(null)}
-          className="px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-md hover:bg-orange-600 transition-colors shadow-sm"
-        >
-          + Add item
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowReceiptUpload(true)}
+            className="px-4 py-2 bg-white text-orange-600 text-sm font-medium rounded-md border border-orange-300 hover:bg-orange-50 transition-colors shadow-sm"
+          >
+            📷 Scan receipt
+          </button>
+          <button
+            onClick={() => setModalItem(null)}
+            className="px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-md hover:bg-orange-600 transition-colors shadow-sm"
+          >
+            + Add item
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -80,6 +90,13 @@ export default function PantryPage() {
           item={modalItem || undefined}
           onClose={() => setModalItem(undefined)}
           onSave={handleSave}
+        />
+      )}
+
+      {showReceiptUpload && (
+        <ReceiptUpload
+          onClose={() => setShowReceiptUpload(false)}
+          onItemsAdded={refresh}
         />
       )}
     </div>

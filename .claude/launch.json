@@ -2,6 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "server",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server/index.js"],
+      "port": 3001,
+      "cwd": "."
+    },
+    {
       "name": "client",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],

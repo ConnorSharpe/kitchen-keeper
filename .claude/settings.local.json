@@ -36,7 +36,16 @@
       "Bash(curl -s --max-time 3 http://localhost:3001/api/health)",
       "Bash(curl -s --max-time 3 http://[::1]:3001/api/health)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(pandoc \"C:\\\\Users\\\\conno\\\\source\\\\repos\\\\kitchen-keeper\\\\docs\\\\kitchen-keeper-spec-v4.docx\" -t plain)",
+      "Bash(python3)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :3001)",
+      "Bash(findstr LISTENING)",
+      "Bash(taskkill /PID 30020 /F)",
+      "PowerShell(Stop-Process -Id 30020 -Force)",
+      "Bash(taskkill /PID 30024 /F)",
+      "PowerShell(Stop-Process -Id 30024 -Force)"
     ]
   }
 }

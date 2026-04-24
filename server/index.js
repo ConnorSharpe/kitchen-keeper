@@ -8,6 +8,8 @@ import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import authRouter from './routes/auth.js';
 import pantryRouter from './routes/pantry.js';
+import aiRouter from './routes/ai.js';
+import recipesRouter from './routes/recipes.js';
 
 // Validate required env vars at startup — fail fast, not mid-request
 const REQUIRED_ENV = ['ANTHROPIC_API_KEY', 'JWT_SECRET'];
@@ -37,10 +39,12 @@ app.use('/uploads', express.static('uploads'));
 
 app.use('/api/auth', authRouter);
 app.use('/api/pantry', pantryRouter);
+app.use('/api/ai', aiRouter);
+app.use('/api/recipes', recipesRouter);
 
 // Health check — useful for smoke testing and cold-start verification
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', phase: 'pantry' });
+  res.json({ status: 'ok', phase: 'dashboard' });
 });
 
 // Global error handler — receives errors from all async routes via express-async-errors

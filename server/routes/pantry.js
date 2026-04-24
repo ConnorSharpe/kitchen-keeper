@@ -50,6 +50,17 @@ router.post('/', validate(createSchema), async (req, res) => {
   res.status(201).json({ item });
 });
 
+// POST /api/pantry/bulk — insert confirmed items from receipt scan preview
+// Must be declared before /:id routes to prevent "bulk" being captured as :id
+const bulkCreateSchema = z.object({
+  items: z.array(createSchema).min(1).max(100),
+});
+
+router.post('/bulk', validate(bulkCreateSchema), async (req, res) => {
+  const items = pantryService.bulkCreate(req.user.id, req.body.items);
+  res.status(201).json({ items });
+});
+
 // PATCH /api/pantry/:id
 router.patch('/:id', validate(updateSchema), async (req, res) => {
   const result = pantryService.update(req.user.id, Number(req.params.id), req.body);
