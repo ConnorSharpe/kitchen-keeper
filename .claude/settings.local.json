@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pandoc \"C:\\\\Users\\\\conno\\\\source\\\\repos\\\\kitchen-keeper\\\\docs\\\\kitchen-keeper-spec-v4.docx\" -t markdown)",
+      "Bash(python \"C:\\\\Users\\\\conno\\\\AppData\\\\Roaming\\\\Claude\\\\local-agent-mode-sessions\\\\skills-plugin\\\\4bde33c0-312f-44c9-8525-c2dd54a5cb4a\\\\e4cc3e5f-9c45-4e78-bf98-3728b134b6b4\\\\skills\\\\docx\\\\scripts\\\\office\\\\unpack.py\" docs/kitchen-keeper-spec-v4.docx /tmp/spec-unpacked)",
+      "Bash(python -c ' *)",
+      "Bash(npx drizzle-kit *)",
+      "Bash(node server/node_modules/.bin/drizzle-kit generate)",
+      "Bash(npm install *)",
+      "Bash(npm view *)",
+      "Bash(node_modules/.bin/drizzle-kit --version)",
+      "Bash(node -e \"const p = require\\('./node_modules/drizzle-orm/package.json'\\); console.log\\('drizzle-orm:', p.version\\)\")",
+      "Bash(node -e \"const p = require\\('./node_modules/better-sqlite3/package.json'\\); console.log\\('better-sqlite3:', p.version\\)\")",
+      "Bash(node server/node_modules/drizzle-kit/bin.cjs generate)",
+      "Bash(node server/node_modules/drizzle-kit/bin.cjs push)",
+      "Bash(node -e ' *)",
+      "Bash(timeout 8 node index.js)",
+      "Bash(timeout 8 node server/index.js)"
+    ]
+  }
+}

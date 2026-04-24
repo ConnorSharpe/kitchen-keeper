@@ -6,7 +6,9 @@
     "postinstall": "npm install --prefix server && npm install --prefix client",
     "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "build": "npm run build --prefix client",
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "db:generate": "node server/node_modules/drizzle-kit/bin.cjs generate",
+    "db:studio": "node server/node_modules/drizzle-kit/bin.cjs studio"
   },
   "devDependencies": {
     "concurrently": "^8.0.0"

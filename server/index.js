@@ -1,5 +1,6 @@
 import 'dotenv/config';           // MUST be first — loads .env before anything reads env vars
 import 'express-async-errors';    // MUST be before express — patches router at load time
+import './db/migrate.js';         // runs synchronously; server won't reach route mounting until DB is migrated
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -34,7 +35,7 @@ app.use('/uploads', express.static('uploads'));
 
 // Health check — useful for smoke testing and cold-start verification
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', phase: 'scaffold' });
+  res.json({ status: 'ok', phase: 'database' });
 });
 
 // Global error handler — receives errors from all async routes via express-async-errors
