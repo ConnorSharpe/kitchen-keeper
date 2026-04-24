@@ -2,17 +2,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext.jsx';
 import ProtectedRoute from './components/layout/ProtectedRoute.jsx';
+import AppLayout from './components/layout/AppLayout.jsx';
 import LoginPage from './pages/LoginPage.jsx';
-
-// Placeholder shown for authenticated users until Phase 5 adds the real Dashboard
-function AppShell() {
-  return (
-    <div style={{ fontFamily: 'sans-serif', padding: '2rem', textAlign: 'center' }}>
-      <h1>🍳 Kitchen Keeper</h1>
-      <p>Auth working. Phase 4 (Pantry CRUD) is next.</p>
-    </div>
-  );
-}
+import PantryPage from './pages/PantryPage.jsx';
 
 export default function App() {
   return (
@@ -21,14 +13,14 @@ export default function App() {
         <Toaster position="top-right" />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route
-            path="/*"
-            element={
-              <ProtectedRoute>
-                <AppShell />
-              </ProtectedRoute>
-            }
-          />
+
+          {/* All authenticated routes live under ProtectedRoute → AppLayout */}
+          <Route element={<ProtectedRoute />}>
+            <Route element={<AppLayout />}>
+              <Route index element={<Navigate to="/pantry" replace />} />
+              <Route path="/pantry" element={<PantryPage />} />
+            </Route>
+          </Route>
         </Routes>
       </AuthProvider>
     </BrowserRouter>

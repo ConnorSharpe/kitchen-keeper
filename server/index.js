@@ -7,6 +7,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import authRouter from './routes/auth.js';
+import pantryRouter from './routes/pantry.js';
 
 // Validate required env vars at startup — fail fast, not mid-request
 const REQUIRED_ENV = ['ANTHROPIC_API_KEY', 'JWT_SECRET'];
@@ -35,10 +36,11 @@ app.use(cookieParser());
 app.use('/uploads', express.static('uploads'));
 
 app.use('/api/auth', authRouter);
+app.use('/api/pantry', pantryRouter);
 
 // Health check — useful for smoke testing and cold-start verification
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', phase: 'auth' });
+  res.json({ status: 'ok', phase: 'pantry' });
 });
 
 // Global error handler — receives errors from all async routes via express-async-errors
