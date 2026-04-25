@@ -6,10 +6,11 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
-import authRouter from './routes/auth.js';
-import pantryRouter from './routes/pantry.js';
-import aiRouter from './routes/ai.js';
-import recipesRouter from './routes/recipes.js';
+import authRouter    from './routes/auth.js';
+import pantryRouter   from './routes/pantry.js';
+import aiRouter       from './routes/ai.js';
+import recipesRouter  from './routes/recipes.js';
+import shoppingRouter from './routes/shopping.js';
 
 // Validate required env vars at startup — fail fast, not mid-request
 const REQUIRED_ENV = ['ANTHROPIC_API_KEY', 'JWT_SECRET'];
@@ -37,10 +38,11 @@ app.use(cookieParser());
 // Only serve recipe images — receipts are deleted after processing
 app.use('/uploads', express.static('uploads'));
 
-app.use('/api/auth', authRouter);
-app.use('/api/pantry', pantryRouter);
-app.use('/api/ai', aiRouter);
-app.use('/api/recipes', recipesRouter);
+app.use('/api/auth',     authRouter);
+app.use('/api/pantry',   pantryRouter);
+app.use('/api/ai',       aiRouter);
+app.use('/api/recipes',  recipesRouter);
+app.use('/api/shopping', shoppingRouter);
 
 // Health check — useful for smoke testing and cold-start verification
 app.get('/api/health', (req, res) => {

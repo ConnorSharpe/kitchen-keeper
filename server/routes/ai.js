@@ -116,6 +116,20 @@ router.post('/parse-receipt', upload.single('receipt'), async (req, res) => {
   }
 });
 
+// POST /api/ai/suggest-recipes
+// Fetches expiring pantry items server-side and asks AI to find web recipes.
+// The client sends NO ingredient data — all context is assembled here.
+router.post('/suggest-recipes', async (req, res) => {
+  const allItems = pantryService.getAll(req.user.id);
+  const expiringItems = allItems.filter((item) => {
+    const days = getExpiryDays(item.expiryDate);
+    return days !== null && days >= 0 && days <= 7;
+  });
+
+  const suggestions = await aiService.suggestRecipes(expiringItems);
+  res.json({ suggestions });
+});
+
 // POST /api/ai/parse-recipe-image
 // Parses a recipe image (card, book page, etc.) and saves it to the recipes table.
 // The image file is retained in /uploads and served statically — NOT deleted.

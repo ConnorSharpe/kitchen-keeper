@@ -6,6 +6,8 @@ import AppLayout from './components/layout/AppLayout.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import PantryPage from './pages/PantryPage.jsx';
+import RecipesPage from './pages/RecipesPage.jsx';
+import ShoppingPage from './pages/ShoppingPage.jsx';
 
 export default function App() {
   return (
@@ -20,6 +22,8 @@ export default function App() {
             <Route element={<AppLayout />}>
               <Route index element={<DashboardPage />} />
               <Route path="/pantry" element={<PantryPage />} />
+              <Route path="/recipes" element={<RecipesPage />} />
+              <Route path="/shopping" element={<ShoppingPage />} />
             </Route>
           </Route>
         </Routes>

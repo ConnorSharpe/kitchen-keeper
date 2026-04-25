@@ -39,6 +39,16 @@ export default function Sidebar() {
             </span>
           )}
         </NavLink>
+
+        <NavLink to="/recipes" className={navClass}>
+          <span aria-hidden>📖</span>
+          Recipes
+        </NavLink>
+
+        <NavLink to="/shopping" className={navClass}>
+          <span aria-hidden>🛒</span>
+          Shopping
+        </NavLink>
       </nav>
 
       <div className="p-3 border-t border-gray-200 space-y-1">

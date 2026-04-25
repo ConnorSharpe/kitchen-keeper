@@ -56,7 +56,7 @@ export const shoppingLists = sqliteTable('shopping_lists', {
   updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
 });
 
-// No userId here — ownership is verified via join through shoppingLists (Phase 8 spec requirement)
+// No userId here — ownership is verified via join through shoppingLists (spec §6.4)
 export const shoppingListItems = sqliteTable('shopping_list_items', {
   id:             integer('id').primaryKey({ autoIncrement: true }),
   listId:         integer('list_id').notNull().references(() => shoppingLists.id, { onDelete: 'cascade' }),
@@ -65,6 +65,7 @@ export const shoppingListItems = sqliteTable('shopping_list_items', {
   unit:           text('unit'),
   isChecked:      integer('is_checked', { mode: 'boolean' }).notNull().default(false),
   sortOrder:      integer('sort_order').notNull().default(0),
+  hasUnitMismatch: integer('has_unit_mismatch', { mode: 'boolean' }).notNull().default(false),
 });
 
 export const chatMessages = sqliteTable('chat_messages', {
