@@ -74,7 +74,35 @@ export default function PantryPage() {
       </div>
 
       {loading ? (
-        <div className="text-center py-16 text-gray-400 text-sm">Loading…</div>
+        <div className="overflow-x-auto rounded-lg border border-gray-200">
+          <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                {['Name', 'Category', 'Qty', 'Unit', 'Expires', 'Status', ''].map((h) => (
+                  <th
+                    key={h}
+                    className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap"
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-100">
+              {[...Array(5)].map((_, i) => (
+                <tr key={i} className="animate-pulse">
+                  <td className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-32" /></td>
+                  <td className="px-4 py-3"><div className="h-4 bg-gray-100 rounded w-16" /></td>
+                  <td className="px-4 py-3"><div className="h-4 bg-gray-100 rounded w-8" /></td>
+                  <td className="px-4 py-3"><div className="h-4 bg-gray-100 rounded w-10" /></td>
+                  <td className="px-4 py-3"><div className="h-4 bg-gray-100 rounded w-20" /></td>
+                  <td className="px-4 py-3"><div className="h-4 bg-gray-100 rounded w-16" /></td>
+                  <td className="px-4 py-3"><div className="h-4 bg-gray-100 rounded w-24" /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : (
         <PantryTable
           items={items}

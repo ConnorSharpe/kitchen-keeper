@@ -19,7 +19,7 @@ export default function PantryTable({ items, onEdit, onMarkUsed, onToggleFreeze,
     return (
       <div className="text-center py-16 text-gray-400">
         <p className="text-4xl mb-3">🧺</p>
-        <p className="text-sm">Your pantry is empty. Add your first item!</p>
+        <p className="text-sm">Your pantry is empty. Add items manually or scan a grocery receipt.</p>
       </div>
     );
   }

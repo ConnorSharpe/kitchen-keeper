@@ -168,6 +168,15 @@ export default function EatThisNow() {
         </p>
       )}
 
+      {!pantryIsEmpty && mode === 'idle' && (
+        <div className="text-center py-6 text-gray-400 select-none">
+          <p className="text-4xl mb-3" aria-hidden>🍽️</p>
+          <p className="text-sm text-gray-500 max-w-xs mx-auto">
+            Tap <span className="font-medium text-gray-700">✨ Suggest Meals</span> to get personalised ideas that use your expiring ingredients first.
+          </p>
+        </div>
+      )}
+
       {mode === 'loading' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {[0, 1, 2].map((i) => (

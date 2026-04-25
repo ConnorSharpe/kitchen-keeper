@@ -58,6 +58,4 @@ app.use((err, req, res, _next) => {
   res.status(status).json({ error: message });
 });
 
-app.listen(process.env.PORT || 3001, () =>
-  console.log(`🍳 Kitchen Keeper server running on port ${process.env.PORT || 3001}`)
-);
+app.listen(process.env.PORT || 3001);
