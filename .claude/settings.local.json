@@ -46,7 +46,9 @@
       "PowerShell(Stop-Process -Id 30020 -Force)",
       "Bash(taskkill /PID 30024 /F)",
       "PowerShell(Stop-Process -Id 30024 -Force)",
-      "Bash(./server/node_modules/.bin/drizzle-kit generate *)"
+      "Bash(./server/node_modules/.bin/drizzle-kit generate *)",
+      "Bash(node --input-type=module)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3001/api/auth/me)"
     ]
   }
 }

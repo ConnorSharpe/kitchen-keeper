@@ -6,8 +6,9 @@ import { validate } from '../middleware/validate.js';
 import { upload } from '../middleware/upload.js';
 import * as pantryService from '../services/pantryService.js';
 import * as recipeService from '../services/recipeService.js';
+import * as chatService from '../services/chatService.js';
 import * as aiService from '../services/aiService.js';
-import { getExpiryDays } from '../utils/expiry.js';
+import { getExpiryDays, getExpiryStatus } from '../utils/expiry.js';
 
 const router = express.Router();
 router.use(requireAuth);
@@ -192,6 +193,53 @@ router.post('/parse-recipe-image', upload.single('recipe'), async (req, res) => 
   });
 
   res.status(201).json({ recipe: saved });
+});
+
+// GET /api/ai/chat/history
+// Returns the last 50 messages for this user, ordered oldest-first (ASC),
+// so ChatPage can populate its message list on mount without re-sorting.
+router.get('/chat/history', async (req, res) => {
+  const messages = chatService.getHistory(req.user.id, 50);
+  res.json({ messages });
+});
+
+// POST /api/ai/chat
+// The route handler is responsible for assembling all context — aiService.chat()
+// is a pure function that accepts pre-built summaries and history, not services.
+const chatMessageSchema = z.object({
+  message: z.string().min(1).max(4000),
+});
+
+router.post('/chat', validate(chatMessageSchema), async (req, res) => {
+  const { message } = req.body;
+  const userId = req.user.id;
+
+  const allItems    = pantryService.getAll(userId);
+  const allRecipes  = recipeService.getAll(userId);
+  const history     = chatService.getHistory(userId, 20);
+
+  // Build lightweight summaries — aiService.chat() receives plain data, not DB rows
+  const pantrySummary = allItems.map((i) => ({
+    name:   i.name,
+    qty:    `${i.quantity} ${i.unit}`,
+    status: getExpiryStatus(i.expiryDate),
+    frozen: i.isFrozen,
+  }));
+
+  const recipeSummary = allRecipes.map((r) => ({
+    id:   r.id,
+    name: r.name,
+    tags: r.tags ? JSON.parse(r.tags) : [],
+  }));
+
+  // AI call — if this throws, savePair is never reached (no orphan messages)
+  const reply = await aiService.chat(pantrySummary, recipeSummary, history, message);
+
+  // Both messages committed atomically — either both saved or neither
+  chatService.savePair(userId, message, reply);
+  chatService.trimHistory(userId, 50);
+
+  res.json({ reply });
 });
 
 export default router;
