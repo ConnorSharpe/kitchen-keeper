@@ -45,8 +45,9 @@ app.use('/api/recipes',  recipesRouter);
 app.use('/api/shopping', shoppingRouter);
 
 // Health check — useful for smoke testing and cold-start verification
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', phase: 'dashboard' });
+// If the server is reachable and migrations ran at startup, the DB is connected.
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', db: 'connected' });
 });
 
 // Global error handler — receives errors from all async routes via express-async-errors

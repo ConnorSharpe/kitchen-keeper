@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext.jsx';
 import ProtectedRoute from './components/layout/ProtectedRoute.jsx';
 import AppLayout from './components/layout/AppLayout.jsx';
+import ErrorBoundary from './components/layout/ErrorBoundary.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import PantryPage from './pages/PantryPage.jsx';
@@ -12,6 +13,7 @@ import ChatPage from './pages/ChatPage.jsx';
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <BrowserRouter>
       <AuthProvider>
         <Toaster position="top-right" />
@@ -31,5 +33,6 @@ export default function App() {
         </Routes>
       </AuthProvider>
     </BrowserRouter>
+    </ErrorBoundary>
   );
 }

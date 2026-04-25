@@ -30,6 +30,14 @@ async function request(method, path, body) {
   }
 
   if (!res.ok) {
+    // validate.js middleware sends Zod errors as an object: { fieldErrors, formErrors }
+    if (typeof data.error === 'object' && data.error !== null) {
+      const err = new Error('Please fix the highlighted fields.');
+      err.status = res.status;
+      err.fieldErrors = data.error.fieldErrors ?? {};
+      err.formErrors = data.error.formErrors ?? [];
+      throw err;
+    }
     const err = new Error(data.error || `Request failed (${res.status})`);
     err.status = res.status;
     throw err;

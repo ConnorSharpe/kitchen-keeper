@@ -35,6 +35,7 @@ export default function AddItemModal({ item, onClose, onSave }) {
   const [form, setForm] = useState(() => buildInitialState(item));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const firstInputRef = useRef(null);
   const isEdit = Boolean(item);
 
@@ -53,6 +54,7 @@ export default function AddItemModal({ item, onClose, onSave }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    setFieldErrors({});
     setSaving(true);
     try {
       const body = {
@@ -68,6 +70,7 @@ export default function AddItemModal({ item, onClose, onSave }) {
       onClose();
     } catch (err) {
       setError(err.message || 'Something went wrong');
+      if (err.fieldErrors) setFieldErrors(err.fieldErrors);
     } finally {
       setSaving(false);
     }
@@ -98,7 +101,7 @@ export default function AddItemModal({ item, onClose, onSave }) {
             <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2">{error}</p>
           )}
 
-          <Field label="Name" required>
+          <Field label="Name" required error={fieldErrors.name?.[0]}>
             <input
               ref={firstInputRef}
               type="text"
@@ -112,7 +115,7 @@ export default function AddItemModal({ item, onClose, onSave }) {
           </Field>
 
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Category">
+            <Field label="Category" error={fieldErrors.category?.[0]}>
               <select value={form.category} onChange={set('category')} className={inputCls}>
                 {CATEGORIES.map((c) => (
                   <option key={c} value={c}>{c}</option>
@@ -120,7 +123,7 @@ export default function AddItemModal({ item, onClose, onSave }) {
               </select>
             </Field>
 
-            <Field label="Quantity">
+            <Field label="Quantity" error={fieldErrors.quantity?.[0]}>
               <input
                 type="number"
                 value={form.quantity}
@@ -133,7 +136,7 @@ export default function AddItemModal({ item, onClose, onSave }) {
             </Field>
           </div>
 
-          <Field label="Unit">
+          <Field label="Unit" error={fieldErrors.unit?.[0]}>
             <input
               type="text"
               value={form.unit}
@@ -145,7 +148,7 @@ export default function AddItemModal({ item, onClose, onSave }) {
           </Field>
 
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Purchase date">
+            <Field label="Purchase date" error={fieldErrors.purchaseDate?.[0]}>
               <input
                 type="date"
                 value={form.purchaseDate}
@@ -154,7 +157,7 @@ export default function AddItemModal({ item, onClose, onSave }) {
               />
             </Field>
 
-            <Field label="Expiry date">
+            <Field label="Expiry date" error={fieldErrors.expiryDate?.[0]}>
               <input
                 type="date"
                 value={form.expiryDate}
@@ -164,7 +167,7 @@ export default function AddItemModal({ item, onClose, onSave }) {
             </Field>
           </div>
 
-          <Field label="Notes">
+          <Field label="Notes" error={fieldErrors.notes?.[0]}>
             <textarea
               value={form.notes}
               onChange={set('notes')}
@@ -200,13 +203,14 @@ export default function AddItemModal({ item, onClose, onSave }) {
 const inputCls =
   'w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400';
 
-function Field({ label, required, children }) {
+function Field({ label, required, error, children }) {
   return (
     <div>
       <label className="block text-xs font-medium text-gray-600 mb-1">
         {label}{required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       {children}
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   );
 }

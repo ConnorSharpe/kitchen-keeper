@@ -20,11 +20,11 @@ export function safeParseJSON(text, fallback) {
 // Anthropic SDK errors carry a .status that mirrors HTTP status codes.
 // A leaked 401 (invalid API key) would trigger client-side logout.
 // A leaked 429 (rate limit) would confuse the client.
-// Remap all Anthropic API errors to 502 (Bad Gateway — upstream failure).
+// Remap all Anthropic API errors to 503 (Service Unavailable — dependency down).
 function wrapAIError(err) {
   if (err instanceof Anthropic.APIError) {
     const wrapped = new Error('AI service unavailable. Please try again later.');
-    wrapped.status = 502;
+    wrapped.status = 503;
     return wrapped;
   }
   return err;
