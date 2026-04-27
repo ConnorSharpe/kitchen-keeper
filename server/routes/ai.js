@@ -1,5 +1,7 @@
-import fs from 'fs';
 import express from 'express';
+import { put } from '@vercel/blob';
+import { v4 as uuidv4 } from 'uuid';
+import path from 'path';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
@@ -14,13 +16,12 @@ const router = express.Router();
 router.use(requireAuth);
 
 // POST /api/ai/eat-this-now
-// Fetches the user's full pantry + saved recipes, then asks AI for 2-3 meal suggestions
-// that prioritise expiring ingredients.
 router.post('/eat-this-now', async (req, res) => {
-  const allItems = pantryService.getAll(req.user.id);
-  const savedRecipes = recipeService.getAll(req.user.id);
+  const [allItems, savedRecipes] = await Promise.all([
+    pantryService.getAll(req.user.id),
+    recipeService.getAll(req.user.id),
+  ]);
 
-  // Only surface items that expire within the next 7 days (not already expired)
   const expiringItems = allItems.filter((item) => {
     const days = getExpiryDays(item.expiryDate);
     return days !== null && days >= 0 && days <= 7;
@@ -31,7 +32,6 @@ router.post('/eat-this-now', async (req, res) => {
 });
 
 // POST /api/ai/expand-suggestion
-// Turns a brief suggestion (name + description) into a full saved recipe.
 const expandSchema = z.object({
   name:        z.string().min(1).max(200),
   description: z.string().max(500),
@@ -39,28 +39,22 @@ const expandSchema = z.object({
 
 router.post('/expand-suggestion', validate(expandSchema), async (req, res) => {
   const { name, description } = req.body;
-  const allItems = pantryService.getAll(req.user.id);
+  const allItems = await pantryService.getAll(req.user.id);
 
   const recipe = await aiService.expandSuggestion(name, description, allItems);
 
   if (!recipe) {
-    // AI returned unparseable JSON — surface as 502 (upstream failure, not client error)
     const err = new Error('AI returned an invalid recipe. Please try again.');
     err.status = 502;
     throw err;
   }
 
-  const saved = recipeService.create(req.user.id, { ...recipe, source: 'ai_suggested' });
+  const saved = await recipeService.create(req.user.id, { ...recipe, source: 'ai_suggested' });
   res.status(201).json({ recipe: saved });
 });
 
 // POST /api/ai/parse-receipt
-// Step 1 of the receipt flow: parse image, validate items, return candidates to client.
-// Does NOT insert into the database — the client previews and confirms first.
-// The receipt file is always deleted in the finally block (privacy-sensitive).
-//
-// Zod schema for a single candidate item — mirrors the pantry createSchema so the
-// same Zod rules apply to both manual adds and receipt-scanned additions.
+// Receipt is never persisted — buffer goes directly to Gemini, then discarded.
 const dateField = z.string().datetime().nullable().optional();
 
 const candidateItemSchema = z.object({
@@ -78,50 +72,34 @@ router.post('/parse-receipt', upload.single('receipt'), async (req, res) => {
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
-  const filePath = req.file.path;
+  const base64 = req.file.buffer.toString('base64');
+  const rawItems = await aiService.parseReceipt(base64, req.file.mimetype);
 
-  try {
-    // Use async read — never block the event loop with readFileSync
-    const imageBuffer = await fs.promises.readFile(filePath);
-    const base64 = imageBuffer.toString('base64');
+  const candidates = rawItems
+    .map((item) => {
+      try {
+        return candidateItemSchema.parse({
+          name:         item.name,
+          category:     item.category || 'Other',
+          quantity:     item.quantity  ?? 1,
+          unit:         item.unit      || 'item',
+          purchaseDate: new Date().toISOString(),
+          expiryDate:   item.estimatedExpiryDays != null
+            ? new Date(Date.now() + item.estimatedExpiryDays * 86_400_000).toISOString()
+            : null,
+        });
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
 
-    const rawItems = await aiService.parseReceipt(base64, req.file.mimetype);
-
-    // Validate each AI-returned item against the pantry schema.
-    // Invalid items are silently skipped — skipped count tells the client how many were lost.
-    const candidates = rawItems
-      .map((item) => {
-        try {
-          return candidateItemSchema.parse({
-            name:         item.name,
-            category:     item.category || 'Other',
-            quantity:     item.quantity  ?? 1,
-            unit:         item.unit      || 'item',
-            purchaseDate: new Date().toISOString(),
-            expiryDate:   item.estimatedExpiryDays != null
-              ? new Date(Date.now() + item.estimatedExpiryDays * 86_400_000).toISOString()
-              : null,
-          });
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean);
-
-    res.json({ candidates, skipped: rawItems.length - candidates.length });
-  } finally {
-    // Always delete receipt — never persisted, privacy-sensitive
-    fs.promises.unlink(filePath).catch((e) =>
-      console.error('[parse-receipt] Receipt unlink failed:', e.message)
-    );
-  }
+  res.json({ candidates, skipped: rawItems.length - candidates.length });
 });
 
 // POST /api/ai/suggest-recipes
-// Fetches expiring pantry items server-side and asks AI to find web recipes.
-// The client sends NO ingredient data — all context is assembled here.
 router.post('/suggest-recipes', async (req, res) => {
-  const allItems = pantryService.getAll(req.user.id);
+  const allItems = await pantryService.getAll(req.user.id);
   const expiringItems = allItems.filter((item) => {
     const days = getExpiryDays(item.expiryDate);
     return days !== null && days >= 0 && days <= 7;
@@ -132,10 +110,7 @@ router.post('/suggest-recipes', async (req, res) => {
 });
 
 // POST /api/ai/parse-recipe-image
-// Parses a recipe image (card, book page, etc.) and saves it to the recipes table.
-// The image file is retained in /uploads and served statically — NOT deleted.
-//
-// Zod schema for the parsed recipe — coerces nullable fields from AI output.
+// The image is uploaded to Vercel Blob for permanent storage after AI parsing.
 const parsedRecipeSchema = z.object({
   name:        z.string().min(1).max(200),
   description: z.string().max(1000).nullable().optional(),
@@ -158,17 +133,10 @@ router.post('/parse-recipe-image', upload.single('recipe'), async (req, res) => 
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
-  // Read file async — do NOT use readFileSync in an async route
-  const imageBuffer = await fs.promises.readFile(req.file.path);
-  const base64 = imageBuffer.toString('base64');
-
+  const base64 = req.file.buffer.toString('base64');
   const raw = await aiService.parseRecipeImage(base64, req.file.mimetype);
 
   if (!raw) {
-    // AI returned malformed JSON — delete the orphaned image and surface as 502
-    fs.promises.unlink(req.file.path).catch((e) =>
-      console.error('[parse-recipe-image] Orphaned image unlink failed:', e.message)
-    );
     const err = new Error('AI could not parse the recipe image. Please try again.');
     err.status = 502;
     throw err;
@@ -178,34 +146,29 @@ router.post('/parse-recipe-image', upload.single('recipe'), async (req, res) => 
   try {
     validated = parsedRecipeSchema.parse(raw);
   } catch {
-    // Structurally invalid even after AI returned something — clean up and reject
-    fs.promises.unlink(req.file.path).catch((e) =>
-      console.error('[parse-recipe-image] Invalid recipe image unlink failed:', e.message)
-    );
     return res.status(422).json({ error: 'Recipe image could not be parsed into a valid recipe.' });
   }
 
-  // imageUrl stores only the filename — /uploads is served statically by Express
-  const saved = recipeService.create(req.user.id, {
+  // Upload to Vercel Blob — the full URL is stored in the DB and used directly by the client
+  const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg';
+  const { url } = await put(`${uuidv4()}${ext}`, req.file.buffer, { access: 'public' });
+
+  const saved = await recipeService.create(req.user.id, {
     ...validated,
     source:   'upload',
-    imageUrl: req.file.filename,
+    imageUrl: url,
   });
 
   res.status(201).json({ recipe: saved });
 });
 
 // GET /api/ai/chat/history
-// Returns the last 50 messages for this user, ordered oldest-first (ASC),
-// so ChatPage can populate its message list on mount without re-sorting.
 router.get('/chat/history', async (req, res) => {
-  const messages = chatService.getHistory(req.user.id, 50);
+  const messages = await chatService.getHistory(req.user.id, 50);
   res.json({ messages });
 });
 
 // POST /api/ai/chat
-// The route handler is responsible for assembling all context — aiService.chat()
-// is a pure function that accepts pre-built summaries and history, not services.
 const chatMessageSchema = z.object({
   message: z.string().min(1).max(4000),
 });
@@ -214,11 +177,12 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
   const { message } = req.body;
   const userId = req.user.id;
 
-  const allItems    = pantryService.getAll(userId);
-  const allRecipes  = recipeService.getAll(userId);
-  const history     = chatService.getHistory(userId, 20);
+  const [allItems, allRecipes, history] = await Promise.all([
+    pantryService.getAll(userId),
+    recipeService.getAll(userId),
+    chatService.getHistory(userId, 20),
+  ]);
 
-  // Build lightweight summaries — aiService.chat() receives plain data, not DB rows
   const pantrySummary = allItems.map((i) => ({
     name:   i.name,
     qty:    `${i.quantity} ${i.unit}`,
@@ -226,18 +190,17 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
     frozen: i.isFrozen,
   }));
 
+  // tags is already parsed to an array by recipeService.getAll()
   const recipeSummary = allRecipes.map((r) => ({
     id:   r.id,
     name: r.name,
-    tags: r.tags ? JSON.parse(r.tags) : [],
+    tags: r.tags ?? [],
   }));
 
-  // AI call — if this throws, savePair is never reached (no orphan messages)
   const reply = await aiService.chat(pantrySummary, recipeSummary, history, message);
 
-  // Both messages committed atomically — either both saved or neither
-  chatService.savePair(userId, message, reply);
-  chatService.trimHistory(userId, 50);
+  await chatService.savePair(userId, message, reply);
+  await chatService.trimHistory(userId, 50);
 
   res.json({ reply });
 });

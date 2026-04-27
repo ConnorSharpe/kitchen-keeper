@@ -40,7 +40,7 @@ export default function RecipeModal({ recipe, onClose, onDelete, onToggleFavorit
         {/* Header image */}
         {recipe.imageUrl ? (
           <img
-            src={`/uploads/${recipe.imageUrl}`}
+            src={recipe.imageUrl}
             alt={recipe.name}
             className="h-44 w-full object-cover flex-shrink-0"
           />

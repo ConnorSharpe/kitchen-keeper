@@ -1,1 +1,0 @@
-ALTER TABLE `shopping_list_items` ADD `has_unit_mismatch` integer DEFAULT false NOT NULL;

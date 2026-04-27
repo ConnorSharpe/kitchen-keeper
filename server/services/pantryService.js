@@ -4,9 +4,7 @@ import { pantryItems } from '../db/schema.js';
 import { getExpiryStatus } from '../utils/expiry.js';
 import { getStaticFreezeExtension } from '../utils/freezeDefaults.js';
 
-// Only active (non-consumed) items. Optional expiringWithin filters to items
-// expiring within N days — used by the ExpiryStrip in Phase 5.
-export function getAll(userId, { expiringWithin } = {}) {
+export async function getAll(userId, { expiringWithin } = {}) {
   const conditions = [
     eq(pantryItems.userId, userId),
     isNull(pantryItems.consumedAt),
@@ -20,70 +18,65 @@ export function getAll(userId, { expiringWithin } = {}) {
     conditions.push(lte(pantryItems.expiryDate, cutoff.toISOString()));
   }
 
-  return db.select().from(pantryItems).where(and(...conditions)).all();
+  return db.select().from(pantryItems).where(and(...conditions));
 }
 
-// Single insert — returning().get() fetches the new row in one round-trip.
-export function create(userId, data) {
-  return db.insert(pantryItems).values({ ...data, userId }).returning().get();
+export async function create(userId, data) {
+  const [row] = await db.insert(pantryItems).values({ ...data, userId }).returning();
+  return row;
 }
 
 // Two-step ownership: find by id first (→ 404), then check userId (→ 403).
-// Returns { status: 'ok', item } | { status: 'not_found' } | { status: 'forbidden' }
-export function update(userId, id, data) {
-  const existing = db.select().from(pantryItems).where(eq(pantryItems.id, id)).get();
+export async function update(userId, id, data) {
+  const [existing] = await db.select().from(pantryItems).where(eq(pantryItems.id, id));
   if (!existing) return { status: 'not_found' };
   if (existing.userId !== userId) return { status: 'forbidden' };
 
-  db.update(pantryItems)
+  await db.update(pantryItems)
     .set({ ...data, updatedAt: new Date().toISOString() })
-    .where(eq(pantryItems.id, id))
-    .run();
+    .where(eq(pantryItems.id, id));
 
-  return { status: 'ok', item: db.select().from(pantryItems).where(eq(pantryItems.id, id)).get() };
+  const [item] = await db.select().from(pantryItems).where(eq(pantryItems.id, id));
+  return { status: 'ok', item };
 }
 
-export function remove(userId, id) {
-  const existing = db.select().from(pantryItems).where(eq(pantryItems.id, id)).get();
+export async function remove(userId, id) {
+  const [existing] = await db.select().from(pantryItems).where(eq(pantryItems.id, id));
   if (!existing) return { status: 'not_found' };
   if (existing.userId !== userId) return { status: 'forbidden' };
 
-  db.delete(pantryItems).where(eq(pantryItems.id, id)).run();
+  await db.delete(pantryItems).where(eq(pantryItems.id, id));
   return { status: 'ok' };
 }
 
-// Marks item as used (cooked/eaten). Sets consumedAt and wasExpiring.
-// wasExpiring is true only for 'warning' or 'critical' — expired items were already wasted.
-export function markUsed(userId, id) {
-  const existing = db.select().from(pantryItems).where(eq(pantryItems.id, id)).get();
+export async function markUsed(userId, id) {
+  const [existing] = await db.select().from(pantryItems).where(eq(pantryItems.id, id));
   if (!existing) return { status: 'not_found' };
   if (existing.userId !== userId) return { status: 'forbidden' };
 
   const expiryStatus = getExpiryStatus(existing.expiryDate);
   const wasExpiring  = expiryStatus === 'warning' || expiryStatus === 'critical';
 
-  db.update(pantryItems)
+  await db.update(pantryItems)
     .set({
       consumedAt:  new Date().toISOString(),
       wasExpiring,
       updatedAt:   new Date().toISOString(),
     })
-    .where(eq(pantryItems.id, id))
-    .run();
+    .where(eq(pantryItems.id, id));
 
   return { status: 'ok' };
 }
 
-// Toggles freeze on/off.
-// Freeze ON:  saves originalExpiryDate, extends expiryDate by category defaults.
+// Freeze ON: saves originalExpiryDate, extends expiryDate by category defaults.
 // Freeze OFF: restores originalExpiryDate, clears all freeze fields.
-export function toggleFreeze(userId, id) {
-  const existing = db.select().from(pantryItems).where(eq(pantryItems.id, id)).get();
+export async function toggleFreeze(userId, id) {
+  const [existing] = await db.select().from(pantryItems).where(eq(pantryItems.id, id));
   if (!existing) return { status: 'not_found' };
   if (existing.userId !== userId) return { status: 'forbidden' };
 
   if (existing.isFrozen) {
-    db.update(pantryItems)
+    await db.update(pantryItems)
       .set({
         isFrozen:           false,
         frozenAt:           null,
@@ -92,49 +85,47 @@ export function toggleFreeze(userId, id) {
         freezeNotes:        null,
         updatedAt:          new Date().toISOString(),
       })
-      .where(eq(pantryItems.id, id))
-      .run();
+      .where(eq(pantryItems.id, id));
   } else {
     const { newExpiryDate } = getStaticFreezeExtension(existing.category, existing.expiryDate);
-    db.update(pantryItems)
+    await db.update(pantryItems)
       .set({
         isFrozen:           true,
         frozenAt:           new Date().toISOString(),
         originalExpiryDate: existing.expiryDate,
         expiryDate:         newExpiryDate,
-        freezeNotes:        null, // AI enriches this in Phase 5+
+        freezeNotes:        null,
         updatedAt:          new Date().toISOString(),
       })
-      .where(eq(pantryItems.id, id))
-      .run();
+      .where(eq(pantryItems.id, id));
   }
 
-  return { status: 'ok', item: db.select().from(pantryItems).where(eq(pantryItems.id, id)).get() };
+  const [item] = await db.select().from(pantryItems).where(eq(pantryItems.id, id));
+  return { status: 'ok', item };
 }
 
-// Inserts multiple items atomically. A single bad item won't leave partial rows.
-export function bulkCreate(userId, items) {
-  const insertMany = db.transaction((rows) =>
-    rows.map((item) =>
-      db.insert(pantryItems).values({ ...item, userId }).returning().get()
-    )
-  );
-  return insertMany(items);
+// Inserts multiple items atomically inside a transaction.
+export async function bulkCreate(userId, items) {
+  return db.transaction(async (tx) => {
+    const results = [];
+    for (const item of items) {
+      const [row] = await tx.insert(pantryItems).values({ ...item, userId }).returning();
+      results.push(row);
+    }
+    return results;
+  });
 }
 
-// Counts items saved from waste since the given ISO date string.
-// Defaults to start of the current week (Monday 00:00 UTC).
-export function getWasteSaved(userId, since) {
+export async function getWasteSaved(userId, since) {
   const sinceDate = since || getStartOfWeek();
-  const result = db
+  const [result] = await db
     .select({ count: sql`count(*)` })
     .from(pantryItems)
     .where(and(
       eq(pantryItems.userId, userId),
       eq(pantryItems.wasExpiring, true),
       sql`${pantryItems.consumedAt} >= ${sinceDate}`,
-    ))
-    .get();
+    ));
   return Number(result?.count ?? 0);
 }
 

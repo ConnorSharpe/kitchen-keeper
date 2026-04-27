@@ -18,51 +18,51 @@ const manualItemSchema = z.object({
   unit:           z.string().max(50).nullable().optional(),
 });
 
-// GET /api/shopping — list all shopping lists for the authenticated user
-router.get('/', (req, res) => {
-  const lists = shoppingService.getAll(req.user.id);
+// GET /api/shopping
+router.get('/', async (req, res) => {
+  const lists = await shoppingService.getAll(req.user.id);
   res.json({ lists });
 });
 
-// POST /api/shopping/build — aggregate ingredients from recipes and persist as a new list
-router.post('/build', validate(buildSchema), (req, res) => {
+// POST /api/shopping/build
+router.post('/build', validate(buildSchema), async (req, res) => {
   const { name, recipeIds } = req.body;
-  const result = shoppingService.buildFromRecipes(req.user.id, name, recipeIds);
+  const result = await shoppingService.buildFromRecipes(req.user.id, name, recipeIds);
   if (result.status === 'invalid_recipes') {
     return res.status(400).json({ error: 'One or more recipe IDs are invalid or do not belong to you.' });
   }
   res.status(201).json({ list: result.list, items: result.items, warnings: result.warnings });
 });
 
-// GET /api/shopping/:id/items — items for a specific list (ownership verified inside service)
-router.get('/:id/items', (req, res) => {
+// GET /api/shopping/:id/items
+router.get('/:id/items', async (req, res) => {
   const listId = Number(req.params.id);
-  const result = shoppingService.getItems(req.user.id, listId);
+  const result = await shoppingService.getItems(req.user.id, listId);
   if (result.status === 'not_found') return res.status(404).json({ error: 'Not found' });
   res.json({ items: result.items });
 });
 
-// PATCH /api/shopping/:id/items/:itemId/check — toggle isChecked (ownership via join)
-router.patch('/:id/items/:itemId/check', (req, res) => {
+// PATCH /api/shopping/:id/items/:itemId/check
+router.patch('/:id/items/:itemId/check', async (req, res) => {
   const listId = Number(req.params.id);
   const itemId = Number(req.params.itemId);
-  const result = shoppingService.toggleItem(req.user.id, listId, itemId);
+  const result = await shoppingService.toggleItem(req.user.id, listId, itemId);
   if (result.status === 'not_found') return res.status(404).json({ error: 'Not found' });
   res.json({ item: result.item });
 });
 
-// POST /api/shopping/:id/items — add a manual item to an existing list
-router.post('/:id/items', validate(manualItemSchema), (req, res) => {
+// POST /api/shopping/:id/items
+router.post('/:id/items', validate(manualItemSchema), async (req, res) => {
   const listId = Number(req.params.id);
-  const result = shoppingService.addManualItem(req.user.id, listId, req.body);
+  const result = await shoppingService.addManualItem(req.user.id, listId, req.body);
   if (result.status === 'not_found') return res.status(404).json({ error: 'Not found' });
   res.status(201).json({ item: result.item });
 });
 
-// DELETE /api/shopping/:id — delete list (CASCADE handles items)
-router.delete('/:id', (req, res) => {
+// DELETE /api/shopping/:id
+router.delete('/:id', async (req, res) => {
   const listId = Number(req.params.id);
-  const result = shoppingService.deleteList(req.user.id, listId);
+  const result = await shoppingService.deleteList(req.user.id, listId);
   if (result.status === 'not_found') return res.status(404).json({ error: 'Not found' });
   res.status(204).end();
 });

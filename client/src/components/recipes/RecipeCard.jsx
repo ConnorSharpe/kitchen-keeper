@@ -17,7 +17,7 @@ export default function RecipeCard({ recipe, onOpen, onToggleFavorite, isFavorit
       {/* Image or placeholder */}
       {recipe.imageUrl ? (
         <img
-          src={`/uploads/${recipe.imageUrl}`}
+          src={recipe.imageUrl}
           alt={recipe.name}
           className="h-36 w-full object-cover"
         />

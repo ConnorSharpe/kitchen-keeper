@@ -10,116 +10,104 @@ function parseJSON(str, fallback = []) {
   }
 }
 
-export function getAll(userId) {
+export async function getAll(userId) {
   return db
     .select()
     .from(shoppingLists)
     .where(eq(shoppingLists.userId, userId))
-    .orderBy(desc(shoppingLists.createdAt))
-    .all();
+    .orderBy(desc(shoppingLists.createdAt));
 }
 
 // Verifies ownership, then returns items ordered by sortOrder.
-export function getItems(userId, listId) {
-  const list = db
+export async function getItems(userId, listId) {
+  const [list] = await db
     .select()
     .from(shoppingLists)
-    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.userId, userId)))
-    .get();
+    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.userId, userId)));
   if (!list) return { status: 'not_found' };
 
-  const items = db
+  const items = await db
     .select()
     .from(shoppingListItems)
     .where(eq(shoppingListItems.listId, listId))
-    .orderBy(shoppingListItems.sortOrder)
-    .all();
+    .orderBy(shoppingListItems.sortOrder);
   return { status: 'ok', items };
 }
 
-// Ownership verified via join through shoppingLists — never by item ID alone (spec §6.4).
-// Any user guessing an item ID gets 404, not the item.
-export function toggleItem(userId, listId, itemId) {
-  const list = db
+// Ownership verified via join through shoppingLists — a guessed item ID returns 404.
+export async function toggleItem(userId, listId, itemId) {
+  const [list] = await db
     .select()
     .from(shoppingLists)
-    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.userId, userId)))
-    .get();
+    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.userId, userId)));
   if (!list) return { status: 'not_found' };
 
-  const item = db
+  const [item] = await db
     .select()
     .from(shoppingListItems)
-    .where(and(eq(shoppingListItems.id, itemId), eq(shoppingListItems.listId, listId)))
-    .get();
+    .where(and(eq(shoppingListItems.id, itemId), eq(shoppingListItems.listId, listId)));
   if (!item) return { status: 'not_found' };
 
-  db.update(shoppingListItems)
+  await db.update(shoppingListItems)
     .set({ isChecked: !item.isChecked })
-    .where(eq(shoppingListItems.id, itemId))
-    .run();
+    .where(eq(shoppingListItems.id, itemId));
 
-  return {
-    status: 'ok',
-    item: db.select().from(shoppingListItems).where(eq(shoppingListItems.id, itemId)).get(),
-  };
+  const [updated] = await db.select().from(shoppingListItems).where(eq(shoppingListItems.id, itemId));
+  return { status: 'ok', item: updated };
 }
 
 // CASCADE on shoppingLists → shoppingListItems handles item cleanup.
-export function deleteList(userId, listId) {
-  const list = db
+export async function deleteList(userId, listId) {
+  const [list] = await db
     .select()
     .from(shoppingLists)
-    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.userId, userId)))
-    .get();
+    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.userId, userId)));
   if (!list) return { status: 'not_found' };
 
-  db.delete(shoppingLists).where(eq(shoppingLists.id, listId)).run();
+  await db.delete(shoppingLists).where(eq(shoppingLists.id, listId));
   return { status: 'ok' };
 }
 
-export function addManualItem(userId, listId, itemData) {
-  const list = db
+export async function addManualItem(userId, listId, itemData) {
+  const [list] = await db
     .select()
     .from(shoppingLists)
-    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.userId, userId)))
-    .get();
+    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.userId, userId)));
   if (!list) return { status: 'not_found' };
 
-  const existing = db
+  const existing = await db
     .select()
     .from(shoppingListItems)
-    .where(eq(shoppingListItems.listId, listId))
-    .all();
+    .where(eq(shoppingListItems.listId, listId));
   const maxSort = existing.reduce((m, i) => Math.max(m, i.sortOrder), -1);
 
-  const newItem = db
+  const [newItem] = await db
     .insert(shoppingListItems)
     .values({
       listId,
       ingredientName: itemData.ingredientName,
-      quantity: itemData.quantity ?? null,
-      unit: itemData.unit ?? null,
-      sortOrder: maxSort + 1,
+      quantity:       itemData.quantity ?? null,
+      unit:           itemData.unit ?? null,
+      sortOrder:      maxSort + 1,
       hasUnitMismatch: false,
     })
-    .returning()
-    .get();
+    .returning();
 
   return { status: 'ok', item: newItem };
 }
 
-// Full build logic: aggregate → deduplicate → pantry cross-reference → persist atomically.
-export function buildFromRecipes(userId, name, recipeIds) {
-  // 1. Fetch requested recipes — every one must belong to this user.
-  const recipeRows = recipeIds.map((id) => {
-    const r = db.select().from(recipes).where(eq(recipes.id, id)).get();
-    return r && r.userId === userId ? r : null;
-  });
+// Full build: aggregate ingredients → deduplicate → pantry cross-reference → persist atomically.
+export async function buildFromRecipes(userId, name, recipeIds) {
+  // Every recipe must belong to this user
+  const recipeRows = await Promise.all(
+    recipeIds.map(async (id) => {
+      const [r] = await db.select().from(recipes).where(eq(recipes.id, id));
+      return r && r.userId === userId ? r : null;
+    })
+  );
   if (recipeRows.some((r) => r === null)) return { status: 'invalid_recipes' };
 
-  // 2. Aggregate by lowercase name.
-  // Map<lowercaseName, { ingredientName, quantity, unit, hasUnitMismatch }>
+  // Aggregate by lowercase name; track unit mismatches
   const ingredientMap = new Map();
   for (const recipe of recipeRows) {
     for (const ing of parseJSON(recipe.ingredients)) {
@@ -129,7 +117,6 @@ export function buildFromRecipes(userId, name, recipeIds) {
       if (ingredientMap.has(key)) {
         const entry = ingredientMap.get(key);
         if (entry.unit !== (ing.unit ?? null)) {
-          // Conflicting units — flag mismatch; don't attempt to add quantities.
           entry.hasUnitMismatch = true;
         } else {
           entry.quantity = (entry.quantity ?? 0) + (ing.quantity ?? 0);
@@ -137,23 +124,20 @@ export function buildFromRecipes(userId, name, recipeIds) {
       } else {
         ingredientMap.set(key, {
           ingredientName: ing.name,
-          quantity: ing.quantity ?? null,
-          unit: ing.unit ?? null,
+          quantity:       ing.quantity ?? null,
+          unit:           ing.unit ?? null,
           hasUnitMismatch: false,
         });
       }
     }
   }
 
-  // 3. Cross-reference active pantry — skip items already stocked, reduce shortfalls.
-  // Only active items count (consumedAt IS NULL).
-  const activePantry = db
+  // Cross-reference active pantry — reduce shortfalls, skip fully stocked items
+  const activePantry = await db
     .select()
     .from(pantryItems)
-    .where(and(eq(pantryItems.userId, userId), isNull(pantryItems.consumedAt)))
-    .all();
+    .where(and(eq(pantryItems.userId, userId), isNull(pantryItems.consumedAt)));
 
-  // Aggregate pantry quantities by lowercase name (sum when units match).
   const pantryMap = new Map();
   for (const p of activePantry) {
     const key = p.name.trim().toLowerCase();
@@ -167,39 +151,38 @@ export function buildFromRecipes(userId, name, recipeIds) {
 
   const needed = [];
   for (const [key, entry] of ingredientMap) {
-    // Skip pantry cross-reference for mismatched-unit items — true quantity is unknown.
     if (!entry.hasUnitMismatch && entry.quantity !== null) {
       const inPantry = pantryMap.get(key);
       if (inPantry && inPantry.unit === entry.unit) {
-        if (inPantry.quantity >= entry.quantity) continue; // fully stocked — omit
-        entry.quantity = entry.quantity - inPantry.quantity; // need only the shortfall
+        if (inPantry.quantity >= entry.quantity) continue;
+        entry.quantity = entry.quantity - inPantry.quantity;
       }
     }
     needed.push(entry);
   }
 
-  // 4. Persist list + all items atomically — partial lists must not exist.
-  const result = db.transaction(() => {
-    const list = db
+  // Persist list + all items atomically
+  const result = await db.transaction(async (tx) => {
+    const [list] = await tx
       .insert(shoppingLists)
       .values({ userId, name, updatedAt: new Date().toISOString() })
-      .returning()
-      .get();
+      .returning();
 
-    const items = needed.map((ing, idx) =>
-      db
+    const items = [];
+    for (const [idx, ing] of needed.entries()) {
+      const [item] = await tx
         .insert(shoppingListItems)
         .values({
-          listId: list.id,
-          ingredientName: ing.ingredientName,
-          quantity: ing.quantity,
-          unit: ing.unit,
-          sortOrder: idx,
+          listId:          list.id,
+          ingredientName:  ing.ingredientName,
+          quantity:        ing.quantity,
+          unit:            ing.unit,
+          sortOrder:       idx,
           hasUnitMismatch: ing.hasUnitMismatch,
         })
-        .returning()
-        .get()
-    );
+        .returning();
+      items.push(item);
+    }
 
     return { list, items };
   });

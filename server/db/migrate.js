@@ -1,9 +1,9 @@
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import { migrate } from 'drizzle-orm/neon-http/migrator';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { db } from './client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Runs synchronously at import time — server will not reach route mounting until this completes
-migrate(db, { migrationsFolder: path.join(__dirname, 'migrations') });
+// Top-level await: importing modules wait for migration to finish before continuing
+await migrate(db, { migrationsFolder: path.join(__dirname, 'migrations') });

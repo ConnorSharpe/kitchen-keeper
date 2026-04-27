@@ -1,10 +1,9 @@
-import fs from 'fs';
-import path from 'path';
+import { del } from '@vercel/blob';
 import { db } from '../db/client.js';
 import { recipes } from '../db/schema.js';
 import { eq, desc } from 'drizzle-orm';
 
-// These three columns are stored as JSON strings in SQLite
+// JSON-serialized columns — stored as text in the DB for portability
 const JSON_FIELDS = ['ingredients', 'steps', 'tags'];
 
 function serialize(data) {
@@ -30,67 +29,62 @@ function parse(row) {
   return out;
 }
 
-export function getAll(userId) {
-  return db
+export async function getAll(userId) {
+  const rows = await db
     .select()
     .from(recipes)
     .where(eq(recipes.userId, userId))
-    .orderBy(desc(recipes.savedAt))
-    .all()
-    .map(parse);
+    .orderBy(desc(recipes.savedAt));
+  return rows.map(parse);
 }
 
-export function create(userId, data) {
-  const row = db
+export async function create(userId, data) {
+  const [row] = await db
     .insert(recipes)
     .values({ ...serialize(data), userId })
-    .returning()
-    .get();
+    .returning();
   return parse(row);
 }
 
 // Two-step ownership: find by id first (→ 404), then check userId (→ 403).
-// Returns { status: 'ok', recipe } | { status: 'not_found' } | { status: 'forbidden' }
-export function update(userId, id, data) {
-  const existing = db.select().from(recipes).where(eq(recipes.id, id)).get();
+export async function update(userId, id, data) {
+  const [existing] = await db.select().from(recipes).where(eq(recipes.id, id));
   if (!existing) return { status: 'not_found' };
   if (existing.userId !== userId) return { status: 'forbidden' };
 
-  db.update(recipes)
+  await db.update(recipes)
     .set({ ...serialize(data), updatedAt: new Date().toISOString() })
-    .where(eq(recipes.id, id))
-    .run();
+    .where(eq(recipes.id, id));
 
-  return { status: 'ok', recipe: parse(db.select().from(recipes).where(eq(recipes.id, id)).get()) };
+  const [updated] = await db.select().from(recipes).where(eq(recipes.id, id));
+  return { status: 'ok', recipe: parse(updated) };
 }
 
-export function remove(userId, id) {
-  const existing = db.select().from(recipes).where(eq(recipes.id, id)).get();
+export async function remove(userId, id) {
+  const [existing] = await db.select().from(recipes).where(eq(recipes.id, id));
   if (!existing) return { status: 'not_found' };
   if (existing.userId !== userId) return { status: 'forbidden' };
 
-  // Unlink recipe image from /uploads — fire-and-forget, never block the caller
-  if (existing.imageUrl) {
-    const filePath = path.join('uploads', existing.imageUrl);
-    fs.promises.unlink(filePath).catch((e) =>
-      console.error('[recipeService] Image unlink failed:', e.message)
+  // Delete blob if it's a full URL (Vercel Blob) — fire-and-forget, never block the caller
+  if (existing.imageUrl?.startsWith('http')) {
+    del(existing.imageUrl).catch((e) =>
+      console.error('[recipeService] Blob delete failed:', e.message)
     );
   }
 
-  db.delete(recipes).where(eq(recipes.id, id)).run();
+  await db.delete(recipes).where(eq(recipes.id, id));
   return { status: 'ok' };
 }
 
-// Flips isFavorite and bumps updatedAt
-export function toggleFavorite(userId, id) {
-  const existing = db.select().from(recipes).where(eq(recipes.id, id)).get();
+export async function toggleFavorite(userId, id) {
+  const [existing] = await db.select().from(recipes).where(eq(recipes.id, id));
   if (!existing) return { status: 'not_found' };
   if (existing.userId !== userId) return { status: 'forbidden' };
 
-  db.update(recipes)
+  await db.update(recipes)
     .set({ isFavorite: !existing.isFavorite, updatedAt: new Date().toISOString() })
-    .where(eq(recipes.id, id))
-    .run();
+    .where(eq(recipes.id, id));
 
-  return { status: 'ok', recipe: parse(db.select().from(recipes).where(eq(recipes.id, id)).get()) };
+  const [updated] = await db.select().from(recipes).where(eq(recipes.id, id));
+  return { status: 'ok', recipe: parse(updated) };
 }

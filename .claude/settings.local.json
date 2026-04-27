@@ -49,7 +49,9 @@
       "Bash(./server/node_modules/.bin/drizzle-kit generate *)",
       "Bash(node --input-type=module)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3001/api/auth/me)",
-      "Bash(npm uninstall *)"
+      "Bash(npm uninstall *)",
+      "Bash(grep -E \"\\\\.\\(js|ts\\)$\")",
+      "Bash(grep -E \"\\\\.\\(js|ts|json\\)$\")"
     ]
   }
 }

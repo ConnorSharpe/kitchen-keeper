@@ -13,7 +13,6 @@ const router = express.Router();
 
 const BCRYPT_COST = 12;
 
-// Cookie options — secure flag is only set in production to allow http in dev
 const cookieOpts = {
   httpOnly: true,
   sameSite: 'strict',
@@ -33,11 +32,11 @@ const loginSchema = z.object({
 });
 
 const loginLimiter = rateLimit({
-  windowMs:       60 * 1000, // 1 minute
-  max:            10,
-  message:        'Too many login attempts — please try again later',
+  windowMs:        60 * 1000, // 1 minute
+  max:             10,
+  message:         'Too many login attempts — please try again later',
   standardHeaders: true,
-  legacyHeaders:  false,
+  legacyHeaders:   false,
 });
 
 function signToken(user) {
@@ -48,7 +47,6 @@ function signToken(user) {
   );
 }
 
-// Strips passwordHash before sending user data to the client
 function safeUser(user) {
   return { id: user.id, email: user.email, name: user.name };
 }
@@ -61,10 +59,11 @@ router.post('/register', validate(registerSchema), async (req, res) => {
 
   let user;
   try {
-    db.insert(users).values({ email, passwordHash, name }).run();
-    user = db.select().from(users).where(eq(users.email, email)).get();
+    // .returning() gives us the inserted row in one round-trip (Postgres RETURNING clause)
+    [user] = await db.insert(users).values({ email, passwordHash, name }).returning();
   } catch (err) {
-    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+    // Postgres unique violation code — equivalent of SQLite SQLITE_CONSTRAINT_UNIQUE
+    if (err.code === '23505') {
       const conflict = new Error('An account with this email already exists');
       conflict.status = 409;
       throw conflict;
@@ -81,9 +80,9 @@ router.post('/register', validate(registerSchema), async (req, res) => {
 router.post('/login', loginLimiter, validate(loginSchema), async (req, res) => {
   const { email, password } = req.body;
 
-  const user = db.select().from(users).where(eq(users.email, email)).get();
+  const [user] = await db.select().from(users).where(eq(users.email, email));
 
-  // Use a constant-time compare even on "not found" to prevent user enumeration
+  // Constant-time compare even on "not found" to prevent user enumeration
   const hash = user?.passwordHash ?? '$2b$12$invalidhashpadding000000000000000000000000000000000000000';
   const valid = await bcrypt.compare(password, hash);
 
