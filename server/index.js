@@ -13,7 +13,7 @@ import recipesRouter  from './routes/recipes.js';
 import shoppingRouter from './routes/shopping.js';
 
 // Validate required env vars at startup — fail fast, not mid-request
-const REQUIRED_ENV = ['ANTHROPIC_API_KEY', 'JWT_SECRET'];
+const REQUIRED_ENV = ['GEMINI_API_KEY', 'JWT_SECRET'];
 for (const key of REQUIRED_ENV) {
   if (!process.env[key]) throw new Error(`Missing required env var: ${key}`);
 }

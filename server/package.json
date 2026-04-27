@@ -7,7 +7,7 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.36.0",
+    "@google/generative-ai": "^0.24.1",
     "bcrypt": "^6.0.0",
     "better-sqlite3": "^12.9.0",
     "cookie-parser": "^1.4.6",
