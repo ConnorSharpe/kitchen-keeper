@@ -1,48 +1,62 @@
-# 🍳 Kitchen Keeper
+# Kitchen Keeper
 
-AI-Powered Home Food Waste Management System
+Kitchen Keeper is an AI-powered food waste management app. Add pantry items manually or by scanning a grocery receipt, see what's expiring, get AI meal suggestions tailored to what you have on hand, save and manage recipes, build shopping lists, and chat with an AI kitchen assistant — all from your phone or browser.
 
-## Setup
+## Live Demo
 
-1. **Clone the repo**
-   ```bash
-   git clone <your-repo-url>
-   cd kitchen-keeper
-   ```
+[https://kitchen-keeper-connorsharpes-projects.vercel.app](https://kitchen-keeper-connorsharpes-projects.vercel.app)
 
-2. **Fill in your environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env and add your real ANTHROPIC_API_KEY and a strong JWT_SECRET
-   ```
+> Invite code required — unauthorized registrations are blocked to protect shared API resources. Contact Connor to request access.
 
-3. **Install all dependencies** (installs root, server, and client in one step)
-   ```bash
-   npm install
-   ```
+## Tech Stack
 
-4. **Start the dev servers**
-   ```bash
-   npm run dev
-   ```
-   - Express API: http://localhost:3001
-   - React client: http://localhost:5173
+| Layer          | Technology                                           |
+|----------------|------------------------------------------------------|
+| Frontend       | React 18 + Vite + Tailwind CSS                      |
+| Backend        | Node.js + Express (Vercel Serverless Functions)     |
+| Database       | Neon Postgres (Drizzle ORM)                         |
+| AI             | Google Gemini 2.0 Flash                             |
+| File Storage   | Vercel Blob                                         |
+| Auth           | JWT stored in `httpOnly`, `sameSite=strict` cookies |
+
+## Features
+
+- **Receipt scanning** — photograph a grocery receipt; Gemini vision extracts items and adds them to your pantry
+- **Expiry tracking** — color-coded urgency so you always know what needs to be used first
+- **Eat This Now** — AI meal suggestions generated from your most-expiring ingredients
+- **Recipe management** — save recipes from suggestions, search the web, and manage your collection
+- **Shopping list builder** — build and manage lists from pantry gaps or recipe ingredients
+- **AI chat assistant** — "Explore" tab for freeform kitchen questions
+- **Freeze toggle** — mark items as frozen with AI-generated storage tips
+- **Waste-saved counter** — tracks estimated food waste prevented over time
+
+## Run Your Own Instance
+
+1. Clone the repo
+2. `cp .env.example .env` and fill in all values
+3. Create a [Neon](https://neon.tech) Postgres database — copy the `DATABASE_URL`
+4. Get a [Gemini API key](https://aistudio.google.com) from Google AI Studio (free tier available)
+5. Deploy to [Vercel](https://vercel.com) — add all env vars from `.env.example`
+   (The Neon and Vercel Blob marketplace integrations auto-provide their tokens)
+6. Run migrations: `npx drizzle-kit push` (from project root, with `.env` populated)
+7. Visit the deployed URL and register (leave `INVITE_CODE` unset on your own instance)
 
 ## Environment Variables
 
-| Variable | Description |
-|---|---|
-| `ANTHROPIC_API_KEY` | Your Anthropic API key (from console.anthropic.com) |
-| `JWT_SECRET` | A long random string for signing JWT tokens |
-| `PORT` | Express server port (default: 3001) |
-| `NODE_ENV` | `development` or `production` |
-| `CLIENT_ORIGIN` | React dev server origin (default: http://localhost:5173) |
+| Variable                | Description                                               | Source                  |
+|-------------------------|-----------------------------------------------------------|-------------------------|
+| `DATABASE_URL`          | Neon Postgres connection string                           | Neon Vercel integration |
+| `JWT_SECRET`            | Secret for signing auth cookies                           | Set manually            |
+| `GEMINI_API_KEY`        | Google Gemini API key                                     | Google AI Studio        |
+| `NODE_ENV`              | `production` on Vercel                                    | Set manually            |
+| `CLIENT_ORIGIN`         | Frontend URL for CORS                                     | Set manually            |
+| `INVITE_CODE`           | Registration gate secret. Omit or leave empty to disable  | Set manually            |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob access token                                  | Vercel Blob integration |
 
-## Architecture
+## Local Development
 
-See `kitchen-keeper-spec-v4.docx` for the full technical specification.
-
-- **Frontend**: React + Vite + Tailwind CSS (port 5173)
-- **Backend**: Node.js + Express (port 3001)
-- **Database**: SQLite via Drizzle ORM
-- **AI**: Claude (Anthropic API)
+```bash
+npm install
+cp .env.example .env   # fill in values
+npm run dev            # Express on :3001, React on :5173
+```

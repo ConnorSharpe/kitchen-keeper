@@ -21,9 +21,10 @@ const cookieOpts = {
 };
 
 const registerSchema = z.object({
-  email:    z.string().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  name:     z.string().min(1, 'Name is required').max(100),
+  email:      z.string().email('Invalid email address'),
+  password:   z.string().min(8, 'Password must be at least 8 characters'),
+  name:       z.string().min(1, 'Name is required').max(100),
+  inviteCode: z.string().trim().optional(),
 });
 
 const loginSchema = z.object({
@@ -53,7 +54,17 @@ function safeUser(user) {
 
 // POST /api/auth/register
 router.post('/register', validate(registerSchema), async (req, res) => {
-  const { email, password, name } = req.body;
+  const { email, password, name, inviteCode } = req.body;
+
+  const envCode = (process.env.INVITE_CODE ?? '').trim();
+  if (envCode) {
+    const submitted = (inviteCode ?? '').trim();
+    if (submitted !== envCode) {
+      const err = new Error('Invalid invite code');
+      err.status = 400;
+      throw err;
+    }
+  }
 
   const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
 
