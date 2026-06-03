@@ -2,13 +2,14 @@
 Add invite-code registration gate and update README for public portfolio presentation
 
 # Current Status
-App is fully built through Phase 10 of the spec (all features complete). Build was broken due
-to migration running at Vercel build time — fixed by removing `node server/db/migrate.js` from
-the `vercel-build` script. App has not yet been smoke-tested on the live Vercel URL.
-Next action is to implement the invite-code gate before smoke testing, then update the README.
+Spec is complete and implementation-ready. TASK-001.md went through 3 rounds of GPT architect
+review — all gaps closed, full LGTM received. No design questions remain open.
+Next action: implement TASK-001 (server gate + client field + README + .env.example).
 
 # Files Modified
 - package.json — removed `node server/db/migrate.js` from vercel-build script (committed: 23c3cde)
+- ai/tasks/TASK-001.md — created; 3-round architect-reviewed implementation spec (NEW)
+- ai/handoffs/CURRENT_STATE.md — this file (updated)
 
 # Files Required Next
 - server/routes/auth.js — add INVITE_CODE validation to POST /register
@@ -105,14 +106,20 @@ Irrelevant:
 
 # Verification Results
 - Build fix: PASS (23c3cde removed migration from vercel-build — build no longer errors on DB connect)
-- Smoke test: NOT YET RUN
+- TASK-001 spec: PASS (3 architect review rounds, full LGTM, no open questions)
+- Smoke test: NOT YET RUN (deferred until after invite gate is deployed)
 - Live URL: https://kitchen-keeper-connorsharpes-projects.vercel.app
 
 # Recommended Next Action
-Read client/src/pages/LoginPage.jsx first to understand the current form structure.
-Then implement the invite code gate (server validation + client field).
-Then rewrite README.md.
-Then commit, push, and smoke test.
+Read TASK-001.md in full, then begin implementation in this order:
+1. Read client/src/pages/LoginPage.jsx (UNREAD — highest risk, do this first)
+2. Read server/routes/auth.js (grep existing error shape and bcrypt placement)
+3. Read server/middleware/validate.js (confirm Zod middleware does not strip inviteCode)
+4. Implement server gate in server/routes/auth.js
+5. Implement client field in client/src/pages/LoginPage.jsx
+6. Update .env.example
+7. Rewrite README.md
+8. Commit and push → smoke test live URL
 
 # Forbidden Exploration
 - server/services/* — no service layer changes needed for this task
@@ -177,6 +184,6 @@ npm install → fills .env → npm run dev → Express on :3001, React on :5173
 N/A — working directly on main branch, no worktree in use.
 Commit and push directly:
 
-git add ai/handoffs/CURRENT_STATE.md
-git commit -m "docs: add CURRENT_STATE.md handoff for invite-gate + README task"
+git add ai/tasks/TASK-001.md ai/handoffs/CURRENT_STATE.md
+git commit -m "docs: add TASK-001 spec (3-round architect review) and update handoff"
 git push
