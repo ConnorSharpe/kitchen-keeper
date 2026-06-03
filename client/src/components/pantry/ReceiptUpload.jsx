@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import toast from 'react-hot-toast';
 
 // ReceiptUpload runs through three phases:
@@ -15,7 +15,12 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
   const [checked, setChecked] = useState({});
   const [skipped, setSkipped] = useState(0);
   const [dragOver, setDragOver] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    setIsMobile(window.matchMedia('(hover: none) and (pointer: coarse)').matches);
+  }, []);
 
   async function scanFile(file) {
     setPhase('scanning');
@@ -158,6 +163,7 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
               ref={fileInputRef}
               type="file"
               accept="image/*"
+              {...(isMobile ? { capture: 'environment' } : {})}
               onChange={handleFileChange}
               className="hidden"
             />
