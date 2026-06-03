@@ -1,6 +1,7 @@
 {
   "name": "kitchen-keeper",
   "version": "1.0.0",
+  "type": "module",
   "description": "AI-Powered Home Food Waste Management System",
   "scripts": {
     "postinstall": "npm install --prefix server && npm install --prefix client",
