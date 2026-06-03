@@ -2,107 +2,66 @@
 TASK-001: Invite-Code Registration Gate + Portfolio README
 
 # Current Status
-COMPLETE. All four deliverables implemented. Awaiting commit, push, and smoke test on live URL.
+COMPLETE. All deliverables implemented, deployed, and smoke tested on live Vercel URL.
 
 # Files Modified
-- server/routes/auth.js — added inviteCode to registerSchema; added gate check before bcrypt
-- client/src/context/AuthContext.jsx — added inviteCode as 4th param to register(); passes it in POST body
-- client/src/pages/LoginPage.jsx — added inviteCode state, render-gated input field, passes to register()
-- README.md — full rewrite for portfolio presentation
-- .env.example — replaced ANTHROPIC_API_KEY with correct vars; added INVITE_CODE with comment
+- server/routes/auth.js — invite code gate
+- client/src/context/AuthContext.jsx — 4th param to register()
+- client/src/pages/LoginPage.jsx — invite code field (register mode only)
+- README.md — portfolio rewrite
+- .env.example — corrected env vars
+- api/index.js — CJS dynamic import wrapper for Vercel ESM compatibility
+- vercel.json — restored API rewrite + functions config
 
-# Files Already Reviewed
-(all from previous session, plus newly read this session)
-- server/routes/auth.js
-- server/middleware/validate.js
-- server/middleware/auth.js
-- client/src/pages/LoginPage.jsx
-- client/src/context/AuthContext.jsx
-
-# Dependency Chain
-
-Editing:
-- server/routes/auth.js
-- client/src/context/AuthContext.jsx (scope expansion — fetch body lives here, not in LoginPage)
-- client/src/pages/LoginPage.jsx
-- README.md
-- .env.example
-
-Requires:
-- server/middleware/validate.js (confirmed: strips fields not in schema — inviteCode added to schema to survive)
-- client/src/api/index.js (used by AuthContext; no changes needed)
-
-Irrelevant:
-- server/services/*
-- server/db/*
-- client/src/components/*
-- client/src/hooks/*
+# Smoke Test Results
+- Register with correct invite code → PASS
+- Register with wrong code → inline error PASS
+- Register with correct code + trailing space → PASS
+- Login → no invite code field visible PASS
+- Full login flow → PASS
 
 # Architecture Notes
-- validate.js replaces req.body with Zod result.data — fields not in schema are stripped.
-  inviteCode added to registerSchema as z.string().trim().optional() to survive middleware.
-- auth.js errors are thrown (new Error + err.status), not returned as res.json({ error }).
-  Invite code error follows the same pattern: throw with status 400.
-- Invite code check is before bcrypt (fast fail as spec requires).
-- AuthContext.register() now accepts (email, password, name, inviteCode) — minimal extension.
-- Gate logic: if INVITE_CODE env var is unset/empty/spaces-only → gate disabled (dev fallback).
-  If set: submitted code (trimmed) must === env code (trimmed). Case-sensitive.
-
-# Decisions Made
-- AuthContext.jsx was listed as "irrelevant/forbidden" in the spec but the register() fetch
-  body is defined there. Modified it with a minimal one-line extension (4th param) rather
-  than duplicating the API call in LoginPage. This is the correct minimal change.
-- Error shape matches existing auth.js convention (throw Error with .status).
-- HTTP status 400 used for invalid invite code (no existing convention to override).
-
-# Remaining Work
-1. Owner adds INVITE_CODE env var to Vercel project settings (manual — not in code)
-2. git add + commit + push → Vercel auto-deploys
-3. Smoke test on live URL:
-   - Register with correct invite code → succeeds
-   - Register with wrong code → error shown inline
-   - Register with correct code + trailing space → succeeds
-   - Login → unaffected, no invite code field visible
+- api/index.js is a CJS lazy-loader that dynamic imports server/app.js (ESM).
+  ncc bundles the CJS wrapper but leaves import() calls as native dynamic imports.
+  server/package.json has "type": "module" — Node loads app.js as ESM at runtime.
+- Neon DB schema was applied manually via Neon SQL Editor (0000_init.sql).
+  The drizzle migrate.js script is incompatible with the Neon HTTP driver (multi-statement).
+  Future migrations must be run via Neon SQL Editor or switched to Neon WebSocket driver.
 
 # Known Risks / Open Questions
-- Smoke test not yet run (deferred until after Vercel deploy)
-- Health endpoint still returns { status: 'ok' } without db field — follow-up task
+- BLOB_READ_WRITE_TOKEN not yet set in Vercel — will fail when image upload is used
+- Health endpoint returns { status: 'ok' } without db field — follow-up task
 - Multer 1.x vulnerability — follow-up task
-- Chat history trim (50 messages/user, AI sees last 20) — intentional, documented
+- drizzle migrate.js incompatible with neon-http driver — follow-up task
 
-# Verification Results
-- No console.log/error in auth.js — inviteCode never logged: PASS
-- inviteCode added to registerSchema (survives validate.js stripping): PASS
-- Gate check is before bcrypt call: PASS
-- inviteCode field render-gated to register mode only: PASS
-- inviteCode passed in same payload object as email/password/name: PASS
-- README matches actual stack (Gemini, Neon Postgres, Vercel Blob — not Anthropic/SQLite): PASS
-- .env.example has INVITE_CODE with correct comment: PASS
+# Remaining Work
+- NEXT: UI changes (TBD — user to specify)
+- FUTURE: Convert to standalone app (PWA or Electron — feasibility confirmed below)
 
-# Recommended Next Action
-Commit and push, then run manual smoke test on live URL.
+# Feasibility: Standalone App (browser-independent)
 
-# Forbidden Exploration
-- server/services/*
-- server/db/*
-- client/src/components/*
-- client/src/hooks/*
-- api/index.js
-- vercel.json
+Two viable paths:
+
+PWA (Progressive Web App) — lower effort
+- Add a web manifest + service worker to the existing React app
+- Users install from browser to home screen / desktop
+- Works offline with cached assets
+- No app store required
+- Best fit if mobile-first
+
+Electron — higher effort
+- Wraps the React frontend in a desktop shell
+- True native desktop app (Windows/Mac/Linux)
+- Requires bundling or pointing at live Vercel API
+- Best fit if desktop-first
+
+Recommendation: PWA first — it reuses the existing Vercel deployment with minimal changes.
 
 # Context Notes
 - branch: main
 - worktree: none
 - context pressure: low
-- Last commit: fab59fc (docs: add TASK-001 spec)
+- Last commit: Vercel ESM fix (api/index.js CJS dynamic import)
 
 # PowerShell Merge Block
 N/A — working directly on main. No worktree.
-
-Run from main:
-
-```powershell
-git add server/routes/auth.js client/src/context/AuthContext.jsx client/src/pages/LoginPage.jsx README.md .env.example ai/handoffs/CURRENT_STATE.md
-git commit -m "TASK-001: add invite-code gate and rewrite README for portfolio"
-git push
-```
