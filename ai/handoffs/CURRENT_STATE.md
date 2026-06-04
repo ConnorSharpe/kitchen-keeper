@@ -1,15 +1,16 @@
 # Task
-Idle — TASK-008 complete. Next: TASK-009 or TASK-010 (see Future Specs).
+TASK-010 COMPLETE. Next: TASK-009 (PWA Push Notifications).
 
 # Current Status
+TASK-010 COMPLETE (2026-06-04). `expandSuggestion()` extended with substitute field; RecipeModal renders amber inline annotation.
 TASK-008 COMPLETE (2026-06-04). Archived to `ai/tasks/archive/TASK-008.md`.
 TASK-007 COMPLETE. Migration `0003_onboarding_complete.sql` must be run in Neon SQL Editor before deploying.
 TASK-006 COMPLETE. Archived.
 TASK-005 COMPLETE. Archived.
 
-# Files Modified (TASK-008)
-- `server/routes/ai.js` — pass `allItems` as first arg to `suggestRecipes()`
-- `server/services/aiService.js` — new signature, defensive array guard, `expiringSet`+`expiresSoon` flag, strengthened prompt text
+# Files Modified (TASK-010)
+- `server/services/aiService.js` — extended `expandSuggestion()` prompt with substitute instructions + `substitute` field in JSON schema
+- `client/src/components/recipes/RecipeModal.jsx` — inline `→ pantry sub:` annotation with `typeof` guard
 
 # Verification Results
 - TASK-008: `npm run build` → ✓ 348 modules, no errors
@@ -23,10 +24,7 @@ TASK-005 COMPLETE. Archived.
 
 # Recommended Next Action
 1. Run TASK-007 migration in Neon SQL Editor (copy from `server/db/migrations/0003_onboarding_complete.sql`) if not yet done.
-2. Implement TASK-010 (spec approved — see `ai/tasks/TASK-010.md`):
-   - Edit `server/services/aiService.js` lines 179–186 (extend `expandSuggestion` prompt)
-   - Edit `client/src/components/recipes/RecipeModal.jsx` lines 114–125 (ingredient render + `typeof` guard)
-3. After TASK-010: start TASK-009 (PWA Push Notifications — largest scope, requires separate spec).
+2. Start TASK-009 (PWA Push Notifications — largest scope, spec not yet written).
 
 # Forbidden Exploration
 - server/middleware/auth.js (identity-only, unchanged)
@@ -42,9 +40,8 @@ TASK-005 COMPLETE. Archived.
 
 # Future Specs (priority order)
 
-## TASK-010 — Gemini Substitution Suggestions in Recipe Flow ← NEXT (APPROVED)
-Extend expandSuggestion() to include substitute field per ingredient.
-Spec: ai/tasks/TASK-010.md (DRAFT-2, implementation-ready).
+## TASK-010 — COMPLETE
+Archived to `ai/tasks/archive/TASK-010.md` (pending archive).
 
 ## TASK-009 — PWA Push Notifications
 Largest scope task. Depends on TASK-006 for full value. Spec not yet written.

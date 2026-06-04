@@ -105,7 +105,7 @@ router.post('/suggest-recipes', async (req, res) => {
     return days !== null && days >= 0 && days <= 7;
   });
 
-  const suggestions = await aiService.suggestRecipes(expiringItems);
+  const suggestions = await aiService.suggestRecipes(allItems, expiringItems);
   res.json({ suggestions });
 });
 

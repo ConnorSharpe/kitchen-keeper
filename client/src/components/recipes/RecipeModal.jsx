@@ -118,6 +118,11 @@ export default function RecipeModal({ recipe, onClose, onDelete, onToggleFavorit
                       {ing.quantity != null && `${ing.quantity} `}
                       {ing.unit && `${ing.unit} `}
                       {ing.name}
+                      {typeof ing.substitute === 'string' && ing.substitute.trim() !== '' && (
+                        <span className="text-amber-600 text-xs ml-1.5 font-medium">
+                          → pantry sub: {ing.substitute}
+                        </span>
+                      )}
                     </span>
                   </li>
                 ))}

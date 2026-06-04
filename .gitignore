@@ -7,3 +7,5 @@ uploads/*
 *.db-shm
 dist/
 .DS_Store
+
+.vercel

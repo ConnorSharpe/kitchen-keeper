@@ -51,7 +51,22 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3001/api/auth/me)",
       "Bash(npm uninstall *)",
       "Bash(grep -E \"\\\\.\\(js|ts\\)$\")",
-      "Bash(grep -E \"\\\\.\\(js|ts|json\\)$\")"
+      "Bash(grep -E \"\\\\.\\(js|ts|json\\)$\")",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\conno\\\\source\\\\repos\\\\kitchen-keeper\\\\client\\\\src\" -Recurse | Where-Object { !$_.PSIsContainer } | Select-Object FullName | ForEach-Object { $_.FullName.Replace\\(\"C:\\\\Users\\\\conno\\\\source\\\\repos\\\\kitchen-keeper\\\\\", \"\"\\) })",
+      "Bash(npx vercel *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git rm *)",
+      "WebSearch",
+      "WebFetch(domain:community.vercel.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\conno\\\\source\\\\repos\\\\kitchen-keeper\" -Force)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(powershell -Command \"\\(Get-Content 'C:\\\\Users\\\\conno\\\\source\\\\repos\\\\kitchen-keeper\\\\ai\\\\handoffs\\\\CURRENT_STATE.md'\\) -replace 'TASK-011','TASK-010' -replace 'TASK-010','TASK-009' -replace 'TASK-009','TASK-008' -replace 'TASK-008','TASK-007' -replace 'TASK-007','TASK-006' -replace 'TASK-006','TASK-005' -replace 'TASK-005','TASK-004' | Set-Content 'C:\\\\Users\\\\conno\\\\source\\\\repos\\\\kitchen-keeper\\\\ai\\\\handoffs\\\\CURRENT_STATE.md'\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"ai\\\\tasks\\\\archive\")",
+      "PowerShell(Move-Item \"ai\\\\tasks\\\\TASK-001.md\" \"ai\\\\tasks\\\\archive\\\\TASK-001.md\")",
+      "PowerShell(Move-Item \"ai\\\\tasks\\\\TASK-002-ABANDONED-electron.md\" \"ai\\\\tasks\\\\archive\\\\TASK-002-ABANDONED-electron.md\")",
+      "PowerShell(Move-Item \"ai\\\\tasks\\\\TASK-003.md\" \"ai\\\\tasks\\\\archive\\\\TASK-003.md\")"
     ]
   }
 }
