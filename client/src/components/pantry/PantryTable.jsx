@@ -1,9 +1,8 @@
-import { getExpiryStatus, getExpiryRowClass, getExpiryBadgeClass, getExpiryLabel } from '../../utils/expiry.js';
+import { getExpiryStatus, getExpiryRowClass, getExpiryBadgeClass, getExpiryLabel, getRipeningState, getRipeningDays } from '../../utils/expiry.js';
 
-function ExpiryBadge({ expiryDate, isFrozen }) {
+function ExpiryBadge({ expiryDate, status }) {
   if (!expiryDate) return <span className="text-gray-400 text-xs">—</span>;
 
-  const status = isFrozen ? 'ok' : getExpiryStatus(expiryDate);
   const cls = getExpiryBadgeClass(status);
   const label = getExpiryLabel(expiryDate);
 
@@ -41,8 +40,13 @@ export default function PantryTable({ items, onEdit, onMarkUsed, onToggleFreeze,
         </thead>
         <tbody className="bg-white divide-y divide-gray-100">
           {items.map((item) => {
-            const status = item.isFrozen ? 'ok' : getExpiryStatus(item.expiryDate);
-            const rowCls = item.isFrozen ? '' : getExpiryRowClass(status);
+            const ripeState    = getRipeningState(item);
+            const expiryStatus = getExpiryStatus(item.expiryDate);
+            const rowStatus = ripeState === 'frozen'   ? 'ok'
+                            : ripeState === 'ripening' ? 'ripening'
+                            : expiryStatus;
+            const rowCls = ripeState === 'frozen' ? '' : getExpiryRowClass(rowStatus);
+            const badgeStatus = item.isFrozen ? 'ok' : expiryStatus;
             return (
               <tr key={item.id} className={`${rowCls} transition-colors`}>
                 <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
@@ -57,10 +61,10 @@ export default function PantryTable({ items, onEdit, onMarkUsed, onToggleFreeze,
                 <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{item.quantity}</td>
                 <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{item.unit}</td>
                 <td className="px-4 py-3 whitespace-nowrap">
-                  <ExpiryBadge expiryDate={item.expiryDate} isFrozen={item.isFrozen} />
+                  <ExpiryBadge expiryDate={item.expiryDate} status={badgeStatus} />
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
-                  <StatusLabel status={status} isFrozen={item.isFrozen} />
+                  <StatusLabel ripeState={ripeState} expiryStatus={expiryStatus} readyDate={item.readyDate} />
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   <div className="flex items-center gap-2">
@@ -93,8 +97,15 @@ export default function PantryTable({ items, onEdit, onMarkUsed, onToggleFreeze,
   );
 }
 
-function StatusLabel({ status, isFrozen }) {
-  if (isFrozen) return <span className="text-blue-600 text-xs">Frozen</span>;
+function StatusLabel({ ripeState, expiryStatus, readyDate }) {
+  if (ripeState === 'frozen') {
+    return <span className="text-blue-600 text-xs">Frozen</span>;
+  }
+  if (ripeState === 'ripening') {
+    const days = getRipeningDays(readyDate);
+    const label = days === 1 ? 'Ready tomorrow' : `Ready in ${days}d`;
+    return <span className="text-purple-600 text-xs font-medium">{label}</span>;
+  }
   const map = {
     ok:       { cls: 'text-green-600', text: 'Good' },
     warning:  { cls: 'text-amber-600', text: 'Expiring soon' },
@@ -102,7 +113,7 @@ function StatusLabel({ status, isFrozen }) {
     expired:  { cls: 'text-red-700',   text: 'Expired' },
     none:     { cls: 'text-gray-400',  text: 'No date' },
   };
-  const { cls, text } = map[status] ?? map.none;
+  const { cls, text } = map[expiryStatus] ?? map.none;
   return <span className={`text-xs font-medium ${cls}`}>{text}</span>;
 }
 

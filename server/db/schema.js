@@ -26,6 +26,7 @@ export const pantryItems = pgTable('pantry_items', {
   unit:               text('unit').notNull().default('item'),
   purchaseDate:       text('purchase_date'),
   expiryDate:         text('expiry_date'),
+  readyDate:          text('ready_date'),
   isFrozen:           boolean('is_frozen').notNull().default(false),
   frozenAt:           text('frozen_at'),
   originalExpiryDate: text('original_expiry_date'),

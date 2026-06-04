@@ -24,6 +24,7 @@ function buildInitialState(item, prefill) {
       quantity:     '1',
       unit:         'item',
       purchaseDate: '',
+      readyDate:    '',
       expiryDate:   '',
       notes:        '',
     };
@@ -34,6 +35,7 @@ function buildInitialState(item, prefill) {
     quantity:     String(item.quantity),
     unit:         item.unit,
     purchaseDate: fromISO(item.purchaseDate),
+    readyDate:    fromISO(item.readyDate),
     expiryDate:   fromISO(item.expiryDate),
     notes:        item.notes ?? '',
   };
@@ -70,8 +72,9 @@ export default function AddItemModal({ item, prefill, onClose, onSave }) {
         category:     form.category,
         quantity:     Number(form.quantity),
         unit:         form.unit.trim() || 'item',
-        purchaseDate: toISO(form.purchaseDate),
-        expiryDate:   toISO(form.expiryDate),
+        purchaseDate: form.purchaseDate ? toISO(form.purchaseDate) : null,
+        readyDate:    form.readyDate    ? toISO(form.readyDate)    : null,
+        expiryDate:   form.expiryDate   ? toISO(form.expiryDate)   : null,
         notes:        form.notes.trim() || null,
       };
       await onSave(body);
@@ -174,6 +177,15 @@ export default function AddItemModal({ item, prefill, onClose, onSave }) {
               />
             </Field>
           </div>
+
+          <Field label="Ready date — when this item will be usable (optional)" error={fieldErrors.readyDate?.[0]}>
+            <input
+              type="date"
+              value={form.readyDate}
+              onChange={set('readyDate')}
+              className={inputCls}
+            />
+          </Field>
 
           <Field label="Notes" error={fieldErrors.notes?.[0]}>
             <textarea

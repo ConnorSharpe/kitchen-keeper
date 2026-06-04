@@ -16,6 +16,7 @@ const createSchema = z.object({
   unit:         z.string().min(1).max(50).default('item'),
   purchaseDate: dateField,
   expiryDate:   dateField,
+  readyDate:    dateField,
   notes:        z.string().max(500).nullable().optional(),
 });
 

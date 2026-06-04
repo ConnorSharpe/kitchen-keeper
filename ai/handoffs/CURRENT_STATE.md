@@ -2,7 +2,8 @@
 TASK-006: readyDate / Ripening State
 
 # Current Status
-TASK-005 complete and archived. TASK-006 spec APPROVED (DRAFT-3, 3 review rounds). Ready to implement.
+TASK-006 COMPLETE. All 6 changes implemented. Build passes (347 modules, no errors).
+Migration `0002_ready_date.sql` confirmed run in Neon — `ready_date text` column live on pantry_items.
 
 # What TASK-005 Shipped (complete — archived to ai/tasks/archive/TASK-005.md)
 - client/src/utils/openFoodFacts.js: NEW — fetchProductByBarcode(), mapProduct(), mapCategory()
@@ -45,8 +46,19 @@ Requires camera + HTTPS (Vercel preview deploy or ngrok for mobile).
 - TASK-005: `npm run build` → ✓ 347 modules, no errors, BarcodeScanner lazy chunk confirmed
 - Smoke test: pending (camera/HTTPS required)
 
+# Files Modified (TASK-006)
+- `server/db/migrations/0002_ready_date.sql` — NEW (run in Neon SQL Editor)
+- `server/db/schema.js` — readyDate column added after expiryDate
+- `server/routes/pantry.js` — readyDate: dateField added to createSchema (updateSchema derives it)
+- `client/src/utils/expiry.js` — getRipeningDays, isRipening, getRipeningState added; ripening cases added to row/badge class switches
+- `client/src/components/pantry/AddItemModal.jsx` — readyDate in buildInitialState, handleSubmit, and form UI
+- `client/src/components/pantry/PantryTable.jsx` — ExpiryBadge decoupled (status prop); StatusLabel updated; row render uses getRipeningState
+
 # Recommended Next Action
-Implement TASK-006. Run migration SQL in Neon SQL Editor first, then implement the 5 file changes per the spec.
+1. ~~Run in Neon SQL Editor~~ DONE
+2. Commit and push to main (see PowerShell Merge Block below)
+3. Deploy to Vercel preview
+4. Manual smoke test per TASK-006 verification steps
 
 # Forbidden Exploration
 - server/db/* (no schema changes)
