@@ -23,11 +23,10 @@ TASK-005 COMPLETE. Archived.
 
 # Recommended Next Action
 1. Run TASK-007 migration in Neon SQL Editor (copy from `server/db/migrations/0003_onboarding_complete.sql`) if not yet done.
-2. Deploy to Vercel preview and smoke test:
-   - TASK-007: new user registration → staples checklist appears once
-   - TASK-008: add 3 no-expiry items → suggest-recipes → assert non-empty response
-   - TASK-008: empty pantry → assert `[]` returned with no AI call
-3. Start TASK-009 (PWA Push Notifications) or TASK-010 (Gemini Substitution Suggestions).
+2. Implement TASK-010 (spec approved — see `ai/tasks/TASK-010.md`):
+   - Edit `server/services/aiService.js` lines 179–186 (extend `expandSuggestion` prompt)
+   - Edit `client/src/components/recipes/RecipeModal.jsx` lines 114–125 (ingredient render + `typeof` guard)
+3. After TASK-010: start TASK-009 (PWA Push Notifications — largest scope, requires separate spec).
 
 # Forbidden Exploration
 - server/middleware/auth.js (identity-only, unchanged)
@@ -43,11 +42,12 @@ TASK-005 COMPLETE. Archived.
 
 # Future Specs (priority order)
 
-## TASK-009 — PWA Push Notifications
-Largest scope task. Depends on TASK-006 for full value.
+## TASK-010 — Gemini Substitution Suggestions in Recipe Flow ← NEXT (APPROVED)
+Extend expandSuggestion() to include substitute field per ingredient.
+Spec: ai/tasks/TASK-010.md (DRAFT-2, implementation-ready).
 
-## TASK-010 — Gemini Substitution Suggestions in Recipe Flow
-Extend expandSuggestion() to include missing ingredients + substitutes.
+## TASK-009 — PWA Push Notifications
+Largest scope task. Depends on TASK-006 for full value. Spec not yet written.
 
 # PowerShell Merge Block
 N/A — working directly on main.
