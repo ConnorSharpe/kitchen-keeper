@@ -5,7 +5,7 @@ import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { users } from '../db/schema.js';
+import { users, households } from '../db/schema.js';
 import { validate } from '../middleware/validate.js';
 import { requireAuth } from '../middleware/auth.js';
 
@@ -21,10 +21,11 @@ const cookieOpts = {
 };
 
 const registerSchema = z.object({
-  email:      z.string().email('Invalid email address'),
-  password:   z.string().min(8, 'Password must be at least 8 characters'),
-  name:       z.string().min(1, 'Name is required').max(100),
-  inviteCode: z.string().trim().optional(),
+  email:         z.string().email('Invalid email address'),
+  password:      z.string().min(8, 'Password must be at least 8 characters'),
+  name:          z.string().min(1, 'Name is required').max(100),
+  inviteCode:    z.string().trim().optional(),
+  householdCode: z.string().trim().optional(),
 });
 
 const loginSchema = z.object({
@@ -40,21 +41,25 @@ const loginLimiter = rateLimit({
   legacyHeaders:   false,
 });
 
+function generateJoinCode() {
+  return Math.random().toString(36).slice(2, 10).toUpperCase();
+}
+
 function signToken(user) {
   return jwt.sign(
-    { sub: user.id, email: user.email, name: user.name },
+    { sub: user.id, email: user.email, name: user.name, householdId: user.householdId },
     process.env.JWT_SECRET,
     { expiresIn: '24h' }
   );
 }
 
 function safeUser(user) {
-  return { id: user.id, email: user.email, name: user.name };
+  return { id: user.id, email: user.email, name: user.name, householdId: user.householdId };
 }
 
 // POST /api/auth/register
 router.post('/register', validate(registerSchema), async (req, res) => {
-  const { email, password, name, inviteCode } = req.body;
+  const { email, password, name, inviteCode, householdCode } = req.body;
 
   const envCode = (process.env.INVITE_CODE ?? '').trim();
   if (envCode) {
@@ -66,14 +71,33 @@ router.post('/register', validate(registerSchema), async (req, res) => {
     }
   }
 
+  // Resolve household: join existing or create new
+  let householdId;
+  if (householdCode?.trim()) {
+    const [existing] = await db
+      .select()
+      .from(households)
+      .where(eq(households.joinCode, householdCode.trim().toUpperCase()));
+    if (!existing) {
+      const err = new Error('Invalid household code');
+      err.status = 400;
+      throw err;
+    }
+    householdId = existing.id;
+  } else {
+    const [newHousehold] = await db
+      .insert(households)
+      .values({ name: `${name}'s Household`, joinCode: generateJoinCode() })
+      .returning();
+    householdId = newHousehold.id;
+  }
+
   const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
 
   let user;
   try {
-    // .returning() gives us the inserted row in one round-trip (Postgres RETURNING clause)
-    [user] = await db.insert(users).values({ email, passwordHash, name }).returning();
+    [user] = await db.insert(users).values({ email, passwordHash, name, householdId }).returning();
   } catch (err) {
-    // Postgres unique violation code — equivalent of SQLite SQLITE_CONSTRAINT_UNIQUE
     if (err.code === '23505') {
       const conflict = new Error('An account with this email already exists');
       conflict.status = 409;

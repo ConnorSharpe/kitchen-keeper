@@ -29,28 +29,28 @@ function parse(row) {
   return out;
 }
 
-export async function getAll(userId) {
+export async function getAll(householdId) {
   const rows = await db
     .select()
     .from(recipes)
-    .where(eq(recipes.userId, userId))
+    .where(eq(recipes.householdId, householdId))
     .orderBy(desc(recipes.savedAt));
   return rows.map(parse);
 }
 
-export async function create(userId, data) {
+export async function create(householdId, data) {
   const [row] = await db
     .insert(recipes)
-    .values({ ...serialize(data), userId })
+    .values({ ...serialize(data), householdId })
     .returning();
   return parse(row);
 }
 
-// Two-step ownership: find by id first (→ 404), then check userId (→ 403).
-export async function update(userId, id, data) {
+// Two-step ownership: find by id first (→ 404), then check householdId (→ 403).
+export async function update(householdId, id, data) {
   const [existing] = await db.select().from(recipes).where(eq(recipes.id, id));
   if (!existing) return { status: 'not_found' };
-  if (existing.userId !== userId) return { status: 'forbidden' };
+  if (existing.householdId !== householdId) return { status: 'forbidden' };
 
   await db.update(recipes)
     .set({ ...serialize(data), updatedAt: new Date().toISOString() })
@@ -60,10 +60,10 @@ export async function update(userId, id, data) {
   return { status: 'ok', recipe: parse(updated) };
 }
 
-export async function remove(userId, id) {
+export async function remove(householdId, id) {
   const [existing] = await db.select().from(recipes).where(eq(recipes.id, id));
   if (!existing) return { status: 'not_found' };
-  if (existing.userId !== userId) return { status: 'forbidden' };
+  if (existing.householdId !== householdId) return { status: 'forbidden' };
 
   // Delete blob if it's a full URL (Vercel Blob) — fire-and-forget, never block the caller
   if (existing.imageUrl?.startsWith('http')) {
@@ -76,10 +76,10 @@ export async function remove(userId, id) {
   return { status: 'ok' };
 }
 
-export async function toggleFavorite(userId, id) {
+export async function toggleFavorite(householdId, id) {
   const [existing] = await db.select().from(recipes).where(eq(recipes.id, id));
   if (!existing) return { status: 'not_found' };
-  if (existing.userId !== userId) return { status: 'forbidden' };
+  if (existing.householdId !== householdId) return { status: 'forbidden' };
 
   await db.update(recipes)
     .set({ isFavorite: !existing.isFavorite, updatedAt: new Date().toISOString() })

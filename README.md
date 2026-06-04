@@ -1,6 +1,6 @@
 # Kitchen Keeper
 
-Kitchen Keeper is an AI-powered food waste management app. Add pantry items manually or by scanning a grocery receipt, see what's expiring, get AI meal suggestions tailored to what you have on hand, save and manage recipes, build shopping lists, and chat with an AI kitchen assistant — all from your phone or browser.
+Kitchen Keeper is an AI-powered food waste management app for households. Add pantry items manually or by scanning a grocery receipt, see what's expiring, get AI meal suggestions tailored to what you have on hand, save and manage recipes, build shopping lists, and chat with an AI kitchen assistant — all from your phone or browser. Multiple household members share the same pantry and lists in real time.
 
 ## Live Demo
 
@@ -21,6 +21,7 @@ Kitchen Keeper is an AI-powered food waste management app. Add pantry items manu
 
 ## Features
 
+- **Household sharing** — invite family members by email; everyone shares the same pantry, recipes, and lists
 - **Receipt scanning** — photograph a grocery receipt; Gemini vision extracts items and adds them to your pantry
 - **Expiry tracking** — color-coded urgency so you always know what needs to be used first
 - **Eat This Now** — AI meal suggestions generated from your most-expiring ingredients
@@ -38,7 +39,7 @@ Kitchen Keeper is an AI-powered food waste management app. Add pantry items manu
 4. Get a [Gemini API key](https://aistudio.google.com) from Google AI Studio (free tier available)
 5. Deploy to [Vercel](https://vercel.com) — add all env vars from `.env.example`
    (The Neon and Vercel Blob marketplace integrations auto-provide their tokens)
-6. Run migrations: `npx drizzle-kit push` (from project root, with `.env` populated)
+6. Run the SQL files in `server/db/migrations/` against your Neon database using the Neon SQL Editor (drizzle-kit is incompatible with the Neon HTTP driver)
 7. Visit the deployed URL and register (leave `INVITE_CODE` unset on your own instance)
 
 ## Environment Variables
@@ -52,6 +53,8 @@ Kitchen Keeper is an AI-powered food waste management app. Add pantry items manu
 | `CLIENT_ORIGIN`         | Frontend URL for CORS                                     | Set manually            |
 | `INVITE_CODE`           | Registration gate secret. Omit or leave empty to disable  | Set manually            |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob access token                                  | Vercel Blob integration |
+| `RESEND_API_KEY`        | Resend API key for household invite emails                | resend.com              |
+| `RESEND_FROM_EMAIL`     | From address for invite emails (default: onboarding@resend.dev) | Set manually      |
 
 ## Local Development
 

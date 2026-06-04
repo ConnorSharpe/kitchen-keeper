@@ -6,6 +6,26 @@ Full Technical Specification — Version 4.0
 
 AI-Powered Home Food Waste Management System
 
+---
+
+NOTE — IMPLEMENTATION DIVERGENCES (updated June 2026)
+
+The live application differs from the original v4 design in the following ways.
+All sections below marked with [CURRENT] reflect the actual deployed state.
+
+  Database:    SQLite (better-sqlite3) → Neon Postgres (Drizzle ORM + neon-http driver)
+  Migrations:  drizzle migrate.js (auto on startup) → manual SQL via Neon SQL Editor
+  AI provider: Anthropic Claude → Google Gemini 2.0 Flash
+  File storage: local /uploads directory → Vercel Blob
+  Data scoping: per-user (user_id FK on data tables) → per-household (household_id FK)
+  Multi-user:  single user only → household sharing model with email invite flow
+
+Section 3 (Database Schema) has been fully updated to reflect the current schema.
+All other sections describe the original design intent; principles remain valid
+unless contradicted by the divergences listed above.
+
+---
+
 
 
 
@@ -114,7 +134,7 @@ Every design decision is evaluated against this loop:
 
 Dashboard-first: the default route (/) is the Dashboard, not the pantry. The answer to 'what do I cook?' is always one tap away.
 
-No tech debt shortcuts: every table has user_id, every route is auth-guarded, timestamps use UTC ISO-8601.
+No tech debt shortcuts: every data table has household_id (migrated from user_id — see Section 3), every route is auth-guarded, timestamps use UTC ISO-8601.
 
 Separation of concerns: React SPA / REST API / AI service layer — each has a single responsibility.
 
@@ -124,7 +144,7 @@ Prompt safety: user-controlled data is never interpolated as free text into AI p
 
 Testable by design: business logic lives in service modules, not in route handlers or React components.
 
-Extensible: adding a second user requires only creating an account — zero schema changes.
+Extensible: household sharing is built in — a second user registers with a household join code and immediately sees all shared data.
 
 Minimal dependencies: no library is included unless it clearly earns its place.
 
@@ -146,11 +166,13 @@ Express API Server (Node.js)
 
     |-- Shopping Router-> shoppingService-> db
 
-    |-- AI Router      -> aiService      -> Anthropic API
+    |-- AI Router      -> aiService      -> Google Gemini API
 
-    |                  -> static /uploads (recipe images only)
+    |-- Household Router -> households, users tables
 
-SQLite database (better-sqlite3, WAL mode)
+Neon Postgres (via @neondatabase/serverless + Drizzle ORM)
+
+Vercel Blob (recipe images)
 
 server/utils/expiry.js  (shared expiry logic, server-only)
 
@@ -208,6 +230,8 @@ kitchen-keeper/
 
 |   |   |-- shopping.js          # /api/shopping/*
 
+|   |   |-- household.js         # /api/household/* (info, members, invite)
+
 |   |   `-- ai.js                # /api/ai/*
 
 |   |-- services/
@@ -220,13 +244,13 @@ kitchen-keeper/
 
 |   |   |-- chatService.js
 
-|   |   `-- aiService.js         # All Anthropic SDK calls centralised here
+|   |   |-- emailService.js      # Resend invite emails
+
+|   |   `-- aiService.js         # All Gemini SDK calls centralised here
 
 |   `-- utils/
 
 |       `-- expiry.js            # getExpiryStatus(), getExpiryDays() — shared server logic
-
-|-- uploads/                     # Recipe images (gitignored). Receipts deleted after parse.
 
 `-- client/
 
@@ -274,6 +298,8 @@ kitchen-keeper/
 
         |   |-- ShoppingPage.jsx
 
+        |   |-- HouseholdPage.jsx    # /household — join code, members list, invite by email
+
         |   `-- ChatPage.jsx         # Secondary — 'Explore' in sidebar
 
         `-- components/
@@ -320,17 +346,38 @@ kitchen-keeper/
 
 
 
-3. Database Schema (Drizzle ORM)
+3. Database Schema (Drizzle ORM) [CURRENT]
 
-All tables include user_id as a foreign key. This is non-negotiable even in single-user deployments. No schema migration is needed to add a second user.
+All data tables (pantry_items, recipes, shopping_lists, chat_messages) are scoped by
+household_id, not user_id. Multiple users in the same household share all data.
+The households table holds a join_code — new users enter this code at registration
+to join an existing household rather than creating a new one.
+
+
+
+3.0 Households Table [NEW]
+
+export const households = pgTable('households', {
+
+  id:        serial('id').primaryKey(),
+
+  name:      text('name').notNull(),
+
+  joinCode:  text('join_code').notNull().unique(),   // 8-char uppercase alphanumeric
+
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+
+});
 
 
 
 3.1 Users Table
 
-export const users = sqliteTable('users', {
+export const users = pgTable('users', {
 
-  id:           integer('id').primaryKey({ autoIncrement: true }),
+  id:           serial('id').primaryKey(),
+
+  householdId:  integer('household_id').notNull().references(() => households.id),
 
   email:        text('email').notNull().unique(),
 
@@ -348,13 +395,13 @@ export const users = sqliteTable('users', {
 
 3.2 Pantry Items Table
 
-export const pantryItems = sqliteTable('pantry_items', {
+export const pantryItems = pgTable('pantry_items', {
 
-  id:                 integer('id').primaryKey({ autoIncrement: true }),
+  id:                 serial('id').primaryKey(),
 
-  userId:             integer('user_id').notNull()
+  householdId:        integer('household_id').notNull()
 
-                        .references(() => users.id, { onDelete: 'cascade' }),
+                        .references(() => households.id, { onDelete: 'cascade' }),
 
   name:               text('name').notNull(),
 
@@ -368,15 +415,19 @@ export const pantryItems = sqliteTable('pantry_items', {
 
   expiryDate:         text('expiry_date'),
 
-  isFrozen:           integer('is_frozen', { mode: 'boolean' }).notNull().default(false),
+  isFrozen:           boolean('is_frozen').notNull().default(false),
 
   frozenAt:           text('frozen_at'),
 
   originalExpiryDate: text('original_expiry_date'),
 
-  freezeNotes:        text('freeze_notes'),   // AI-generated storage tip
+  freezeNotes:        text('freeze_notes'),
 
   notes:              text('notes'),
+
+  consumedAt:         text('consumed_at'),
+
+  wasExpiring:        boolean('was_expiring'),
 
   createdAt:          text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 
@@ -388,23 +439,23 @@ export const pantryItems = sqliteTable('pantry_items', {
 
 3.3 Recipes Table
 
-export const recipes = sqliteTable('recipes', {
+export const recipes = pgTable('recipes', {
 
-  id:          integer('id').primaryKey({ autoIncrement: true }),
+  id:          serial('id').primaryKey(),
 
-  userId:      integer('user_id').notNull()
+  householdId: integer('household_id').notNull()
 
-                 .references(() => users.id, { onDelete: 'cascade' }),
+                 .references(() => households.id, { onDelete: 'cascade' }),
 
   name:        text('name').notNull(),
 
   description: text('description'),
 
-  source:      text('source'),    // 'upload' | 'ai_suggested' | 'manual'
+  source:      text('source'),    // 'upload' | 'ai_suggested' | 'web_suggested' | 'manual'
 
   sourceUrl:   text('source_url'),
 
-  imageUrl:    text('image_url'), // path to uploaded image in /uploads, if any
+  imageUrl:    text('image_url'), // full Vercel Blob URL for uploaded images
 
   ingredients: text('ingredients').notNull(),  // JSON: [{name, quantity, unit}]
 
@@ -418,7 +469,7 @@ export const recipes = sqliteTable('recipes', {
 
   tags:        text('tags'),                   // JSON: string[]
 
-  isFavorite:  integer('is_favorite', { mode: 'boolean' }).notNull().default(false),
+  isFavorite:  boolean('is_favorite').notNull().default(false),
 
   savedAt:     text('saved_at').notNull().$defaultFn(() => new Date().toISOString()),
 
@@ -430,41 +481,45 @@ export const recipes = sqliteTable('recipes', {
 
 3.4 Shopping Tables
 
-export const shoppingLists = sqliteTable('shopping_lists', {
+export const shoppingLists = pgTable('shopping_lists', {
 
-  id:        integer('id').primaryKey({ autoIncrement: true }),
+  id:          serial('id').primaryKey(),
 
-  userId:    integer('user_id').notNull()
+  householdId: integer('household_id').notNull()
 
-               .references(() => users.id, { onDelete: 'cascade' }),
+                 .references(() => households.id, { onDelete: 'cascade' }),
 
-  name:      text('name').notNull(),
+  name:        text('name').notNull(),
 
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  createdAt:   text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt:   text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
 
 });
 
 
 
-export const shoppingListItems = sqliteTable('shopping_list_items', {
+// Ownership verified via join through shoppingLists — no householdId column by design
 
-  id:             integer('id').primaryKey({ autoIncrement: true }),
+export const shoppingListItems = pgTable('shopping_list_items', {
 
-  listId:         integer('list_id').notNull()
+  id:              serial('id').primaryKey(),
 
-                    .references(() => shoppingLists.id, { onDelete: 'cascade' }),
+  listId:          integer('list_id').notNull()
 
-  ingredientName: text('ingredient_name').notNull(),
+                     .references(() => shoppingLists.id, { onDelete: 'cascade' }),
 
-  quantity:       real('quantity'),
+  ingredientName:  text('ingredient_name').notNull(),
 
-  unit:           text('unit'),
+  quantity:        real('quantity'),
 
-  isChecked:      integer('is_checked', { mode: 'boolean' }).notNull().default(false),
+  unit:            text('unit'),
 
-  sortOrder:      integer('sort_order').notNull().default(0),
+  isChecked:       boolean('is_checked').notNull().default(false),
+
+  sortOrder:       integer('sort_order').notNull().default(0),
+
+  hasUnitMismatch: boolean('has_unit_mismatch').notNull().default(false),
 
 });
 
@@ -472,65 +527,41 @@ export const shoppingListItems = sqliteTable('shopping_list_items', {
 
 3.5 Chat Messages Table
 
-export const chatMessages = sqliteTable('chat_messages', {
+export const chatMessages = pgTable('chat_messages', {
 
-  id:        integer('id').primaryKey({ autoIncrement: true }),
+  id:          serial('id').primaryKey(),
 
-  userId:    integer('user_id').notNull()
+  householdId: integer('household_id').notNull()
 
-               .references(() => users.id, { onDelete: 'cascade' }),
+                 .references(() => households.id, { onDelete: 'cascade' }),
 
-  role:      text('role').notNull(),   // 'user' | 'assistant'
+  role:        text('role').notNull(),   // 'user' | 'assistant'
 
-  content:   text('content').notNull(),
+  content:     text('content').notNull(),
 
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  createdAt:   text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 
 });
 
-
-
-3.6 Migration Strategy
-
-Never use 'drizzle-kit push' in production. It applies changes directly without a migration record and can silently drop columns during renames.
-
-// drizzle.config.js
-
-export default {
-
-  schema:        './server/db/schema.js',
-
-  out:           './server/db/migrations',
-
-  dialect:       'sqlite',
-
-  dbCredentials: { url: './kitchen-keeper.db' }
-
-};
+Chat history is household-scoped (not per-user) — all household members share
+the same AI context window, which is appropriate since they share the same pantry.
 
 
 
-// Development (new machine or empty DB only):
+3.6 Migration Strategy [CURRENT]
 
-npx drizzle-kit push
+drizzle migrate.js is INCOMPATIBLE with the Neon HTTP driver (@neondatabase/serverless).
+All migrations are applied manually via the Neon SQL Editor.
 
+Migration files live in server/db/migrations/:
+  0000_init.sql       — original schema (all tables, user_id FKs)
+  0001_households.sql — introduces households table, migrates user_id → household_id
 
+To apply a new migration: paste the SQL file contents into the Neon SQL Editor
+and execute. There is no auto-migration on server startup.
 
-// After any schema change (generates SQL file):
-
-npx drizzle-kit generate
-
-
-
-// server/db/migrate.js — runs at server startup:
-
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-
-import { db } from './client.js';
-
-migrate(db, { migrationsFolder: './server/db/migrations' });
-
-migrate.js is imported at the top of server/index.js before any router is mounted. This ensures schema is always current when the server starts, with no manual steps required.
+drizzle.config.js is present for schema introspection tooling only — do not use
+drizzle-kit push or drizzle-kit migrate against the Neon database.
 
 
 
@@ -862,17 +893,17 @@ export function getStaticFreezeExtension(category, currentExpiryDate) {
 
 6.4 Nested Resource Ownership — Explicit Join Pattern
 
-shoppingListItems has no userId column. All operations on items must verify ownership by joining through shoppingLists. Never look up a list item by id alone.
+shoppingListItems has no householdId column. All operations on items must verify ownership by joining through shoppingLists. Never look up a list item by id alone.
 
 // CORRECT — verify ownership through the parent join before touching items
 
-async function toggleItem(userId, listId, itemId) {
+async function toggleItem(householdId, listId, itemId) {
 
-  // Confirm the list belongs to this user
+  // Confirm the list belongs to this household
 
   const list = await db.select().from(shoppingLists)
 
-    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.userId, userId)))
+    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.householdId, householdId)))
 
     .get();
 
@@ -926,7 +957,7 @@ await db.update(pantryItems)
 
   .set({ ...data, updatedAt: new Date().toISOString() })
 
-  .where(and(eq(pantryItems.id, id), eq(pantryItems.userId, userId)));
+  .where(and(eq(pantryItems.id, id), eq(pantryItems.householdId, householdId)));
 
 
 
@@ -944,7 +975,7 @@ ChatPage must load previous messages on mount. Without this endpoint, every navi
 
 router.get('/chat/history', requireAuth, async (req, res) => {
 
-  const messages = await chatService.getHistory(req.user.id, 50);
+  const messages = await chatService.getHistory(req.user.householdId, 50);
 
   res.json({ messages });
 
@@ -1626,7 +1657,7 @@ express-rate-limit: 10 req/min per IP on /api/auth/login. Prevents brute-force.
 
 Zod validates ALL request bodies before service logic runs. Invalid input rejected at the boundary.
 
-Every DB query filters by userId. Ownership verified before update/delete.
+Every DB query filters by householdId. Ownership verified before update/delete.
 
 Nested resource ownership (shoppingListItems) verified via explicit join through shoppingLists, never by item ID alone.
 
@@ -2490,7 +2521,7 @@ nodemon ignores *.db, *.db-wal, *.db-shm, uploads/ — no restart on DB write.
 
 Phase 2 — Database
 
-schema.js defines all 6 tables with user_id FKs. pantryItems includes consumedAt and wasExpiring.
+schema.js defines all 7 tables (households + 6 data tables) with household_id FKs on data tables. pantryItems includes consumedAt and wasExpiring.
 
 drizzle-kit generate creates migration files in server/db/migrations/.
 
@@ -2528,7 +2559,7 @@ Any 401 mid-session causes clean redirect to /login (not an error toast).
 
 Phase 4 — Pantry CRUD
 
-All CRUD endpoints filter by userId.
+All CRUD endpoints filter by householdId.
 
 Ownership check on PATCH and DELETE returns 403 if wrong user.
 

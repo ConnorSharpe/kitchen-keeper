@@ -1,7 +1,15 @@
 import { pgTable, text, integer, real, boolean, serial } from 'drizzle-orm/pg-core';
 
+export const households = pgTable('households', {
+  id:        serial('id').primaryKey(),
+  name:      text('name').notNull(),
+  joinCode:  text('join_code').notNull().unique(),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+});
+
 export const users = pgTable('users', {
   id:           serial('id').primaryKey(),
+  householdId:  integer('household_id').notNull().references(() => households.id),
   email:        text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   name:         text('name').notNull(),
@@ -11,7 +19,7 @@ export const users = pgTable('users', {
 
 export const pantryItems = pgTable('pantry_items', {
   id:                 serial('id').primaryKey(),
-  userId:             integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  householdId:        integer('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
   name:               text('name').notNull(),
   category:           text('category').notNull().default('Other'),
   quantity:           real('quantity').notNull().default(1),
@@ -31,7 +39,7 @@ export const pantryItems = pgTable('pantry_items', {
 
 export const recipes = pgTable('recipes', {
   id:          serial('id').primaryKey(),
-  userId:      integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  householdId: integer('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
   name:        text('name').notNull(),
   description: text('description'),
   source:      text('source'),
@@ -49,8 +57,8 @@ export const recipes = pgTable('recipes', {
 });
 
 export const shoppingLists = pgTable('shopping_lists', {
-  id:        serial('id').primaryKey(),
-  userId:    integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  id:          serial('id').primaryKey(),
+  householdId: integer('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
   name:      text('name').notNull(),
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
   updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
@@ -69,8 +77,8 @@ export const shoppingListItems = pgTable('shopping_list_items', {
 });
 
 export const chatMessages = pgTable('chat_messages', {
-  id:        serial('id').primaryKey(),
-  userId:    integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  id:          serial('id').primaryKey(),
+  householdId: integer('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
   role:      text('role').notNull(), // 'user' | 'assistant'
   content:   text('content').notNull(),
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),

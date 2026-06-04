@@ -4,9 +4,9 @@ import { pantryItems } from '../db/schema.js';
 import { getExpiryStatus } from '../utils/expiry.js';
 import { getStaticFreezeExtension } from '../utils/freezeDefaults.js';
 
-export async function getAll(userId, { expiringWithin } = {}) {
+export async function getAll(householdId, { expiringWithin } = {}) {
   const conditions = [
-    eq(pantryItems.userId, userId),
+    eq(pantryItems.householdId, householdId),
     isNull(pantryItems.consumedAt),
   ];
 
@@ -21,16 +21,16 @@ export async function getAll(userId, { expiringWithin } = {}) {
   return db.select().from(pantryItems).where(and(...conditions));
 }
 
-export async function create(userId, data) {
-  const [row] = await db.insert(pantryItems).values({ ...data, userId }).returning();
+export async function create(householdId, data) {
+  const [row] = await db.insert(pantryItems).values({ ...data, householdId }).returning();
   return row;
 }
 
-// Two-step ownership: find by id first (→ 404), then check userId (→ 403).
-export async function update(userId, id, data) {
+// Two-step ownership: find by id first (→ 404), then check householdId (→ 403).
+export async function update(householdId, id, data) {
   const [existing] = await db.select().from(pantryItems).where(eq(pantryItems.id, id));
   if (!existing) return { status: 'not_found' };
-  if (existing.userId !== userId) return { status: 'forbidden' };
+  if (existing.householdId !== householdId) return { status: 'forbidden' };
 
   await db.update(pantryItems)
     .set({ ...data, updatedAt: new Date().toISOString() })
@@ -40,19 +40,19 @@ export async function update(userId, id, data) {
   return { status: 'ok', item };
 }
 
-export async function remove(userId, id) {
+export async function remove(householdId, id) {
   const [existing] = await db.select().from(pantryItems).where(eq(pantryItems.id, id));
   if (!existing) return { status: 'not_found' };
-  if (existing.userId !== userId) return { status: 'forbidden' };
+  if (existing.householdId !== householdId) return { status: 'forbidden' };
 
   await db.delete(pantryItems).where(eq(pantryItems.id, id));
   return { status: 'ok' };
 }
 
-export async function markUsed(userId, id) {
+export async function markUsed(householdId, id) {
   const [existing] = await db.select().from(pantryItems).where(eq(pantryItems.id, id));
   if (!existing) return { status: 'not_found' };
-  if (existing.userId !== userId) return { status: 'forbidden' };
+  if (existing.householdId !== householdId) return { status: 'forbidden' };
 
   const expiryStatus = getExpiryStatus(existing.expiryDate);
   const wasExpiring  = expiryStatus === 'warning' || expiryStatus === 'critical';
@@ -70,10 +70,10 @@ export async function markUsed(userId, id) {
 
 // Freeze ON: saves originalExpiryDate, extends expiryDate by category defaults.
 // Freeze OFF: restores originalExpiryDate, clears all freeze fields.
-export async function toggleFreeze(userId, id) {
+export async function toggleFreeze(householdId, id) {
   const [existing] = await db.select().from(pantryItems).where(eq(pantryItems.id, id));
   if (!existing) return { status: 'not_found' };
-  if (existing.userId !== userId) return { status: 'forbidden' };
+  if (existing.householdId !== householdId) return { status: 'forbidden' };
 
   if (existing.isFrozen) {
     await db.update(pantryItems)
@@ -105,24 +105,24 @@ export async function toggleFreeze(userId, id) {
 }
 
 // Inserts multiple items atomically inside a transaction.
-export async function bulkCreate(userId, items) {
+export async function bulkCreate(householdId, items) {
   return db.transaction(async (tx) => {
     const results = [];
     for (const item of items) {
-      const [row] = await tx.insert(pantryItems).values({ ...item, userId }).returning();
+      const [row] = await tx.insert(pantryItems).values({ ...item, householdId }).returning();
       results.push(row);
     }
     return results;
   });
 }
 
-export async function getWasteSaved(userId, since) {
+export async function getWasteSaved(householdId, since) {
   const sinceDate = since || getStartOfWeek();
   const [result] = await db
     .select({ count: sql`count(*)` })
     .from(pantryItems)
     .where(and(
-      eq(pantryItems.userId, userId),
+      eq(pantryItems.householdId, householdId),
       eq(pantryItems.wasExpiring, true),
       sql`${pantryItems.consumedAt} >= ${sinceDate}`,
     ));

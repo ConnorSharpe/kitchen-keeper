@@ -38,20 +38,20 @@ const updateSchema = createSchema.partial();
 
 // GET /api/recipes
 router.get('/', async (req, res) => {
-  const list = await recipeService.getAll(req.user.id);
+  const list = await recipeService.getAll(req.user.householdId);
   res.json({ recipes: list });
 });
 
 // POST /api/recipes
 router.post('/', validate(createSchema), async (req, res) => {
-  const recipe = await recipeService.create(req.user.id, req.body);
+  const recipe = await recipeService.create(req.user.householdId, req.body);
   res.status(201).json({ recipe });
 });
 
 // PATCH /api/recipes/:id
 router.patch('/:id', validate(updateSchema), async (req, res) => {
   const id = Number(req.params.id);
-  const result = await recipeService.update(req.user.id, id, req.body);
+  const result = await recipeService.update(req.user.householdId, id, req.body);
   if (result.status === 'not_found') return res.status(404).json({ error: 'Not found' });
   if (result.status === 'forbidden')  return res.status(403).json({ error: 'Forbidden' });
   res.json({ recipe: result.recipe });
@@ -60,7 +60,7 @@ router.patch('/:id', validate(updateSchema), async (req, res) => {
 // DELETE /api/recipes/:id
 router.delete('/:id', async (req, res) => {
   const id = Number(req.params.id);
-  const result = await recipeService.remove(req.user.id, id);
+  const result = await recipeService.remove(req.user.householdId, id);
   if (result.status === 'not_found') return res.status(404).json({ error: 'Not found' });
   if (result.status === 'forbidden')  return res.status(403).json({ error: 'Forbidden' });
   res.status(204).end();
@@ -69,7 +69,7 @@ router.delete('/:id', async (req, res) => {
 // PATCH /api/recipes/:id/favorite
 router.patch('/:id/favorite', async (req, res) => {
   const id = Number(req.params.id);
-  const result = await recipeService.toggleFavorite(req.user.id, id);
+  const result = await recipeService.toggleFavorite(req.user.householdId, id);
   if (result.status === 'not_found') return res.status(404).json({ error: 'Not found' });
   if (result.status === 'forbidden')  return res.status(403).json({ error: 'Forbidden' });
   res.json({ recipe: result.recipe });

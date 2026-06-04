@@ -1,43 +1,35 @@
 # Task
-TASK-001: COMPLETE. Next: PWA (installable on phone via Vercel)
+TASK-003: COMPLETE — Household model, invite flow, documentation
 
 # Current Status
-TASK-001 fully shipped. TASK-002 (Electron) scoped and spec'd but abandoned —
-user preference is browser on laptop, installable app on phone. PWA on top of
-the existing Vercel deployment is the correct path forward.
+Fully shipped. DB migration run. All code, UI, and docs updated.
+Next: add RESEND_API_KEY + RESEND_FROM_EMAIL to Vercel env vars, re-deploy, re-login.
 
-# Recent Shipped Changes
-- server/routes/auth.js — invite code gate
-- client/src/context/AuthContext.jsx — 4th param to register()
-- client/src/pages/LoginPage.jsx — invite code field (register mode only)
-- client/src/components/layout/Sidebar.jsx — hamburger menu (mobile only)
-- client/src/components/pantry/ReceiptUpload.jsx — camera capture (mobile only)
-- README.md — portfolio rewrite
-- api/index.js — CJS dynamic import wrapper for Vercel ESM compatibility
-- vercel.json — restored API rewrite + functions config
+# What Was Built
+- Household model: all data scoped by household_id (not user_id)
+- Register creates a new household or joins an existing one via joinCode
+- GET /api/household — returns household name + joinCode
+- GET /api/household/members — lists all members in the household
+- POST /api/household/invite — sends join code via Resend email
+- HouseholdPage (/household) — shows join code, members list, invite-by-email form
+- Household nav link added to Sidebar
 
 # Architecture Notes
-- api/index.js is a CJS lazy-loader that dynamic imports server/app.js (ESM)
-- Neon DB schema applied via Neon SQL Editor (0000_init.sql)
-- drizzle migrate.js incompatible with Neon HTTP driver — future migrations via Neon SQL Editor
-- Vercel Blob token not yet set — image upload will fail until configured
-
-# Next Task: PWA
-Make the Vercel web app installable on mobile (iOS/Android home screen).
-Minimum viable PWA requires:
-- public/manifest.json — app name, icons, theme color, display: standalone
-- public/sw.js — service worker (can be minimal — just enables installability)
-- <link rel="manifest"> in client/index.html
-- HTTPS already satisfied by Vercel
-
-Once installed, the app behaves like a native app: full screen, home screen icon,
-no browser chrome. Camera capture and hamburger menu already work on mobile.
+- JWT embeds householdId; re-login required after deploy (old tokens lack it)
+- joinCode is 8-char uppercase alphanumeric, unique constraint in DB
+- Chat history is household-scoped (shared pantry context)
+- emailService.js uses Resend; falls back to 503 if RESEND_API_KEY not set
 
 # Known Risks / Open Questions
 - BLOB_READ_WRITE_TOKEN not set in Vercel — image upload fails until configured
 - Multer 1.x vulnerability — follow-up task
-- drizzle migrate.js incompatible with neon-http driver — follow-up task
-- Health endpoint returns { status: 'ok' } without db field — follow-up task
+- joinCode collision (Math.random, no retry) — negligible risk for family app
+
+# Next Tasks (priority order)
+1. Set RESEND_API_KEY + RESEND_FROM_EMAIL in Vercel, re-deploy
+2. Re-login (old JWT lacks householdId)
+3. Use Household page to email invite to wife
+4. PWA installability (manifest.json + service worker)
 
 # Context Notes
 - branch: main

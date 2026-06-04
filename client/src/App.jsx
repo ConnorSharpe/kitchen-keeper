@@ -10,6 +10,7 @@ import PantryPage from './pages/PantryPage.jsx';
 import RecipesPage from './pages/RecipesPage.jsx';
 import ShoppingPage from './pages/ShoppingPage.jsx';
 import ChatPage from './pages/ChatPage.jsx';
+import HouseholdPage from './pages/HouseholdPage.jsx';
 
 export default function App() {
   return (
@@ -28,6 +29,7 @@ export default function App() {
               <Route path="/recipes" element={<RecipesPage />} />
               <Route path="/shopping" element={<ShoppingPage />} />
               <Route path="/chat" element={<ChatPage />} />
+              <Route path="/household" element={<HouseholdPage />} />
             </Route>
           </Route>
         </Routes>

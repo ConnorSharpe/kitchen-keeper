@@ -5,11 +5,12 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
-import authRouter    from './routes/auth.js';
-import pantryRouter   from './routes/pantry.js';
-import aiRouter       from './routes/ai.js';
-import recipesRouter  from './routes/recipes.js';
-import shoppingRouter from './routes/shopping.js';
+import authRouter      from './routes/auth.js';
+import pantryRouter    from './routes/pantry.js';
+import aiRouter        from './routes/ai.js';
+import recipesRouter   from './routes/recipes.js';
+import shoppingRouter  from './routes/shopping.js';
+import householdRouter from './routes/household.js';
 
 const REQUIRED_ENV = ['GEMINI_API_KEY', 'JWT_SECRET'];
 for (const key of REQUIRED_ENV) {
@@ -38,11 +39,12 @@ app.use(cors({ origin: corsOrigins, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 
-app.use('/api/auth',     authRouter);
-app.use('/api/pantry',   pantryRouter);
-app.use('/api/ai',       aiRouter);
-app.use('/api/recipes',  recipesRouter);
-app.use('/api/shopping', shoppingRouter);
+app.use('/api/auth',      authRouter);
+app.use('/api/pantry',    pantryRouter);
+app.use('/api/ai',        aiRouter);
+app.use('/api/recipes',   recipesRouter);
+app.use('/api/shopping',  shoppingRouter);
+app.use('/api/household', householdRouter);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 

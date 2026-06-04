@@ -9,9 +9,10 @@ export default function LoginPage() {
   const [mode, setMode]         = useState('login'); // 'login' | 'register'
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName]             = useState('');
-  const [inviteCode, setInviteCode] = useState('');
-  const [error, setError]           = useState('');
+  const [name, setName]                     = useState('');
+  const [inviteCode, setInviteCode]         = useState('');
+  const [householdCode, setHouseholdCode]   = useState('');
+  const [error, setError]                   = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // Already logged in — go straight to the app
@@ -32,7 +33,7 @@ export default function LoginPage() {
       if (mode === 'login') {
         await login(email, password);
       } else {
-        await register(email, password, name, inviteCode);
+        await register(email, password, name, inviteCode, householdCode);
       }
       navigate('/');
     } catch (err) {
@@ -78,6 +79,22 @@ export default function LoginPage() {
                   className="w-full rounded-lg border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
                   placeholder="Required for live demo"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Household Code <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  autoComplete="off"
+                  value={householdCode}
+                  onChange={(e) => setHouseholdCode(e.target.value)}
+                  className="w-full rounded-lg border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
+                  placeholder="Enter a code to join an existing kitchen"
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  Leave blank to start your own kitchen. Enter your partner's code to share theirs.
+                </p>
               </div>
             </>
           )}

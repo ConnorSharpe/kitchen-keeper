@@ -10,20 +10,20 @@ function parseJSON(str, fallback = []) {
   }
 }
 
-export async function getAll(userId) {
+export async function getAll(householdId) {
   return db
     .select()
     .from(shoppingLists)
-    .where(eq(shoppingLists.userId, userId))
+    .where(eq(shoppingLists.householdId, householdId))
     .orderBy(desc(shoppingLists.createdAt));
 }
 
 // Verifies ownership, then returns items ordered by sortOrder.
-export async function getItems(userId, listId) {
+export async function getItems(householdId, listId) {
   const [list] = await db
     .select()
     .from(shoppingLists)
-    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.userId, userId)));
+    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.householdId, householdId)));
   if (!list) return { status: 'not_found' };
 
   const items = await db
@@ -35,11 +35,11 @@ export async function getItems(userId, listId) {
 }
 
 // Ownership verified via join through shoppingLists — a guessed item ID returns 404.
-export async function toggleItem(userId, listId, itemId) {
+export async function toggleItem(householdId, listId, itemId) {
   const [list] = await db
     .select()
     .from(shoppingLists)
-    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.userId, userId)));
+    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.householdId, householdId)));
   if (!list) return { status: 'not_found' };
 
   const [item] = await db
@@ -57,22 +57,22 @@ export async function toggleItem(userId, listId, itemId) {
 }
 
 // CASCADE on shoppingLists → shoppingListItems handles item cleanup.
-export async function deleteList(userId, listId) {
+export async function deleteList(householdId, listId) {
   const [list] = await db
     .select()
     .from(shoppingLists)
-    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.userId, userId)));
+    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.householdId, householdId)));
   if (!list) return { status: 'not_found' };
 
   await db.delete(shoppingLists).where(eq(shoppingLists.id, listId));
   return { status: 'ok' };
 }
 
-export async function addManualItem(userId, listId, itemData) {
+export async function addManualItem(householdId, listId, itemData) {
   const [list] = await db
     .select()
     .from(shoppingLists)
-    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.userId, userId)));
+    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.householdId, householdId)));
   if (!list) return { status: 'not_found' };
 
   const existing = await db
@@ -97,12 +97,12 @@ export async function addManualItem(userId, listId, itemData) {
 }
 
 // Full build: aggregate ingredients → deduplicate → pantry cross-reference → persist atomically.
-export async function buildFromRecipes(userId, name, recipeIds) {
+export async function buildFromRecipes(householdId, name, recipeIds) {
   // Every recipe must belong to this user
   const recipeRows = await Promise.all(
     recipeIds.map(async (id) => {
       const [r] = await db.select().from(recipes).where(eq(recipes.id, id));
-      return r && r.userId === userId ? r : null;
+      return r && r.householdId === householdId ? r : null;
     })
   );
   if (recipeRows.some((r) => r === null)) return { status: 'invalid_recipes' };
@@ -136,7 +136,7 @@ export async function buildFromRecipes(userId, name, recipeIds) {
   const activePantry = await db
     .select()
     .from(pantryItems)
-    .where(and(eq(pantryItems.userId, userId), isNull(pantryItems.consumedAt)));
+    .where(and(eq(pantryItems.householdId, householdId), isNull(pantryItems.consumedAt)));
 
   const pantryMap = new Map();
   for (const p of activePantry) {
@@ -165,7 +165,7 @@ export async function buildFromRecipes(userId, name, recipeIds) {
   const result = await db.transaction(async (tx) => {
     const [list] = await tx
       .insert(shoppingLists)
-      .values({ userId, name, updatedAt: new Date().toISOString() })
+      .values({ householdId, name, updatedAt: new Date().toISOString() })
       .returning();
 
     const items = [];
