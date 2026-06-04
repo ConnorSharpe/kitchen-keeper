@@ -1,10 +1,13 @@
 import { pgTable, text, integer, real, boolean, serial } from 'drizzle-orm/pg-core';
 
 export const households = pgTable('households', {
-  id:        serial('id').primaryKey(),
-  name:      text('name').notNull(),
-  joinCode:  text('join_code').notNull().unique(),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  id:               serial('id').primaryKey(),
+  name:             text('name').notNull(),
+  joinCode:         text('join_code').notNull().unique(),
+  createdAt:        text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  conditions:       text('conditions').notNull().default('[]'),
+  allergies:        text('allergies').notNull().default('[]'),
+  foodPreferences:  text('food_preferences').notNull().default('[]'),
 });
 
 export const users = pgTable('users', {
@@ -93,4 +96,18 @@ export const chatMessages = pgTable('chat_messages', {
   role:      text('role').notNull(), // 'user' | 'assistant'
   content:   text('content').notNull(),
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+});
+
+export const mealLogs = pgTable('meal_logs', {
+  id:             serial('id').primaryKey(),
+  householdId:    integer('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  pantryItemId:   integer('pantry_item_id').references(() => pantryItems.id, { onDelete: 'set null' }),
+  itemName:       text('item_name').notNull(),
+  category:       text('category').notNull().default('Other'),
+  purineLevel:    text('purine_level').notNull().default('medium'),
+  wasExpiring:    boolean('was_expiring'),
+  quantityBefore: real('quantity_before'),
+  quantityAfter:  real('quantity_after'),
+  loggedAt:       text('logged_at').notNull(),
+  source:         text('source').notNull().default('agent'),
 });

@@ -12,6 +12,7 @@ import recipesRouter   from './routes/recipes.js';
 import shoppingRouter  from './routes/shopping.js';
 import householdRouter from './routes/household.js';
 import pushRouter      from './routes/push.js';
+import dietaryRouter   from './routes/dietary.js';
 
 // CRON_SECRET is validated at route level (optional for local dev)
 const REQUIRED_ENV = ['GEMINI_API_KEY', 'JWT_SECRET', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT'];
@@ -48,6 +49,7 @@ app.use('/api/recipes',   recipesRouter);
 app.use('/api/shopping',  shoppingRouter);
 app.use('/api/household', householdRouter);
 app.use('/api/push',     pushRouter);
+app.use('/api/dietary',  dietaryRouter);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 

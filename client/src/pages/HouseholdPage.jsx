@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../api/index.js';
+import DietaryProfileForm from '../components/settings/DietaryProfileForm.jsx';
 
 export default function HouseholdPage() {
   const [household, setHousehold] = useState(null);
@@ -123,6 +124,15 @@ export default function HouseholdPage() {
             {inviteError}
           </p>
         )}
+      </section>
+
+      {/* Dietary profile */}
+      <section className="bg-white border border-gray-200 rounded-2xl p-6">
+        <h2 className="text-base font-semibold text-gray-800 mb-4">Dietary profile</h2>
+        <p className="text-xs text-gray-500 mb-4">
+          Shared across all household members. Used by the AI assistant to personalise meal suggestions.
+        </p>
+        <DietaryProfileForm />
       </section>
 
       {/* Members list */}

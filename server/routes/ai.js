@@ -10,6 +10,11 @@ import * as pantryService from '../services/pantryService.js';
 import * as recipeService from '../services/recipeService.js';
 import * as chatService from '../services/chatService.js';
 import * as aiService from '../services/aiService.js';
+import * as mealLogService from '../services/mealLogService.js';
+import * as dietaryService from '../services/dietaryService.js';
+import * as recipeScorer from '../utils/recipeScorer.js';
+import { normalizeUnit } from '../utils/foodNormalization.js';
+import { getPurineLevel } from '../data/purineIndex.js';
 import { getExpiryDays, getExpiryStatus } from '../utils/expiry.js';
 
 const router = express.Router();
@@ -183,11 +188,18 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
     chatService.getHistory(householdId, 20),
   ]);
 
+  const expiringItems = allItems.filter((item) => {
+    const days = getExpiryDays(item.expiryDate);
+    return days !== null && days >= 0 && days <= 7;
+  });
+
   const pantrySummary = allItems.map((i) => ({
-    name:   i.name,
-    qty:    `${i.quantity} ${i.unit}`,
-    status: getExpiryStatus(i.expiryDate),
-    frozen: i.isFrozen,
+    id:       i.id,
+    name:     i.name,
+    category: i.category,
+    qty:      `${i.quantity} ${i.unit}`,
+    status:   getExpiryStatus(i.expiryDate),
+    frozen:   i.isFrozen,
   }));
 
   // tags is already parsed to an array by recipeService.getAll()
@@ -196,6 +208,8 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
     name: r.name,
     tags: r.tags ?? [],
   }));
+
+  const dietaryContext = await dietaryService.buildDietaryContext(householdId);
 
   const toolHandlers = {
     add_pantry_item: async (args) => {
@@ -240,10 +254,216 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
         return { ok: false, error: 'Failed to save item to pantry.' };
       }
     },
+
+    update_pantry_item: async (args) => {
+      const updateSchema = z.object({
+        id:         z.coerce.number().int().positive(),
+        name:       z.string().min(1).max(200).optional(),
+        quantity:   z.coerce.number().min(0).optional(),
+        unit:       z.string().min(1).max(50).optional(),
+        category:   z.enum(['Produce','Dairy','Meat','Seafood','Bakery','Frozen','Pantry','Beverages','Condiments','Other']).optional(),
+        expiryDate: z.string().datetime().optional(),
+        notes:      z.string().max(500).nullable().optional(),
+      });
+
+      let parsed;
+      try { parsed = updateSchema.parse(args); }
+      catch (e) { return { ok: false, error: `Invalid data: ${e.message}` }; }
+
+      const { id, ...fields } = parsed;
+      try {
+        const item = await pantryService.update(householdId, id, fields);
+        return { ok: true, item };
+      } catch {
+        return { ok: false, error: 'Item not found or update failed.' };
+      }
+    },
+
+    remove_pantry_item: async (args) => {
+      const removeSchema = z.object({ id: z.coerce.number().int().positive() });
+
+      let parsed;
+      try { parsed = removeSchema.parse(args); }
+      catch (e) { return { ok: false, error: `Invalid data: ${e.message}` }; }
+
+      try {
+        await pantryService.remove(householdId, parsed.id);
+        return { ok: true };
+      } catch {
+        return { ok: false, error: 'Item not found or could not be removed.' };
+      }
+    },
+
+    consume_pantry_item: async (args) => {
+      const consumeSchema = z.object({
+        itemName:       z.string().min(1),
+        amountConsumed: z.number().positive().optional(),
+        unit:           z.string().optional(),
+        fullyConsumed:  z.boolean().optional(),
+        skipDeduction:  z.boolean().optional(),
+      });
+
+      let parsed;
+      try { parsed = consumeSchema.parse(args); }
+      catch (e) { return { ok: false, error: `Invalid data: ${e.message}` }; }
+
+      const { itemName, amountConsumed, unit, fullyConsumed, skipDeduction } = parsed;
+
+      // Name resolution
+      const lowerTarget = itemName.toLowerCase();
+
+      // Step 2a: exact case-insensitive matches
+      const exactMatches = allItems.filter((i) => i.name.toLowerCase() === lowerTarget);
+      let item;
+      if (exactMatches.length > 1) {
+        return { ok: false, error: `Ambiguous: ${exactMatches.map((i) => i.name).join(', ')}. Ask user to clarify.` };
+      } else if (exactMatches.length === 1) {
+        item = exactMatches[0];
+      } else {
+        // Step 2b: itemName is substring of pantry name (min 4 chars)
+        const bMatches = lowerTarget.length >= 4
+          ? allItems.filter((i) => i.name.toLowerCase().includes(lowerTarget))
+          : [];
+        // Step 2c: pantry name is substring of itemName (min 4 chars)
+        const cMatches = allItems.filter((i) => i.name.length >= 4 && lowerTarget.includes(i.name.toLowerCase()));
+        const combined = [...new Set([...bMatches, ...cMatches])];
+
+        if (combined.length === 0) return { ok: false, error: 'Item not found. Ask user which item they mean.' };
+        if (combined.length > 1)  return { ok: false, error: `Ambiguous: ${combined.map((i) => i.name).join(', ')}. Ask user to clarify.` };
+        item = combined[0];
+      }
+
+      // Unit mismatch detection
+      const normalizedInputUnit  = unit ? normalizeUnit(unit) : '';
+      const normalizedPantryUnit = item.unit ? normalizeUnit(item.unit) : '';
+      const unitMismatch = !!(normalizedInputUnit && normalizedPantryUnit && normalizedInputUnit !== normalizedPantryUnit);
+
+      // Server-side skip-deduction rule (ADR-007)
+      const serverSkip    = (item.category === 'Condiments' && fullyConsumed !== true);
+      const effectiveSkip = serverSkip || unitMismatch || (skipDeduction === true && !serverSkip && !unitMismatch);
+      const skipReason    = effectiveSkip
+        ? (unitMismatch ? 'unit_mismatch' : serverSkip ? 'condiment' : 'advisory')
+        : null;
+
+      // Compute remaining (Invariant 1: quantity ≥ 0)
+      let remaining;
+      if (fullyConsumed) {
+        remaining = 0;
+      } else {
+        remaining = item.quantity - (amountConsumed ?? 0);
+        remaining = Math.max(0, remaining);
+      }
+
+      // Apply pantry mutation
+      if (!effectiveSkip) {
+        if (remaining === 0) {
+          await pantryService.markUsed(householdId, item.id);
+        } else {
+          await pantryService.update(householdId, item.id, { quantity: remaining });
+        }
+      }
+
+      // Expiry status
+      const status = getExpiryStatus(item.expiryDate);
+      const wasExpiring = ['warning', 'critical', 'expired'].includes(status);
+
+      // Log the meal
+      await mealLogService.create({
+        householdId,
+        pantryItemId:   item.id,
+        itemName:       item.name,
+        category:       item.category,
+        purineLevel:    getPurineLevel(item.name, item.category),
+        wasExpiring,
+        quantityBefore: item.quantity,
+        quantityAfter:  effectiveSkip ? item.quantity : remaining,
+        source: 'agent',
+      });
+
+      return {
+        ok: true,
+        item: {
+          id:             item.id,
+          name:           item.name,
+          remaining,
+          skipApplied:    effectiveSkip,
+          skipReason,
+          quantityBefore: item.quantity,
+        },
+      };
+    },
+
+    suggest_recipes: async (args) => {
+      const requestedStrategy = args.strategy ?? 'any';
+
+      const dietaryProfile = await dietaryService.getProfile(householdId);
+
+      // Get raw candidates from Gemini (2 calls: search grounding + JSON format)
+      const candidates = await aiService.suggestRecipes(allItems, expiringItems);
+
+      // Score and annotate each candidate
+      const scored = candidates.map((candidate) => {
+        const { overlapScore, matchedIngredients, unmatchedIngredients } =
+          recipeScorer.score(candidate, allItems);
+        const { allergyNote, healthNote } =
+          recipeScorer.annotateHealth(candidate, dietaryProfile ?? { conditions: [], allergies: [] });
+        return { ...candidate, overlapScore, matchedIngredients, unmatchedIngredients, allergyNote, healthNote };
+      });
+
+      // Auto-select strategy
+      let effectiveStrategy = requestedStrategy;
+      if (requestedStrategy === 'any') {
+        const cutoff72h = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
+        const recent72h = await mealLogService.getRecentSince(householdId, cutoff72h);
+        const highCount = recent72h.filter((m) => m.purineLevel === 'high').length;
+        const medCount  = recent72h.filter((m) => m.purineLevel === 'medium').length;
+        const isHighPurine = highCount >= 2 || (highCount + medCount) >= 4;
+
+        if (isHighPurine)            effectiveStrategy = 'dietary_safe';
+        else if (expiringItems.length > 0) effectiveStrategy = 'expiring_first';
+        else                         effectiveStrategy = 'pantry_overlap';
+      }
+
+      // Sort
+      const expiringNames = new Set(expiringItems.map((i) => i.name.toLowerCase()));
+      const sorted = [...scored].sort((a, b) => {
+        if (effectiveStrategy === 'expiring_first') {
+          const aExp = (a.matchedIngredients || []).some((n) => expiringNames.has(n.toLowerCase()));
+          const bExp = (b.matchedIngredients || []).some((n) => expiringNames.has(n.toLowerCase()));
+          if (aExp && !bExp) return -1;
+          if (!aExp && bExp) return 1;
+        }
+        if (effectiveStrategy === 'dietary_safe') {
+          const aScore = (a.allergyNote ? -10 : 0) + (a.healthNote ? -2 : 0) + (a.overlapScore ?? 0);
+          const bScore = (b.allergyNote ? -10 : 0) + (b.healthNote ? -2 : 0) + (b.overlapScore ?? 0);
+          return bScore - aScore;
+        }
+        return (b.overlapScore ?? 0) - (a.overlapScore ?? 0);
+      });
+
+      return { ok: true, suggestions: sorted.slice(0, 5), strategy: effectiveStrategy };
+    },
+
+    save_recipe: async (args) => {
+      const saveSchema = z.object({
+        name:        z.string().min(1).max(200),
+        description: z.string().max(500),
+      });
+
+      let parsed;
+      try { parsed = saveSchema.parse(args); }
+      catch (e) { return { ok: false, error: `Invalid data: ${e.message}` }; }
+
+      const full = await aiService.expandSuggestion(parsed.name, parsed.description, allItems);
+      if (!full) return { ok: false, error: 'AI could not expand the recipe. Try again.' };
+
+      const saved = await recipeService.create(householdId, { ...full, source: 'agent_saved' });
+      return { ok: true, recipe: { id: saved.id, name: saved.name } };
+    },
   };
 
   const { reply, itemsAdded } = await aiService.chat(
-    pantrySummary, recipeSummary, history, message, toolHandlers
+    pantrySummary, recipeSummary, history, message, toolHandlers, dietaryContext
   );
 
   await chatService.savePair(householdId, message, reply);
