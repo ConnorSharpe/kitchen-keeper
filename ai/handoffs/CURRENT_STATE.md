@@ -1,9 +1,12 @@
 # Task
-TASK-006: readyDate / Ripening State
+TASK-008: Fix suggestRecipes for No-Expiry Pantry Items (SPEC APPROVED — ready to implement)
 
 # Current Status
-TASK-006 COMPLETE. All 6 changes implemented. Build passes (347 modules, no errors).
-Migration `0002_ready_date.sql` confirmed run in Neon — `ready_date text` column live on pantry_items.
+TASK-008 SPEC APPROVED (DRAFT-2). Implementation-ready. No migration required.
+See `ai/tasks/TASK-008.md` for full spec.
+
+TASK-007 COMPLETE. All 6 changes implemented. Build passes (348 modules, no errors).
+Migration `0003_onboarding_complete.sql` ready — must be run in Neon SQL Editor before deploying.
 
 # What TASK-005 Shipped (complete — archived to ai/tasks/archive/TASK-005.md)
 - client/src/utils/openFoodFacts.js: NEW — fetchProductByBarcode(), mapProduct(), mapCategory()
@@ -43,28 +46,29 @@ Requires camera + HTTPS (Vercel preview deploy or ngrok for mobile).
   uniqueness retry error surfaces
 
 # Verification Results
-- TASK-005: `npm run build` → ✓ 347 modules, no errors, BarcodeScanner lazy chunk confirmed
-- Smoke test: pending (camera/HTTPS required)
+- TASK-007: `npm run build` → ✓ 348 modules, no errors, BarcodeScanner lazy chunk preserved
+- Smoke test: pending (requires migration run in Neon + Vercel preview deploy)
 
-# Files Modified (TASK-006)
-- `server/db/migrations/0002_ready_date.sql` — NEW (run in Neon SQL Editor)
-- `server/db/schema.js` — readyDate column added after expiryDate
-- `server/routes/pantry.js` — readyDate: dateField added to createSchema (updateSchema derives it)
-- `client/src/utils/expiry.js` — getRipeningDays, isRipening, getRipeningState added; ripening cases added to row/badge class switches
-- `client/src/components/pantry/AddItemModal.jsx` — readyDate in buildInitialState, handleSubmit, and form UI
-- `client/src/components/pantry/PantryTable.jsx` — ExpiryBadge decoupled (status prop); StatusLabel updated; row render uses getRipeningState
+# Files Modified (TASK-007)
+- `server/db/migrations/0003_onboarding_complete.sql` — NEW (must run in Neon SQL Editor)
+- `server/db/schema.js` — `onboardingComplete` boolean column added to `usersTable`
+- `server/routes/auth.js` — `safeUser` includes `onboardingComplete`; registration INSERT sets `false`; `/me` made DB-backed; `POST /auth/onboarding-complete` added
+- `client/src/context/AuthContext.jsx` — `completeOnboarding()` added; exposed on Provider
+- `client/src/components/onboarding/StaplesChecklist.jsx` — NEW; chip-toggle UI, handleAdd/handleSkip, error state machine, Dismiss for now
+- `client/src/pages/PantryPage.jsx` — `useAuth` import; `onboardingDismissed` state + useEffect reset; `isEligible`/`showOnboarding` derivations; `handleOnboardingComplete`/`handleOnboardingDismiss`; `<StaplesChecklist>` mounted; `loading` renamed to `pantryLoading`
 
 # Recommended Next Action
-1. ~~Run in Neon SQL Editor~~ DONE
-2. Commit and push to main (see PowerShell Merge Block below)
-3. Deploy to Vercel preview
-4. Manual smoke test per TASK-006 verification steps
+1. Implement TASK-008 per `ai/tasks/TASK-008.md` — 2 files, ~15 lines, no migration.
+   - `server/routes/ai.js`: pass `allItems` as first arg to `suggestRecipes()`
+   - `server/services/aiService.js`: new signature, defensive guard, `itemsData` shape, prompt text
+2. Run TASK-007 migration in Neon SQL Editor (copy from `server/db/migrations/0003_onboarding_complete.sql`) if not yet done.
+3. Deploy to Vercel preview and smoke test both TASK-007 and TASK-008.
 
 # Forbidden Exploration
-- server/db/* (no schema changes)
-- server/routes/auth.js (unrelated)
+- server/middleware/auth.js (identity-only, unchanged)
+- server/routes/pantry.js (bulk endpoint unchanged)
 - server/routes/household.js (unrelated)
-- All client pages except those in scope for active task
+- client/src/components/pantry/* (unchanged)
 
 # Context Notes
 - branch: main
@@ -90,7 +94,8 @@ SPEC APPROVED (DRAFT-9) — implementation-ready. One-time screen after registra
 common pantry staples. 9 architect review rounds. See ai/tasks/TASK-007.md.
 
 ## TASK-008 — Fix suggestRecipes for No-Expiry Pantry Items
-Low-effort: pass all pantry items to AI, not just expiring ones.
+SPEC APPROVED (DRAFT-2) — implementation-ready. Pass all pantry items to AI, not just
+expiring ones. 2 files, ~15 lines, no migration. See ai/tasks/TASK-008.md.
 
 ## TASK-009 — PWA Push Notifications
 Largest scope task. Depends on TASK-006 for full value.
