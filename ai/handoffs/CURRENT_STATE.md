@@ -2,69 +2,42 @@
 TASK-004: Chat Tool-Calling — Add to Pantry via Conversation
 
 # Current Status
-TASK-004 spec is IMPLEMENTATION-READY (2 architect review rounds complete, DRAFT-3 final).
-No code has been written yet. Next session begins implementation.
+TASK-004 IMPLEMENTATION COMPLETE. Code merged to main.
+TASK-005 spec drafting in progress — next session.
 
-# What TASK-003 Shipped (complete — on main)
-- householdService.js extracted (getById, getMembers, getByJoinCode, create)
-- server/routes/household.js and auth.js refactored to use service layer
-- joinCode generation moved to crypto.randomBytes(4).toString('hex').toUpperCase()
-- HouseholdPage.jsx: loadError state + try/catch/finally + retry button
-- .env.example: RESEND_API_KEY and RESEND_FROM_EMAIL added
-
-# Files Required Next Session (TASK-004)
-- server/services/aiService.js — modify chat() to support tool-calling dispatch loop
-- server/routes/ai.js — build toolHandlers, update POST /api/ai/chat response
-- client/src/pages/ChatPage.jsx — render itemsAdded chips
-
-# Files Already Reviewed (read-only, no changes needed)
-- server/services/pantryService.js — create(householdId, data) is the write target
-- server/db/schema.js — pantryItems columns confirmed; no migration needed
-- server/utils/expiry.js — UTC-day granularity pattern confirmed for expiryDate computation
-- server/services/chatService.js — no changes needed
-
-# Dependency Chain
-
-Editing:
-- server/services/aiService.js
-- server/routes/ai.js
-- client/src/pages/ChatPage.jsx
-
-Requires:
-- server/services/pantryService.js (read-only)
-- server/db/schema.js (read-only)
-- server/utils/expiry.js (read-only)
-
-Irrelevant:
-- server/services/chatService.js
-- server/services/householdService.js
-- server/routes/auth.js
-- server/routes/household.js
-- All other client pages
+# What TASK-004 Shipped (complete — on main)
+- server/services/aiService.js: PANTRY_TOOLS constant, dispatch loop (max 5 iterations),
+  _buildFallbackReply(), chat() signature extended with toolHandlers param,
+  return type changed string → { reply, itemsAdded }
+- server/routes/ai.js: toolHandlers object with add_pantry_item (Zod validation,
+  UTC midnight expiry computation, pantryService.create()), res.json({ reply, itemsAdded })
+- client/src/pages/ChatPage.jsx: itemsAdded attached to assistant messages,
+  green chips rendered below assistant bubbles for each added item
 
 # Architecture Notes
 - aiService.js remains DB-free. Tool execution stays in the route via toolHandlers callback map.
-- chat() return type changes: string → { reply: string, itemsAdded: PantryItem[] }
-- Response contract is a superset: { reply } → { reply, itemsAdded } (backward-compatible)
+- chat() return type: { reply: string, itemsAdded: PantryItem[] }
 - shelfLifeDays (integer ≥ 0) in tool schema; route converts to UTC midnight ISO date
 - Dispatch loop max 5 iterations; exhaustion returns safe fallback reply (not 500)
-- Pantry summary rebuilt from DB every request — no cache invalidation needed
-
-# Decisions Made
-- Server-side expiry computation via shelfLifeDays (not expiryDate string from model)
-- UTC midnight normalization: setUTCHours(0,0,0,0) + setUTCDate(+N) — matches expiry.js
-- shelfLifeDays: z.coerce.number().int().nonnegative() — allows 0 ("expires today")
 - Insert-always semantics for duplicate items (no upsert)
-- No client-side confirmation dialog — Gemini's text reply IS the confirmation
-- Loop-exhaustion returns { reply: "I couldn't complete that request...", itemsAdded }
-- Failed-tool fallback: "I couldn't add those items..." (not misleading "Done.")
+- Pantry summary rebuilt from DB on every request — no cache invalidation needed
 
-# Remaining Work
-- [ ] Implement aiService.js changes (PANTRY_TOOLS constant, dispatch loop, _buildFallbackReply)
-- [ ] Implement ai.js route changes (toolHandlers, destructure { reply, itemsAdded }, update res.json)
-- [ ] Implement ChatPage.jsx changes (itemsAdded in state, chip rendering)
-- [ ] Verify: single item, multi-item, no-tool-call, shelfLifeDays 0, loop guard, unknown tool
-- [ ] Update CURRENT_STATE.md on completion
+# TASK-004 Smoke Test Checklist
+Run these manually before closing out TASK-004. Start dev server (`npm run dev`).
+
+- [ ] Single item with shelf life — "add leftover chicken, good for 2 days"
+      → 1 DB row, expiryDate = UTC midnight + 2d, AI confirms, 1 chip visible
+- [ ] Multiple items — "add 2 eggs and a carton of milk"
+      → 2 DB rows, 2 chips, single AI reply
+- [ ] No tool call — "what should I make for dinner?"
+      → No DB write, itemsAdded = [], reply non-empty, no chips
+- [ ] No shelf life — "add some olive oil"
+      → expiryDate = null, item created, no error
+- [ ] shelfLifeDays 0 — "add the leftover soup, use it today"
+      → expiryDate = today UTC midnight, Zod nonnegative() passes
+- [ ] Insert-always — "add milk" twice → 2 separate DB rows
+- [ ] chat_messages table — only user + assistant text rows (no tool intermediates)
+- [ ] Server logs — no unhandled errors across all steps
 
 # Known Risks (ongoing)
 - Multer 1.x vulnerability — pre-existing, no fix scheduled
@@ -73,18 +46,16 @@ Irrelevant:
   uniqueness retry error surfaces
 
 # Verification Results
-- TASK-004: not yet started
+- TASK-004: implementation complete — smoke test pending
 
 # Recommended Next Action
-Implement TASK-004. Start with aiService.js (PANTRY_TOOLS constant + dispatch loop),
-then ai.js route update, then ChatPage.jsx chips. Full spec at ai/tasks/TASK-004.md.
+Draft TASK-005 spec (Barcode Scanner + Open Food Facts). Pure client change — no backend needed.
 
 # Forbidden Exploration
 - server/db/* (no schema changes)
-- server/services/pantryService.js (read-only)
 - server/routes/auth.js (unrelated)
 - server/routes/household.js (unrelated)
-- client/src/* (except ChatPage.jsx)
+- All client pages except those in scope for active task
 
 # Context Notes
 - branch: main
@@ -94,7 +65,7 @@ then ai.js route update, then ChatPage.jsx chips. Full spec at ai/tasks/TASK-004
 
 # Future Specs (priority order — none started)
 
-## TASK-005 — Barcode Scanner + Open Food Facts
+## TASK-005 — Barcode Scanner + Open Food Facts (NEXT)
 Zero-cost pantry onboarding. User points phone camera at a grocery item barcode →
 Open Food Facts API returns name + category → pre-fills add-item form.
 Pure client change. No backend changes needed.

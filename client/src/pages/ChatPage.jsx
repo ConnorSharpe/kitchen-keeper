@@ -54,10 +54,10 @@ export default function ChatPage() {
     setLoading(true);
 
     try {
-      const { reply } = await api.post('/api/ai/chat', { message: userText });
+      const { reply, itemsAdded } = await api.post('/api/ai/chat', { message: userText });
       setMessages((prev) => [
         ...prev,
-        { key: nextTempId(), role: 'assistant', content: reply },
+        { key: nextTempId(), role: 'assistant', content: reply, itemsAdded: itemsAdded ?? [] },
       ]);
     } catch (err) {
       // Remove the optimistic user message — it was not saved to the DB
@@ -131,40 +131,55 @@ export default function ChatPage() {
 
         {/* Message bubbles */}
         {messages.map((msg) => (
-          <div
-            key={msg.key}
-            className={`flex items-end gap-2 ${
-              msg.role === 'user' ? 'justify-end' : 'justify-start'
-            }`}
-          >
-            {msg.role === 'assistant' && (
-              <div
-                className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center text-sm flex-shrink-0"
-                aria-hidden
-              >
-                🍳
-              </div>
-            )}
-
+          <div key={msg.key}>
             <div
-              className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                msg.role === 'user'
-                  ? 'bg-orange-500 text-white rounded-br-sm'
-                  : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
+              className={`flex items-end gap-2 ${
+                msg.role === 'user' ? 'justify-end' : 'justify-start'
               }`}
             >
-              {msg.role === 'assistant' ? (
-                // ReactMarkdown with remark-gfm renders tables, task lists,
-                // and strikethrough correctly — without it, pipes render as text.
-                <div className="prose-chat">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {msg.content}
-                  </ReactMarkdown>
+              {msg.role === 'assistant' && (
+                <div
+                  className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center text-sm flex-shrink-0"
+                  aria-hidden
+                >
+                  🍳
                 </div>
-              ) : (
-                <span className="whitespace-pre-wrap">{msg.content}</span>
               )}
+
+              <div
+                className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                  msg.role === 'user'
+                    ? 'bg-orange-500 text-white rounded-br-sm'
+                    : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
+                }`}
+              >
+                {msg.role === 'assistant' ? (
+                  // ReactMarkdown with remark-gfm renders tables, task lists,
+                  // and strikethrough correctly — without it, pipes render as text.
+                  <div className="prose-chat">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <span className="whitespace-pre-wrap">{msg.content}</span>
+                )}
+              </div>
             </div>
+
+            {msg.role === 'assistant' && msg.itemsAdded?.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-1.5 ml-9">
+                {msg.itemsAdded.map((item) => (
+                  <span
+                    key={item.id}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 border border-green-200 text-xs text-green-700"
+                  >
+                    <span aria-hidden>+</span>
+                    {item.name} added to pantry
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         ))}
 

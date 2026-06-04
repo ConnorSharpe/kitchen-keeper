@@ -18,8 +18,8 @@ router.use(requireAuth);
 // POST /api/ai/eat-this-now
 router.post('/eat-this-now', async (req, res) => {
   const [allItems, savedRecipes] = await Promise.all([
-    pantryService.getAll(req.user.id),
-    recipeService.getAll(req.user.id),
+    pantryService.getAll(req.user.householdId),
+    recipeService.getAll(req.user.householdId),
   ]);
 
   const expiringItems = allItems.filter((item) => {
@@ -39,7 +39,7 @@ const expandSchema = z.object({
 
 router.post('/expand-suggestion', validate(expandSchema), async (req, res) => {
   const { name, description } = req.body;
-  const allItems = await pantryService.getAll(req.user.id);
+  const allItems = await pantryService.getAll(req.user.householdId);
 
   const recipe = await aiService.expandSuggestion(name, description, allItems);
 
@@ -49,7 +49,7 @@ router.post('/expand-suggestion', validate(expandSchema), async (req, res) => {
     throw err;
   }
 
-  const saved = await recipeService.create(req.user.id, { ...recipe, source: 'ai_suggested' });
+  const saved = await recipeService.create(req.user.householdId, { ...recipe, source: 'ai_suggested' });
   res.status(201).json({ recipe: saved });
 });
 
@@ -99,7 +99,7 @@ router.post('/parse-receipt', upload.single('receipt'), async (req, res) => {
 
 // POST /api/ai/suggest-recipes
 router.post('/suggest-recipes', async (req, res) => {
-  const allItems = await pantryService.getAll(req.user.id);
+  const allItems = await pantryService.getAll(req.user.householdId);
   const expiringItems = allItems.filter((item) => {
     const days = getExpiryDays(item.expiryDate);
     return days !== null && days >= 0 && days <= 7;
@@ -153,7 +153,7 @@ router.post('/parse-recipe-image', upload.single('recipe'), async (req, res) => 
   const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg';
   const { url } = await put(`${uuidv4()}${ext}`, req.file.buffer, { access: 'public' });
 
-  const saved = await recipeService.create(req.user.id, {
+  const saved = await recipeService.create(req.user.householdId, {
     ...validated,
     source:   'upload',
     imageUrl: url,
@@ -164,7 +164,7 @@ router.post('/parse-recipe-image', upload.single('recipe'), async (req, res) => 
 
 // GET /api/ai/chat/history
 router.get('/chat/history', async (req, res) => {
-  const messages = await chatService.getHistory(req.user.id, 50);
+  const messages = await chatService.getHistory(req.user.householdId, 50);
   res.json({ messages });
 });
 
@@ -175,12 +175,12 @@ const chatMessageSchema = z.object({
 
 router.post('/chat', validate(chatMessageSchema), async (req, res) => {
   const { message } = req.body;
-  const userId = req.user.id;
+  const householdId = req.user.householdId;
 
   const [allItems, allRecipes, history] = await Promise.all([
-    pantryService.getAll(userId),
-    recipeService.getAll(userId),
-    chatService.getHistory(userId, 20),
+    pantryService.getAll(householdId),
+    recipeService.getAll(householdId),
+    chatService.getHistory(householdId, 20),
   ]);
 
   const pantrySummary = allItems.map((i) => ({
@@ -197,12 +197,59 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
     tags: r.tags ?? [],
   }));
 
-  const reply = await aiService.chat(pantrySummary, recipeSummary, history, message);
+  const toolHandlers = {
+    add_pantry_item: async (args) => {
+      const addItemSchema = z.object({
+        name:          z.string().min(1).max(200),
+        quantity:      z.coerce.number().positive().default(1),
+        unit:          z.string().min(1).max(50).default('item'),
+        category:      z
+          .enum(['Produce','Dairy','Meat','Seafood','Bakery','Frozen','Pantry','Beverages','Condiments','Other'])
+          .default('Other'),
+        shelfLifeDays: z.coerce.number().int().nonnegative().optional(),
+        notes:         z.string().max(500).nullable().optional(),
+      });
 
-  await chatService.savePair(userId, message, reply);
-  await chatService.trimHistory(userId, 50);
+      let parsed;
+      try {
+        parsed = addItemSchema.parse(args);
+      } catch (e) {
+        return { ok: false, error: `Invalid item data: ${e.message}` };
+      }
 
-  res.json({ reply });
+      let expiryDate = null;
+      if (parsed.shelfLifeDays != null) {
+        const expiry = new Date();
+        expiry.setUTCHours(0, 0, 0, 0);
+        expiry.setUTCDate(expiry.getUTCDate() + parsed.shelfLifeDays);
+        expiryDate = expiry.toISOString();
+      }
+
+      try {
+        const item = await pantryService.create(householdId, {
+          name:         parsed.name,
+          quantity:     parsed.quantity,
+          unit:         parsed.unit,
+          category:     parsed.category,
+          purchaseDate: new Date().toISOString(),
+          expiryDate,
+          notes:        parsed.notes ?? null,
+        });
+        return { ok: true, item };
+      } catch {
+        return { ok: false, error: 'Failed to save item to pantry.' };
+      }
+    },
+  };
+
+  const { reply, itemsAdded } = await aiService.chat(
+    pantrySummary, recipeSummary, history, message, toolHandlers
+  );
+
+  await chatService.savePair(householdId, message, reply);
+  await chatService.trimHistory(householdId, 50);
+
+  res.json({ reply, itemsAdded });
 });
 
 export default router;
