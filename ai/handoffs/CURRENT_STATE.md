@@ -1,10 +1,10 @@
 # Task
-TASK-005: Barcode Scanner + Open Food Facts
+TASK-006: readyDate / Ripening State
 
 # Current Status
-TASK-005 IMPLEMENTATION COMPLETE. Build verified. Smoke test pending (requires camera / HTTPS).
+TASK-005 complete and archived. TASK-006 spec APPROVED (DRAFT-3, 3 review rounds). Ready to implement.
 
-# What TASK-005 Shipped (complete — on main)
+# What TASK-005 Shipped (complete — archived to ai/tasks/archive/TASK-005.md)
 - client/src/utils/openFoodFacts.js: NEW — fetchProductByBarcode(), mapProduct(), mapCategory()
 - client/src/components/pantry/BarcodeScanner.jsx: NEW — camera overlay, EAN-13/UPC-A only,
   stoppedRef double-stop guard, onDetected/onClose/onError callbacks
@@ -46,7 +46,7 @@ Requires camera + HTTPS (Vercel preview deploy or ngrok for mobile).
 - Smoke test: pending (camera/HTTPS required)
 
 # Recommended Next Action
-TASK-005 smoke test on a Vercel preview deploy or ngrok tunnel, then implement TASK-006 (readyDate / Ripening State) — requires schema migration.
+Implement TASK-006. Run migration SQL in Neon SQL Editor first, then implement the 5 file changes per the spec.
 
 # Forbidden Exploration
 - server/db/* (no schema changes)
@@ -62,10 +62,13 @@ TASK-005 smoke test on a Vercel preview deploy or ngrok tunnel, then implement T
 
 # Future Specs (priority order)
 
-## TASK-005 — Barcode Scanner + Open Food Facts (SPEC APPROVED — ready to implement)
-Zero-cost pantry onboarding. User points phone camera at a grocery item barcode →
-Open Food Facts API returns name + category → pre-fills add-item form.
-Pure client change. No backend changes needed.
+## TASK-005 — Barcode Scanner + Open Food Facts (COMPLETE — archived)
+
+## TASK-006 — readyDate / Ripening State (SPEC APPROVED — ready to implement)
+Adds a "not yet ready" state for items that need time before use. Single nullable
+column `ready_date` on `pantry_items`. Purple row tint + "Ready in Xd" status label.
+Requires schema migration (manual Neon SQL). 5 files edited, 1 migration created.
+Approved after 3 architect review rounds. See ai/tasks/TASK-006.md for full spec.
 
 ## TASK-006 — readyDate / Ripening State
 Adds a "not yet ready" state for items that need time. Requires schema migration.
