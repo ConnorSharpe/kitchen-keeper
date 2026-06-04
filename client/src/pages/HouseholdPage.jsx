@@ -5,6 +5,7 @@ export default function HouseholdPage() {
   const [household, setHousehold] = useState(null);
   const [members, setMembers]     = useState([]);
   const [loading, setLoading]     = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [copied, setCopied]       = useState(false);
 
   const [inviteEmail, setInviteEmail]       = useState('');
@@ -14,13 +15,19 @@ export default function HouseholdPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [h, m] = await Promise.all([
-      api.get('/api/household'),
-      api.get('/api/household/members'),
-    ]);
-    setHousehold(h.household);
-    setMembers(m.members);
-    setLoading(false);
+    setLoadError(null);
+    try {
+      const [h, m] = await Promise.all([
+        api.get('/api/household'),
+        api.get('/api/household/members'),
+      ]);
+      setHousehold(h.household);
+      setMembers(m.members);
+    } catch (err) {
+      setLoadError(err.message || 'Failed to load household');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -49,9 +56,13 @@ export default function HouseholdPage() {
   }
 
   if (loading) {
+    return <div className="flex items-center justify-center h-64 text-gray-400">Loading…</div>;
+  }
+  if (loadError) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-400">
-        Loading…
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <p className="text-sm text-red-600">{loadError}</p>
+        <button onClick={load} className="text-sm text-orange-600 hover:underline">Retry</button>
       </div>
     );
   }

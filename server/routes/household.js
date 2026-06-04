@@ -1,8 +1,6 @@
 import express from 'express';
-import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { db } from '../db/client.js';
-import { households, users } from '../db/schema.js';
+import * as householdService from '../services/householdService.js';
 import { requireAuth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { sendHouseholdInvite } from '../services/emailService.js';
@@ -12,11 +10,7 @@ router.use(requireAuth);
 
 // GET /api/household — household info + join code
 router.get('/', async (req, res) => {
-  const [household] = await db
-    .select()
-    .from(households)
-    .where(eq(households.id, req.user.householdId));
-
+  const household = await householdService.getById(req.user.householdId);
   if (!household) return res.status(404).json({ error: 'Household not found' });
 
   res.json({
@@ -30,11 +24,7 @@ router.get('/', async (req, res) => {
 
 // GET /api/household/members — all users in this household
 router.get('/members', async (req, res) => {
-  const members = await db
-    .select({ id: users.id, name: users.name, email: users.email, createdAt: users.createdAt })
-    .from(users)
-    .where(eq(users.householdId, req.user.householdId));
-
+  const members = await householdService.getMembers(req.user.householdId);
   res.json({ members });
 });
 
@@ -44,11 +34,7 @@ const inviteSchema = z.object({
 });
 
 router.post('/invite', validate(inviteSchema), async (req, res) => {
-  const [household] = await db
-    .select()
-    .from(households)
-    .where(eq(households.id, req.user.householdId));
-
+  const household = await householdService.getById(req.user.householdId);
   if (!household) return res.status(404).json({ error: 'Household not found' });
 
   await sendHouseholdInvite({

@@ -5,7 +5,8 @@ import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { users, households } from '../db/schema.js';
+import { users } from '../db/schema.js';
+import * as householdService from '../services/householdService.js';
 import { validate } from '../middleware/validate.js';
 import { requireAuth } from '../middleware/auth.js';
 
@@ -41,10 +42,6 @@ const loginLimiter = rateLimit({
   legacyHeaders:   false,
 });
 
-function generateJoinCode() {
-  return Math.random().toString(36).slice(2, 10).toUpperCase();
-}
-
 function signToken(user) {
   return jwt.sign(
     { sub: user.id, email: user.email, name: user.name, householdId: user.householdId },
@@ -74,10 +71,7 @@ router.post('/register', validate(registerSchema), async (req, res) => {
   // Resolve household: join existing or create new
   let householdId;
   if (householdCode?.trim()) {
-    const [existing] = await db
-      .select()
-      .from(households)
-      .where(eq(households.joinCode, householdCode.trim().toUpperCase()));
+    const existing = await householdService.getByJoinCode(householdCode);
     if (!existing) {
       const err = new Error('Invalid household code');
       err.status = 400;
@@ -85,10 +79,7 @@ router.post('/register', validate(registerSchema), async (req, res) => {
     }
     householdId = existing.id;
   } else {
-    const [newHousehold] = await db
-      .insert(households)
-      .values({ name: `${name}'s Household`, joinCode: generateJoinCode() })
-      .returning();
+    const newHousehold = await householdService.create(name);
     householdId = newHousehold.id;
   }
 
