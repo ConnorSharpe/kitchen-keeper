@@ -24,12 +24,12 @@ TASK-006 COMPLETE. Archived.
 - `client/public/sw.js` — added push + notificationclick handlers (existing cache handlers preserved)
 - `client/src/pages/PantryPage.jsx` — imported + mounted PushNotificationBanner above onboarding
 
-# Pre-Deploy Checklist (MUST complete before shipping)
-1. Run `0004_push_subscriptions.sql` in Neon SQL Editor
-2. `npm install web-push --prefix server`
-3. `npx web-push generate-vapid-keys` → set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT in Vercel
-4. Set CRON_SECRET in Vercel (e.g. `openssl rand -hex 32`)
-5. `npm run build` — confirm passes
+# Pre-Deploy Checklist — ALL COMPLETE (2026-06-04)
+1. ✅ `0004_push_subscriptions.sql` run in Neon SQL Editor
+2. ✅ `npm install web-push --prefix server`
+3. ✅ VAPID keys generated and set in Vercel env vars
+4. ✅ CRON_SECRET set in Vercel
+5. ✅ `npm run build` passed
 
 # Known Risks (ongoing)
 - Multer 1.x vulnerability — pre-existing, no fix scheduled
