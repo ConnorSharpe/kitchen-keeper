@@ -16,9 +16,17 @@ function fromISO(isoStr) {
   return isoStr ? isoStr.split('T')[0] : '';
 }
 
-function buildInitialState(item) {
+function buildInitialState(item, prefill) {
   if (!item) {
-    return { name: '', category: 'Other', quantity: '1', unit: 'item', purchaseDate: '', expiryDate: '', notes: '' };
+    return {
+      name:         prefill?.name     ?? '',
+      category:     prefill?.category ?? 'Other',
+      quantity:     '1',
+      unit:         'item',
+      purchaseDate: '',
+      expiryDate:   '',
+      notes:        '',
+    };
   }
   return {
     name:         item.name,
@@ -31,8 +39,8 @@ function buildInitialState(item) {
   };
 }
 
-export default function AddItemModal({ item, onClose, onSave }) {
-  const [form, setForm] = useState(() => buildInitialState(item));
+export default function AddItemModal({ item, prefill, onClose, onSave }) {
+  const [form, setForm] = useState(() => buildInitialState(item, prefill));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});

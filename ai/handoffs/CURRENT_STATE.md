@@ -1,43 +1,39 @@
 # Task
-TASK-004: Chat Tool-Calling — Add to Pantry via Conversation
+TASK-005: Barcode Scanner + Open Food Facts
 
 # Current Status
-TASK-004 IMPLEMENTATION COMPLETE. Code merged to main.
-TASK-005 spec drafting in progress — next session.
+TASK-005 IMPLEMENTATION COMPLETE. Build verified. Smoke test pending (requires camera / HTTPS).
 
-# What TASK-004 Shipped (complete — on main)
-- server/services/aiService.js: PANTRY_TOOLS constant, dispatch loop (max 5 iterations),
-  _buildFallbackReply(), chat() signature extended with toolHandlers param,
-  return type changed string → { reply, itemsAdded }
-- server/routes/ai.js: toolHandlers object with add_pantry_item (Zod validation,
-  UTC midnight expiry computation, pantryService.create()), res.json({ reply, itemsAdded })
-- client/src/pages/ChatPage.jsx: itemsAdded attached to assistant messages,
-  green chips rendered below assistant bubbles for each added item
+# What TASK-005 Shipped (complete — on main)
+- client/src/utils/openFoodFacts.js: NEW — fetchProductByBarcode(), mapProduct(), mapCategory()
+- client/src/components/pantry/BarcodeScanner.jsx: NEW — camera overlay, EAN-13/UPC-A only,
+  stoppedRef double-stop guard, onDetected/onClose/onError callbacks
+- client/src/components/pantry/AddItemModal.jsx: additive prefill prop, buildInitialState(item, prefill)
+- client/src/pages/PantryPage.jsx: lazy BarcodeScanner import, showBarcodeScanner + barcodePrefill
+  state, fetchAbortRef, handleBarcodeDetected, handleScannerError, "Scan barcode" button,
+  Suspense wrapper, updated AddItemModal render (prefill + onClose clears barcodePrefill)
+- client package: html5-qrcode installed
 
 # Architecture Notes
-- aiService.js remains DB-free. Tool execution stays in the route via toolHandlers callback map.
-- chat() return type: { reply: string, itemsAdded: PantryItem[] }
-- shelfLifeDays (integer ≥ 0) in tool schema; route converts to UTC midnight ISO date
-- Dispatch loop max 5 iterations; exhaustion returns safe fallback reply (not 500)
-- Insert-always semantics for duplicate items (no upsert)
-- Pantry summary rebuilt from DB on every request — no cache invalidation needed
+- BarcodeScanner lazy-loaded (React.lazy) — emits separate 335 KB chunk, not in initial bundle
+- aiService.js / all server files: untouched (pure client change)
+- fetchAbortRef aborts in-flight OFF fetch on page unmount; AbortError caught silently
+- modalItem sentinel contract preserved: undefined=closed, null=add, object=edit
+- barcodePrefill cleared on every modal close — no stale prefill on subsequent "+ Add item" taps
+- mapCategory default: "Pantry" (known product, no tag match); unknown barcode → prefill=null → "Other"
 
-# TASK-004 Smoke Test Checklist
-Run these manually before closing out TASK-004. Start dev server (`npm run dev`).
+# TASK-005 Smoke Test Checklist
+Requires camera + HTTPS (Vercel preview deploy or ngrok for mobile).
 
-- [ ] Single item with shelf life — "add leftover chicken, good for 2 days"
-      → 1 DB row, expiryDate = UTC midnight + 2d, AI confirms, 1 chip visible
-- [ ] Multiple items — "add 2 eggs and a carton of milk"
-      → 2 DB rows, 2 chips, single AI reply
-- [ ] No tool call — "what should I make for dinner?"
-      → No DB write, itemsAdded = [], reply non-empty, no chips
-- [ ] No shelf life — "add some olive oil"
-      → expiryDate = null, item created, no error
-- [ ] shelfLifeDays 0 — "add the leftover soup, use it today"
-      → expiryDate = today UTC midnight, Zod nonnegative() passes
-- [ ] Insert-always — "add milk" twice → 2 separate DB rows
-- [ ] chat_messages table — only user + assistant text rows (no tool intermediates)
-- [ ] Server logs — no unhandled errors across all steps
+- [ ] "Scan barcode" button visible on PantryPage
+- [ ] Clicking button lazy-loads BarcodeScanner chunk (DevTools Network tab)
+- [ ] Scan EAN-13 barcode → scanner closes → OFF fetch visible → AddItemModal pre-filled
+- [ ] "+ Add item" → modal opens with blank name, category "Other" (no prefill contamination)
+- [ ] "Scan receipt" → ReceiptUpload unaffected
+- [ ] Edit existing item → modal opens in edit mode (prefill=undefined, ignored)
+- [ ] Camera denied → toast "Camera access denied…" → no modal opens
+- [ ] Unknown barcode → toast "Product not found…" → modal opens blank (category "Other")
+- [ ] Network error → toast "Could not look up product…" → modal opens blank
 
 # Known Risks (ongoing)
 - Multer 1.x vulnerability — pre-existing, no fix scheduled
@@ -46,10 +42,11 @@ Run these manually before closing out TASK-004. Start dev server (`npm run dev`)
   uniqueness retry error surfaces
 
 # Verification Results
-- TASK-004: implementation complete — smoke test pending
+- TASK-005: `npm run build` → ✓ 347 modules, no errors, BarcodeScanner lazy chunk confirmed
+- Smoke test: pending (camera/HTTPS required)
 
 # Recommended Next Action
-Implement TASK-005 (Barcode Scanner + Open Food Facts). Spec is DRAFT-3, approved after 2 architect review rounds. Pure client change — no backend needed.
+TASK-005 smoke test on a Vercel preview deploy or ngrok tunnel, then implement TASK-006 (readyDate / Ripening State) — requires schema migration.
 
 # Forbidden Exploration
 - server/db/* (no schema changes)
