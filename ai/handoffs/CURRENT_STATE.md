@@ -86,7 +86,8 @@ Approved after 3 architect review rounds. See ai/tasks/TASK-006.md for full spec
 Adds a "not yet ready" state for items that need time. Requires schema migration.
 
 ## TASK-007 — Staples Checklist (First-Login Onboarding)
-One-time screen after registration for common pantry staples.
+SPEC APPROVED (DRAFT-9) — implementation-ready. One-time screen after registration for
+common pantry staples. 9 architect review rounds. See ai/tasks/TASK-007.md.
 
 ## TASK-008 — Fix suggestRecipes for No-Expiry Pantry Items
 Low-effort: pass all pantry items to AI, not just expiring ones.
