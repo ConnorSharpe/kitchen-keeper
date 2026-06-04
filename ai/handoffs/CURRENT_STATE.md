@@ -1,15 +1,16 @@
 # Task
-TASK-011 SPEC COMPLETE (DRAFT-7) — awaiting implementation
+TASK-011 SPEC APPROVED (DRAFT-10) — ready for implementation
 
 # Current Status
-TASK-011 spec (DRAFT-7) written and approved through 7 rounds of GPT architect review.
-Ready to hand to a dev agent for implementation.
+TASK-011 spec (DRAFT-10) approved after 10 rounds of GPT architect review (2026-06-04).
 No code has been written yet — this session was spec-only.
+Implementation agent should begin with 011A, then 011B, then 011C (strict dependency order).
 
 Previous completed tasks: TASK-006 through TASK-010 all complete. See archive.
 
 # Files Modified (this session)
-- `ai/tasks/TASK-011.md` — created; iterated DRAFT-1 through DRAFT-7
+- `ai/tasks/TASK-011.md` — created and iterated DRAFT-1 through DRAFT-10 (APPROVED)
+- `ai/handoffs/CURRENT_STATE.md` — this file
 
 # Files Required Next (for implementation agent)
 - `server/db/schema.js`
@@ -59,7 +60,8 @@ Editing (011C):
 - server/utils/recipeScorer.js                  (new)
 - server/services/aiService.js                  (add 2 tool declarations)
 - server/routes/ai.js                           (add 2 tool handlers)
-- server/utils/foodNormalization.test.js        (new — required before 011C ships)
+- server/utils/foodNormalization.test.js        (new — REQUIRED before 011C ships)
+- server/data/purineIndex.test.js               (new — REQUIRED before 011C ships)
 
 Requires (read-only):
 - server/services/pantryService.js
@@ -77,12 +79,13 @@ Irrelevant:
 ```
 
 # Architecture Notes
-- Three staged deliverables: 011A → 011B → 011C (strict dependency order)
+- Three staged deliverables: 011A → 011B → 011C (strict dependency order — architect approval condition)
 - 011A is foundational: meal_logs table + consume/update/remove agent tools
 - 011B depends on 011A (meal_logs must exist for getRecentSince)
 - 011C depends on 011B (dietaryContext must be injectable into chat)
-- All normalization logic lives in server/utils/foodNormalization.js (single source of truth)
-- Allergy detection uses lightNormalizeForAllergy() + containsWholeWord() ONLY — Invariant 12
+- All normalization logic lives in server/utils/foodNormalization.js (single source of truth — ADR-008)
+- LOOKUP is built from three source tables then chain-resolved at initialization — normalizeFood() is a single O(1) lookup after flattening
+- Allergy detection uses lightNormalizeForAllergy() + expandAllergen() + containsWholeWord() ONLY — Invariant 12
 - getRecentLimit(n) for display; getRecentSince(isoTimestamp) for purine load — two separate methods
 - TEXT-JSON pattern maintained throughout (not JSONB) — intentional debt tracked as TASK-012
 - No new env vars required
@@ -92,19 +95,25 @@ Irrelevant:
 - meal_logs append-only — ADR-002 / Invariant 2
 - Static purine index, no USDA API — ADR-003
 - TEXT columns for JSON, not JSONB — ADR-004 (TASK-012 planned)
-- Substring overlap scoring with normalization, not embeddings — ADR-005
+- Token overlap scoring with normalization, not embeddings — ADR-005
 - Staged delivery 011A/B/C — ADR-006
 - Server owns skip-deduction policy — ADR-007
 - foodNormalization.js as SPOF — ADR-008 / Invariant 11
 - meal log immutability; corrections restore pantry only — ADR-009
 - getRecentLimit for display, getRecentSince for purine classification (no LIMIT on time-range query)
-- stripIngredientPrefix lives in foodNormalization.js (not recipeScorer.js)
+- stripIngredientPrefix lives in foodNormalization.js
 - medium purine keywords checked before high (prevents kidney bean → kidney misclassification)
+- Unit mismatch: skip deduction + log + notify (not error) — preserves liquid item UX
+- consume_pantry_item returns quantityBefore for deterministic reversal
+- Purine keywords use word-boundary matching (\b) — prevents "pear"/"pea" false positive
+- bare 'heart' replaced with compound forms ('beef heart' etc.) — prevents "heart of palm" false positive
+- No dedicated reversal tool — update_pantry_item with quantity: quantityBefore is sufficient
+- foodsMatch intentionally does not match bean varieties (black bean ≠ kidney bean — different ingredients)
 
 # Remaining Work
 1. 011A implementation (foundational — ship first)
 2. 011B implementation (depends on 011A)
-3. 011C implementation + foodNormalization.test.js (depends on 011B)
+3. 011C implementation + foodNormalization.test.js + purineIndex.test.js (depends on 011B; tests are required deliverables)
 4. TASK-012 — JSONB migration (separate task, not blocking)
 
 # Known Risks
@@ -113,6 +122,8 @@ Irrelevant:
 - 3 Gemini calls per suggest_recipes turn — acceptable for MVP; cache deferred to post-launch
 - No settings page client-side — DietaryProfileForm mounts on HouseholdPage.jsx
 - TEXT-JSON debt across schema — tracked as TASK-012
+- Unit conversion not implemented — mismatch triggers skip-and-notify, not conversion
+- foodsMatch does not match ingredient varieties (black bean ≠ kidney bean) — intentional
 
 # Verification Results
 N/A — spec only, no code written this session
@@ -121,7 +132,15 @@ N/A — spec only, no code written this session
 - [ ] 011A: Run 0005_meal_logs.sql in Neon SQL Editor
 - [ ] 011B: Run 0006_household_dietary_profile.sql in Neon SQL Editor
 - [ ] npm run build passes after each stage
+- [ ] foodNormalization.test.js passes (required before 011C)
+- [ ] purineIndex.test.js passes (required before 011C)
 - [ ] Full flow smoke test: consume → meal log → dietary context → suggest_recipes → save_recipe
+
+# Architect Approval Conditions (from DRAFT-10 approval)
+1. 011A ships before any 011B work is merged
+2. 011B ships before any 011C work is merged
+3. foodNormalization.test.js and purineIndex.test.js are required deliverables, not optional
+4. Any future normalization additions comply with ADR-008 and include tests
 
 # Forbidden Exploration
 - server/middleware/auth.js
@@ -138,7 +157,7 @@ N/A — spec only, no code written this session
 - branch: main
 - worktree: none
 - context pressure: low
-- All spec iterations (DRAFT-1 through DRAFT-7) preserved in ai/tasks/TASK-011.md revision table
+- All spec iterations (DRAFT-1 through DRAFT-10) preserved in ai/tasks/TASK-011.md revision table
 
 # PowerShell Merge Block
-N/A — working directly on main. Commit the spec file only.
+N/A — working directly on main. Commit the spec files only.

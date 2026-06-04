@@ -1,6 +1,6 @@
 # TASK-011 — Intelligent Agent: Full Pantry CRUD, Consumption Logging, Dietary Awareness & Recipe Suggestion Tools
 
-**Status:** DRAFT-7 — updated after sixth GPT architect review (2026-06-04)
+**Status:** DRAFT-10 — APPROVED (2026-06-04) — implementation ready
 **Author:** Claude Code / ConnorSharpe
 
 ## Revision History
@@ -11,9 +11,12 @@
 | DRAFT-2 | Split into 011A/B/C, ADRs extracted, invariants added, JSONB vs TEXT resolved, purine default corrected, hybrid window added |
 | DRAFT-3 | `skipDeduction` moved to server-side determinism; dual source-of-truth invariant added; `getRecentWindow` capped and deterministic; `foodNormalization.js` consolidated; JSON parse boundary invariant; correction-after-consumption behavior specified; `amountConsumed` ratio threshold clarified; TASK-012 stub raised for JSONB migration |
 | DRAFT-4 | **Normalization rewrite:** removed all algorithmic plural stripping (was corrupting "cheese"→"chee", "tomatoes"→"tomat"); alias lookup now runs first on original string; bidirectional alias expansion at init. **`getPurineLevel`:** explicit `null` category handling. **Allergy detection:** normalized allergen + word-boundary matching (fixes "nut"→"coconut" false positive). **`getRecentWindow`:** replaced two-query union with single-query + post-filter (fixes 72h overflow when >10 meals). **`consume_pantry_item`:** ratio-based skip replaced with category-only rule (eliminates NaN-when-fullyConsumed bug and unit-mismatch trap); `unit` field re-added with unit-equality guard. **recipeScorer:** pantry pre-normalized into `Map` for O(1) lookup. **Unit test requirement** added as Invariant 11. |
-| DRAFT-5 | **scorer O(n²)→O(n+m):** `pantryKeysList` extracted outside ingredient loop. **`getRecentWindow` simplified:** always returns last 10 sorted DESC; 72h logic moved to `buildDietaryContext` where interpretation belongs. **Allergy detection:** dropped `foodsMatch` from allergy path — `containsWholeWord` only (single clear semantic). **`containsWholeWord`:** switched to `\b` word boundaries (handles punctuation like `"almond (sliced)"`). **`foodsMatch`:** replaced substring with token-based overlap (fixes `"pea"`→`"peach"` and `"ham"`→`"chamomile"` false positives). **Unit normalization:** `normalizeUnit()` added to `foodNormalization.js`; unit equality guard now normalizes both sides before comparison. **`skipDeduction` description:** clarified as advisory-only. **`ALIAS_ENTRIES` restructured:** split into `PLURAL_FORMS`, `SYNONYM_MAP`, `PREPARATION_EXPANSIONS` for maintainability. **`logged_at TEXT`:** documented as safe — `toISOString()` is the established codebase convention for all date writes; not a risk. |
+| DRAFT-5 | **scorer O(n²)→O(n+m):** `pantryKeysList` extracted outside ingredient loop. **`getRecentWindow` simplified:** always returns last 10 sorted DESC; 72h logic moved to `buildDietaryContext` where interpretation belongs. **Allergy detection:** dropped `foodsMatch` from allergy path — `containsWholeWord` only (single clear semantic). **`containsWholeWord`:** switched to `\b` word boundaries (handles punctuation like `"almond (sliced)"`). **`foodsMatch`:** replaced substring with token-based overlap (fixes `"pea"`→`"peach"` and `"ham"`→`"chamomile"` false positives). **Unit normalization:** `normalizeUnit()` added to `foodNormalization.js`; unit equality guard now normalizes both sides before comparison. **`skipDeduction` description:** clarified as advisory-only. **`ALIAS_ENTRIES` restructured:** split into `PLURAL_FORMS`, `SYNONYM_MAP`, `PREPARATION_EXPANSIONS` for maintainability. |
 | DRAFT-6 | **Quantity prefix stripping:** added `stripIngredientPrefix()` in `recipeScorer.score()` — strips leading numbers/fractions/units from AI-generated ingredient names before normalization. NOT placed in `normalizeFood()` to preserve its purity. **Allergy light normalization:** added `lightNormalizeForAllergy()` (lowercase + punctuation only, no synonym/prep expansion) to `foodNormalization.js`; `annotateHealth()` now uses this instead of `normalizeFood()`. **Invariant 12** added: `normalizeFood()` and `foodsMatch()` are banned from allergy detection code paths. **`foodsMatch()` 2-token threshold:** single shared token no longer sufficient; requires ≥2 token overlap OR exact canonical match — prevents "red bean"/"bean sprouts" collision. **`getPurineLevel` keyword ordering:** `medium` checked before `high` (simpler and correct fix — "kidney bean" matches medium before "kidney" matches high; plain "kidney" doesn't contain "kidney bean" so correctly falls through to high). **Consume fuzzy match tightened:** substring fallback now requires consumed-name to be a meaningful portion of the pantry name (≥4 chars, not just any overlap). |
 | DRAFT-7 | **Dietary window correctness fix (hard blocker):** split `getRecentWindow` into `getRecentLimit(householdId, n)` (last N sorted DESC, for display) and `getRecentSince(householdId, isoTimestamp)` (unbounded time-range query, for 72h purine load). `buildDietaryContext` now calls both independently — purine classification uses `getRecentSince` with full temporal visibility, not a pre-truncated LIMIT 10 set. DB index on `(household_id, logged_at)` added to migration. **`stripIngredientPrefix` moved to `foodNormalization.js`** (second hard blocker): function is fundamentally text normalization; moving it keeps all normalization testable in one file. `recipeScorer.js` imports it. Test spec corrected — `stripIngredientPrefix` now correctly belongs in `foodNormalization.test.js`. |
+| DRAFT-8 | **`recipeScorer.score()` wired to `foodsMatch()`** (hard blocker): scorer was using raw `k.includes(ingNorm)` substring matching, reintroducing exactly the false-positive class fixed in DRAFT-4/5. `foodsMatch` now added to imports; fuzzy fallback replaced with `keysList.some((k) => foodsMatch(k, ingNorm))`. **Consumption reversal made deterministic** (hard blocker): `meal_logs` now stores `quantity_before` and `quantity_after` columns; `consume_pantry_item` handler writes both and returns `quantityBefore` in the tool response; system prompt updated to use that value when reversing. Note: a dedicated reversal tool was considered but rejected — `update_pantry_item` with `quantity: quantityBefore` achieves identical semantics with no new surface area. **`getRecentSince` timestamp invariant enforced in code** (hard blocker): query now explicitly casts both sides to `::timestamptz` — safety argument is code-enforced, not prose-only. **`stripIngredientPrefix` regex improved** (should-fix): handles `"1 x onion"`, `"2 cans tomatoes"`, `"3 large eggs"`, `"14 oz diced tomatoes"`. **Allergen category expansion added** (should-fix, required to satisfy existing AC): `ALLERGEN_ALIASES` map and `expandAllergen()` added to `foodNormalization.js`; `annotateHealth()` now expands category allergens (e.g. "shellfish" → shrimp/prawn/crab/…) before `containsWholeWord` check. Invariant 12 updated to permit `expandAllergen()` (explicit curated list, not synonym expansion). **`meal_logs` growth estimate corrected**: "18 entries max" was based on per-meal counts; actual bound accounts for per-item-consumed log entries (40–80 rows realistic upper bound for 72h). |
+| DRAFT-10 | **`normalizeFood()` chain resolution** (hard blocker): `normalizeFood("scallions")` returned `"scallion"` instead of `"green onion"` because `LOOKUP` was built as a flat merged Map — a single lookup on `"scallions"` returned the PLURAL_FORMS intermediate value, not the SYNONYM_MAP terminal. Same bug affected `"zucchinis"` → `"zucchini"` (should be `"courgette"`) and `"eggplants"` → `"eggplant"` (should be `"aubergine"`). Fix: added post-build flattening loop that resolves all two-step chains at module initialization, so `normalizeFood()` remains a single O(1) lookup with no runtime logic. The three source tables (PLURAL_FORMS, SYNONYM_MAP, PREPARATION_EXPANSIONS) are kept for human readability. **`['peas', 'pea']` added to PLURAL_FORMS** (important): entry was referenced in test fixtures but absent from the table — contradictory spec. **LOOKUP comment corrected** (important): "Lookup order" replaced with "flattened canonical map" — previous wording implied a non-existent multi-stage algorithm and obscured the chain bug. **Chain-resolution test fixtures added**: `"zucchinis" → "courgette"` and `"eggplants" → "aubergine"` added to `foodNormalization.test.js` requirements. **`foodsMatch` strictness documented**: `"black beans"` and `"kidney beans"` share only 1 token (`"bean"`) and correctly return `false` — these are different ingredients and the behavior is intentional; added to Known Risks as an accepted limitation for awareness. |
+| DRAFT-9 | **Unit mismatch: error → skip-and-notify** (hard blocker): returning an error on unit mismatch breaks common liquid-consumption workflows (e.g. "2 tbsp olive oil" vs pantry "500 ml"). Changed to: skip quantity deduction, log the consumption event, return `skipReason: 'unit_mismatch'` in tool response; system prompt updated to explain this to the user and suggest resolution. **Purine keyword word-boundary matching** (hard blocker): `name.includes(keyword)` produced false positives — `"pear"` matched `"pea"` (medium), `"heart of palm"` matched `"heart"` (high). Web-confirmed: heart of palm is NOT high-purine (it is a low-purine vegetable). Fix: added `matchesPurineKeyword()` helper using `\b` boundaries; replaced bare `'heart'` in PURINE_KEYWORDS with explicit compound forms (`'beef heart'`, `'pork heart'`, `'chicken heart'`, `'lamb heart'`, `'duck heart'`); added `['heart of palm', 'palm vegetable']` to PREPARATION_EXPANSIONS. Added `purineIndex.test.js` requirement. **Invariant 6 corrected** (important): previously said `z.array(z.string())`; updated to match actual PATCH validation: `z.array(z.string().min(1).max(100)).max(20)`. **Multiple exact name matches → ambiguity** (important): step 2a now explicitly checks for more than one case-insensitive exact match and returns ambiguity error before any mutation. **ADR-008 drift rule added**: any future normalization logic must live in `foodNormalization.js` and be covered by a test — explicit rule prevents re-emergence of the multi-system divergence that ADR-008 was created to prevent. **ADR-009 dietary-context caveat**: added note that dietary context reflects recorded events, not verified nutrition history — meal log entries are not removed on reversal and therefore continue to contribute to purine window. **`logged_at` language corrected**: removed "not a risk" framing; now consistently described as accepted technical debt alongside ADR-004. |
 
 ---
 
@@ -31,7 +34,7 @@ Purine content is not a USDA FoodData Central nutrient field. The high-purine fo
 ## ADR-004: JSON columns — TEXT, not JSONB (intentional debt)
 Every JSON field in the existing schema (`recipes.ingredients`, `recipes.steps`, `recipes.tags`) is stored as `text` and handled via `serialize()`/`parse()` helpers in the service layer — the pattern is established in `recipeService.js` and must be followed exactly for all new JSON-text fields. Introducing `jsonb` columns for new fields only would create two incompatible patterns. New `households` columns use `text` for consistency. A separate TASK-012 is raised to migrate all JSON-text columns to JSONB as a single coherent change. **This is documented debt, not stable architecture.**
 
-## ADR-005: Substring overlap scoring with normalization, not embeddings
+## ADR-005: Token overlap scoring with normalization, not embeddings
 Deterministic, cheap, debuggable. The normalization layer (shared utility, see below) closes the majority of practical gaps. Embeddings are a valid future upgrade if scoring accuracy proves insufficient.
 
 ## ADR-006: Staged delivery (011A → 011B → 011C)
@@ -43,8 +46,12 @@ The model may suggest `skipDeduction: true` for trace condiment use, but the ser
 ## ADR-008: `foodNormalization.js` as single source of truth
 Both purine classification and ingredient overlap scoring require name normalization (plural handling, aliases, synonym mapping). Because both `purineIndex.js` and `recipeScorer.js` are new files, consolidating normalization into a shared utility from day one prevents divergence. Without this, the two systems will produce inconsistent results within two iterations of alias expansion.
 
+**Drift prevention rule (mandatory):** Any normalization logic introduced in future tasks — synonym mappings, plural forms, preparation expansions, unit aliases, allergen aliases — MUST be added to `foodNormalization.js` and covered by a corresponding test in `foodNormalization.test.js`. Normalization logic in any other file is a violation of this ADR. If a future task genuinely requires file-local normalization, it must document why it cannot use the shared utility and request a spec review.
+
 ## ADR-009: Meal log is append-only; corrections affect pantry only
-`meal_logs` is an audit trail. If a user says "actually I didn't eat that," the pantry quantity is restored via `update_pantry_item`, but the meal log entry is not reversed. This is intentional: the log records what the agent processed, not a verified ground truth of consumption. The model must be prompted to tell the user that the pantry has been restored but the meal history entry remains. This preserves log integrity and keeps dietary window calculations stable.
+`meal_logs` is an audit trail. The log records what the agent processed, not a verified ground truth of consumption. The log stores `quantity_before` (item quantity at time of consumption) and `quantity_after` (remaining quantity after deduction). The handler returns `quantityBefore` in the `consume_pantry_item` tool response so the model has it in-context immediately for reversal. If a user says "actually I didn't eat that," the model uses that value with `update_pantry_item` to restore the pantry. The meal log entry is not reversed — the model must inform the user of this.
+
+**Important caveat for future developers:** Dietary context reflects recorded consumption events, not verified nutrition history. If a user reverses a consumption, the meal_log entry remains and continues to contribute to the 72h purine window. Do not treat dietary context as ground truth of what was eaten — it is a best-effort record of what the agent processed.
 
 ---
 
@@ -55,15 +62,15 @@ Enforced at the service/handler layer. Not suggestions.
 1. **Pantry quantity ≥ 0 always.** `consume_pantry_item` handler must clamp: `remaining = Math.max(0, remaining)`. If clamped to 0, treat as `fullyConsumed = true`.
 2. **`meal_logs` is append-only.** No update or delete endpoints exist. No service methods for mutation.
 3. **Tool calls must reference valid IDs.** `update_pantry_item` and `remove_pantry_item` handlers verify `id` belongs to `householdId` before any write. Non-existent or cross-household IDs return `{ ok: false, error: 'Item not found' }` — never a silent no-op.
-4. **Ambiguous name match never mutates DB.** If `consume_pantry_item` fuzzy match returns 2+ candidates, return `{ ok: false, error: 'Ambiguous: [list]. Ask user to clarify.' }` before any write.
+4. **Ambiguous name match never mutates DB.** If `consume_pantry_item` name resolution returns 2+ candidates at any step (including 2+ exact case-insensitive matches), return `{ ok: false, error: 'Ambiguous: [list]. Ask user to clarify.' }` before any write.
 5. **No negative `amountConsumed`.** Validated as `z.number().positive()` at the Zod boundary in the tool handler.
-6. **Dietary profile fields must be valid JSON arrays.** `PATCH /api/dietary` validates `conditions`, `allergies`, `foodPreferences` as `z.array(z.string())` before write.
+6. **Dietary profile fields must be valid, non-empty strings.** `PATCH /api/dietary` validates each of `conditions`, `allergies`, `foodPreferences` as `z.array(z.string().min(1).max(100)).max(20).optional()` — matching the actual Zod schema on the route.
 7. **Allergy notes are critical warnings.** System prompt instructs the model: allergy `allergyNote` values must be surfaced explicitly — never suppressed or softened.
 8. **`item_name` in `meal_logs` is informational only when `pantry_item_id IS NOT NULL`.** If a FK is present, `item_name` must not be used for joins, analytics queries, or deduplication. It exists solely for human readability when the referenced item has been deleted. Future analytics code must join on `pantry_item_id` when available.
-9. **Server owns skip-deduction policy.** The server applies its deterministic condiment rule before honoring any model-supplied `skipDeduction` flag. Model cannot override a server-enforced deduction.
+9. **Server owns skip-deduction policy.** The server applies its deterministic condiment and unit-mismatch rules before honoring any model-supplied `skipDeduction` flag. Model cannot override a server-enforced deduction.
 10. **JSON-text fields are parsed once at the service boundary.** No `JSON.parse()` in route handlers. All new services with JSON-text columns must implement `serialize()`/`parse()` helpers following the `recipeService.js` pattern.
-11. **`foodNormalization.js` must have unit tests.** It is a semantic single point of failure: bugs here affect health warnings, recipe matching, and dietary classification simultaneously. A test file (`server/utils/foodNormalization.test.js`) is required before 011C ships, covering: known synonyms, known plurals, words that previously broke stripping (`"cheese"`, `"hummus"`, `"glass"`), `foodsMatch` symmetric cases, and `containsWholeWord` boundary cases (see `foodNormalization.js` spec for full fixture list).
-12. **`normalizeFood()` and `foodsMatch()` are banned from allergy detection code paths.** Allergy detection must use `lightNormalizeForAllergy()` and `containsWholeWord()` only. Synonym and preparation expansion in the allergy path risk false negatives in safety-critical matching — if a future alias change renames an ingredient, an existing allergy entry could silently stop triggering. Raw text form is the only safe anchor for allergy matching.
+11. **`foodNormalization.js` must have unit tests.** It is a semantic single point of failure: bugs here affect health warnings, recipe matching, and dietary classification simultaneously. A test file (`server/utils/foodNormalization.test.js`) is required before 011C ships. See test fixture list in the `foodNormalization.js` spec section.
+12. **`normalizeFood()` and `foodsMatch()` are banned from allergy detection code paths.** Allergy detection uses `lightNormalizeForAllergy()`, `containsWholeWord()`, and `expandAllergen()` only. `expandAllergen()` uses a curated explicit `ALLERGEN_ALIASES` map — this is permissible because it is a deliberate safety list, not synonym expansion that could silently rename an ingredient. Any change to `ALLERGEN_ALIASES` requires a corresponding test update.
 
 ---
 
@@ -95,7 +102,7 @@ Add `update_pantry_item`, `remove_pantry_item`, and `consume_pantry_item` tools 
 
 ### Edit
 - `server/db/schema.js` — add `mealLogs` table
-- `server/services/aiService.js` — add 3 tool declarations; update system prompt with tool decision rules and correction behavior
+- `server/services/aiService.js` — add 3 tool declarations; update system prompt
 - `server/routes/ai.js` — add 3 tool handlers; update `pantrySummary` shape
 
 ## Forbidden Files (011A)
@@ -107,19 +114,19 @@ Add `update_pantry_item`, `remove_pantry_item`, and `consume_pantry_item` tools 
 ### `0005_meal_logs.sql`
 ```sql
 CREATE TABLE meal_logs (
-  id             SERIAL PRIMARY KEY,
-  household_id   INTEGER NOT NULL REFERENCES households(id) ON DELETE CASCADE,
-  pantry_item_id INTEGER REFERENCES pantry_items(id) ON DELETE SET NULL,
-  item_name      TEXT    NOT NULL,
-  category       TEXT    NOT NULL DEFAULT 'Other',
-  purine_level   TEXT    NOT NULL DEFAULT 'medium',
-  was_expiring   BOOLEAN,
-  logged_at      TEXT    NOT NULL,
-  source         TEXT    NOT NULL DEFAULT 'agent'
+  id              SERIAL PRIMARY KEY,
+  household_id    INTEGER NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  pantry_item_id  INTEGER REFERENCES pantry_items(id) ON DELETE SET NULL,
+  item_name       TEXT    NOT NULL,
+  category        TEXT    NOT NULL DEFAULT 'Other',
+  purine_level    TEXT    NOT NULL DEFAULT 'medium',
+  was_expiring    BOOLEAN,
+  quantity_before NUMERIC,
+  quantity_after  NUMERIC,
+  logged_at       TEXT    NOT NULL,
+  source          TEXT    NOT NULL DEFAULT 'agent'
 );
 
--- Index required for getRecentSince() time-range queries — without this,
--- getRecentSince does a full table scan filtered in Postgres.
 CREATE INDEX idx_meal_logs_household_logged_at
   ON meal_logs (household_id, logged_at DESC);
 ```
@@ -128,7 +135,8 @@ CREATE INDEX idx_meal_logs_household_logged_at
 - `pantry_item_id` is nullable. Set when the item exists at time of consumption. `ON DELETE SET NULL` preserves the log entry when the item is later deleted.
 - Per Invariant 8: when `pantry_item_id IS NOT NULL`, `item_name` is informational only — not for joins or analytics.
 - `purine_level` defaults to `'medium'`, not `'low'`. Unknown Meat/Seafood items are more likely medium than low. Over-warning is preferable for a health constraint.
-- `was_expiring` propagated from expiry status at time of consumption — preserves the waste-saved analytics signal for the existing `GET /api/pantry/waste-saved` endpoint.
+- `was_expiring` propagated from expiry status at time of consumption.
+- `quantity_before` is the item quantity at the moment of consumption. `quantity_after` is the quantity remaining after the handler completes — equal to `quantity_before` when `effectiveSkip` is true (condiment skip or unit mismatch skip). Both nullable for back-compat; always populated by the agent handler. These two values give the model everything it needs to restore pantry state on reversal.
 
 ## `pantrySummary` Shape Change (011A)
 
@@ -157,58 +165,64 @@ const pantrySummary = allItems.map((i) => ({
 Single source of truth for all food name normalization. Imported by `purineIndex.js`, `recipeScorer.js` (011C), and the `consume_pantry_item` handler. Covered by unit tests (Invariant 11).
 
 **Design decisions:**
-- No algorithmic plural stripping — corrupts too many food words (`"cheese"→"chee"`, `"hummus"→"humu"`). All plural→singular forms are declared explicitly.
-- Alias tables split into three distinct concerns to prevent maintenance collisions: plurals, synonyms (regional/cultural variants), and preparation expansions (compound forms like "chicken broth").
-- `foodsMatch` uses token-based overlap instead of substring — prevents `"pea"` matching `"peach"` and `"ham"` matching `"chamomile"`.
-- `containsWholeWord` uses `\b` word boundaries — handles punctuation in realistic ingredient strings (`"almond (sliced)"`, `"peanut, roasted"`).
+- No algorithmic plural stripping — corrupts too many food words. All plural→singular forms are declared explicitly.
+- `LOOKUP` is built from three source tables and then **chain-resolved at initialization**. Some plural forms point to an intermediate singular that is itself a synonym key (e.g. `scallions → scallion → green onion`). The post-build flattening loop collapses all chains so every key maps directly to its terminal canonical form. `normalizeFood()` is a single O(1) lookup — no runtime iteration.
+- `foodsMatch` uses token-based overlap — prevents `"pea"` matching `"peach"` and `"ham"` matching `"chamomile"`. Note: two-word bean variants (`"black bean"` vs `"kidney bean"`) share only 1 token and correctly do NOT match — they are genuinely different ingredients.
+- `containsWholeWord` uses `\b` word boundaries — handles punctuation in realistic ingredient strings.
+- `ALLERGEN_ALIASES` is a curated explicit safety list for category-level allergens. Not synonym expansion — will not silently reroute an allergy trigger if an ingredient alias changes. Any modification requires a test update (Invariant 12).
+- `PREPARATION_EXPANSIONS` includes `'heart of palm'` → `'palm vegetable'` to prevent this low-purine vegetable from matching the `'heart'` purine keyword (see `purineIndex.js`).
 
 ```js
 // ── Plural forms: exact plural → canonical singular ──────────────────────────
-// To add a new food plural: add ONE entry here. Do not add algorithmic stripping.
+// Note: some entries here have values that are themselves keys in SYNONYM_MAP
+// (e.g. 'scallions' → 'scallion', and 'scallion' → 'green onion').
+// These chains are resolved by the flattening step below — do NOT inline
+// the chain manually here; let the flattening loop handle it.
 const PLURAL_FORMS = new Map([
-  ['tomatoes',      'tomato'],
-  ['potatoes',      'potato'],
-  ['avocados',      'avocado'],
-  ['anchovies',     'anchovy'],
-  ['kidney beans',  'kidney bean'],
-  ['chickpeas',     'chickpea'],
-  ['lentils',       'lentil'],
-  ['mushrooms',     'mushroom'],
-  ['onions',        'onion'],
-  ['carrots',       'carrot'],
-  ['aubergines',    'aubergine'],
-  ['courgettes',    'courgette'],
-  ['zucchinis',     'zucchini'],
-  ['eggplants',     'eggplant'],
-  ['scallions',     'scallion'],
-  ['prawns',        'prawn'],
-  ['shrimps',       'shrimp'],
-  ['eggs',          'egg'],
-  ['cloves',        'clove'],
+  ['tomatoes',         'tomato'],
+  ['potatoes',         'potato'],
+  ['avocados',         'avocado'],
+  ['anchovies',        'anchovy'],
+  ['kidney beans',     'kidney bean'],
+  ['chickpeas',        'chickpea'],
+  ['lentils',          'lentil'],
+  ['mushrooms',        'mushroom'],
+  ['onions',           'onion'],
+  ['carrots',          'carrot'],
+  ['aubergines',       'aubergine'],
+  ['courgettes',       'courgette'],
+  ['zucchinis',        'zucchini'],    // chain: zucchini → courgette (resolved by flattening)
+  ['eggplants',        'eggplant'],   // chain: eggplant → aubergine (resolved by flattening)
+  ['scallions',        'scallion'],   // chain: scallion → green onion (resolved by flattening)
+  ['prawns',           'prawn'],
+  ['shrimps',          'shrimp'],
+  ['peas',             'pea'],
+  ['eggs',             'egg'],
+  ['cloves',           'clove'],
   ['cloves of garlic', 'garlic'],
 ]);
 
 // ── Regional/cultural synonyms: variant → canonical ──────────────────────────
-// Canonical form is the more common English name.
 const SYNONYM_MAP = new Map([
-  ['cilantro',      'coriander'],
-  ['eggplant',      'aubergine'],
-  ['zucchini',      'courgette'],
-  ['scallion',      'green onion'],
-  ['spring onion',  'green onion'],
-  ['green onions',  'green onion'],
-  ['spring onions', 'green onion'],
-  ['heavy cream',   'cream'],
-  ['double cream',  'cream'],
-  ['whipping cream','cream'],
-  ['single cream',  'cream'],
-  ['cornstarch',    'cornflour'],
-  ['broil',         'grill'],
+  ['cilantro',       'coriander'],
+  ['eggplant',       'aubergine'],
+  ['zucchini',       'courgette'],
+  ['scallion',       'green onion'],
+  ['spring onion',   'green onion'],
+  ['green onions',   'green onion'],
+  ['spring onions',  'green onion'],
+  ['heavy cream',    'cream'],
+  ['double cream',   'cream'],
+  ['whipping cream', 'cream'],
+  ['single cream',   'cream'],
+  ['cornstarch',     'cornflour'],
+  ['broil',          'grill'],
 ]);
 
 // ── Preparation expansions: compound form → base ingredient ──────────────────
-// "chicken broth" resolves to "chicken" for purine and overlap scoring purposes.
 // These are intentionally one-directional: beef broth IS beef for health purposes.
+// 'heart of palm' → 'palm vegetable' prevents the low-purine vegetable from
+// matching the high-purine 'heart' keyword in purineIndex.js.
 const PREPARATION_EXPANSIONS = new Map([
   ['beef broth',        'beef'],
   ['beef stock',        'beef'],
@@ -233,15 +247,46 @@ const PREPARATION_EXPANSIONS = new Map([
   ['lamb mince',        'lamb'],
   ['lamb chop',         'lamb'],
   ['lamb chops',        'lamb'],
+  ['heart of palm',     'palm vegetable'],  // low-purine vegetable; must not match 'heart' keyword
 ]);
 
-// Build combined lookup: longest-match wins (preparation expansions checked first).
-// Lookup order: PREPARATION_EXPANSIONS → PLURAL_FORMS → SYNONYM_MAP
+// ── Flattened canonical map ────────────────────────────────────────────────────
+// Built from the three source tables, then chain-resolved at module initialization.
+// After flattening every key maps DIRECTLY to its terminal canonical form —
+// no multi-step lookup is needed at runtime.
+//
+// Why: PLURAL_FORMS intermediate values can themselves be keys in SYNONYM_MAP,
+// creating two-step chains that a single Map.get() call cannot follow.
+// Example chain: 'scallions' → 'scallion' → 'green onion'
+//   Before flattening: LOOKUP.get('scallions') === 'scallion'   ← wrong
+//   After flattening:  LOOKUP.get('scallions') === 'green onion' ← correct
+//
+// The same applies to: 'zucchinis'→'zucchini'→'courgette'
+//                  and: 'eggplants'→'eggplant'→'aubergine'
+//
+// PREPARATION_EXPANSIONS has priority (spread first); duplicates are overwritten
+// by later spreads, so the merge order is intentional.
 const LOOKUP = new Map([
   ...PREPARATION_EXPANSIONS,
   ...PLURAL_FORMS,
   ...SYNONYM_MAP,
 ]);
+
+// Resolve all two-step chains so normalizeFood() is a single O(1) lookup.
+// Runs until stable — safe for our data depth (max 2 iterations in practice).
+{
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [key, value] of LOOKUP) {
+      const resolved = LOOKUP.get(value);
+      if (resolved !== undefined && resolved !== value) {
+        LOOKUP.set(key, resolved);
+        changed = true;
+      }
+    }
+  }
+}
 
 export function normalizeFood(name) {
   if (!name) return '';
@@ -249,22 +294,16 @@ export function normalizeFood(name) {
   return LOOKUP.get(n) ?? n;
 }
 
-// Token-based match: splits names into word tokens and checks for meaningful overlap.
-// Requires ≥2 shared tokens OR exact canonical match — single token overlap is not sufficient.
-// This prevents "red bean" matching "bean sprouts" (only 1 shared token: "bean").
-// It also correctly handles single-word foods: "beef" normalizes to "beef" via LOOKUP,
-// so exact canonical match catches it before token comparison.
+// Token-based match: requires ≥2 shared tokens OR exact canonical match.
+// Prevents "red bean" matching "bean sprouts" (only 1 shared token).
 function tokenize(name) {
   return (name || '').toLowerCase().split(/[\s,()/]+/).filter((t) => t.length > 2);
 }
 
-// Returns true if a and b refer to the same food after normalization and token comparison.
 export function foodsMatch(a, b) {
   const na = normalizeFood(a);
   const nb = normalizeFood(b);
-  // Exact canonical match is always sufficient
   if (na === nb) return true;
-  // Require ≥2 shared tokens to prevent single-word false positives
   const tokensA = new Set(tokenize(na));
   const tokensB = tokenize(nb);
   const sharedCount = tokensB.filter((t) => tokensA.has(t)).length;
@@ -272,55 +311,66 @@ export function foodsMatch(a, b) {
 }
 
 // Light normalization for allergy detection ONLY.
-// Intentionally does NOT run through synonym or preparation expansion.
-// Reason: synonym expansion could cause false negatives in safety-critical allergy matching
-// (e.g. if "peanut butter" expands to "peanut", allergy for "peanut butter" might not match
-// an ingredient listed as "peanut butter" in a future alias change).
-// Rule: allergy detection always operates on raw text form (lowercase + punctuation only).
+// Does NOT run through synonym or preparation expansion — raw text form only.
 export function lightNormalizeForAllergy(name) {
   if (!name) return '';
   return name
     .toLowerCase()
     .trim()
-    .replace(/[(),.!?;:'"]/g, ' ')  // strip punctuation to spaces
-    .replace(/\s+/g, ' ')            // collapse whitespace
+    .replace(/[(),.!?;:'"]/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
-// Word-boundary match: checks if word appears as a whole word in text.
-// Uses \b boundaries — correctly handles punctuation ("almond (sliced)", "peanut, roasted").
-// Used for allergy detection only. Do not use for general ingredient matching.
+// Word-boundary match. Used for allergy detection only.
 export function containsWholeWord(text, word) {
   if (!text || !word) return false;
   const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`\\b${escaped}\\b`).test(text);
 }
 
+// ── Allergen category expansion ───────────────────────────────────────────────
+// Maps category-level allergen names to their specific ingredient members.
+// Explicit curated safety list — NOT synonym expansion.
+// Any change here requires a corresponding test update (Invariant 12).
+const ALLERGEN_ALIASES = new Map([
+  ['shellfish', ['shrimp', 'prawn', 'lobster', 'crab', 'oyster', 'scallop', 'mussel', 'clam', 'squid', 'octopus']],
+  ['tree nut',  ['almond', 'walnut', 'cashew', 'pecan', 'pistachio', 'hazelnut', 'macadamia', 'brazil nut', 'pine nut']],
+  ['tree nuts', ['almond', 'walnut', 'cashew', 'pecan', 'pistachio', 'hazelnut', 'macadamia', 'brazil nut', 'pine nut']],
+  ['gluten',    ['wheat', 'barley', 'rye', 'spelt', 'farro', 'semolina', 'durum', 'bulgur']],
+  ['dairy',     ['milk', 'cream', 'cheese', 'butter', 'yogurt', 'yoghurt', 'whey', 'casein', 'lactose', 'ghee']],
+  ['fish',      ['salmon', 'tuna', 'cod', 'haddock', 'tilapia', 'trout', 'bass', 'snapper', 'halibut', 'anchovy', 'sardine', 'herring', 'mackerel']],
+  ['soy',       ['soy sauce', 'tofu', 'miso', 'edamame', 'tempeh', 'soya']],
+]);
+
+export function expandAllergen(allergenLight) {
+  const aliases = ALLERGEN_ALIASES.get(allergenLight);
+  return aliases ? [allergenLight, ...aliases] : [allergenLight];
+}
+
 // ── Unit normalization ────────────────────────────────────────────────────────
-// Maps common abbreviations and variants to a canonical unit string.
-// Used by the consume_pantry_item handler to normalize units before equality check.
 const UNIT_ALIASES = new Map([
-  ['tbsp',         'tablespoon'], ['tbs',           'tablespoon'], ['tablespoons', 'tablespoon'],
-  ['tsp',          'teaspoon'],  ['teaspoons',      'teaspoon'],
-  ['g',            'gram'],      ['grams',          'gram'],
-  ['kg',           'kilogram'],  ['kilograms',      'kilogram'],
-  ['ml',           'milliliter'],['millilitre',     'milliliter'], ['millilitres', 'milliliter'], ['milliliters', 'milliliter'],
-  ['l',            'liter'],     ['litre',          'liter'],      ['litres',      'liter'],       ['liters',     'liter'],
-  ['oz',           'ounce'],     ['ounces',         'ounce'],
-  ['lb',           'pound'],     ['lbs',            'pound'],      ['pounds',      'pound'],
-  ['c',            'cup'],       ['cups',           'cup'],
-  ['pieces',       'piece'],     ['pc',             'piece'],      ['pcs',         'piece'],
-  ['items',        'item'],
-  ['servings',     'serving'],
-  ['cloves',       'clove'],
-  ['slices',       'slice'],
-  ['bunches',      'bunch'],
-  ['heads',        'head'],
-  ['cans',         'can'],
-  ['jars',         'jar'],
-  ['bottles',      'bottle'],
-  ['bags',         'bag'],
-  ['packets',      'packet'],
+  ['tbsp', 'tablespoon'], ['tbs', 'tablespoon'], ['tablespoons', 'tablespoon'],
+  ['tsp', 'teaspoon'], ['teaspoons', 'teaspoon'],
+  ['g', 'gram'], ['grams', 'gram'],
+  ['kg', 'kilogram'], ['kilograms', 'kilogram'],
+  ['ml', 'milliliter'], ['millilitre', 'milliliter'], ['millilitres', 'milliliter'], ['milliliters', 'milliliter'],
+  ['l', 'liter'], ['litre', 'liter'], ['litres', 'liter'], ['liters', 'liter'],
+  ['oz', 'ounce'], ['ounces', 'ounce'],
+  ['lb', 'pound'], ['lbs', 'pound'], ['pounds', 'pound'],
+  ['c', 'cup'], ['cups', 'cup'],
+  ['pieces', 'piece'], ['pc', 'piece'], ['pcs', 'piece'],
+  ['items', 'item'],
+  ['servings', 'serving'],
+  ['cloves', 'clove'],
+  ['slices', 'slice'],
+  ['bunches', 'bunch'],
+  ['heads', 'head'],
+  ['cans', 'can'],
+  ['jars', 'jar'],
+  ['bottles', 'bottle'],
+  ['bags', 'bag'],
+  ['packets', 'packet'],
 ]);
 
 export function normalizeUnit(unit) {
@@ -330,12 +380,10 @@ export function normalizeUnit(unit) {
 }
 
 // ── Ingredient prefix stripping ───────────────────────────────────────────────
-// Strips leading quantity/unit prefixes from AI-generated recipe ingredient name strings.
-// Gemini structured prompts separate name from quantity, but the two-step suggestRecipes()
-// search-grounding path can produce mixed strings like "2 cloves of garlic".
-// Placed here (not in recipeScorer.js) so it is testable alongside other normalizations
-// and importable by any future caller that processes AI ingredient strings.
-const QUANTITY_PREFIX_RE = /^\d+(\s*\/\s*\d+|\.\d+)?\s*(g|kg|ml|l|oz|lb|lbs|tbsp|tsp|cup|cups|cloves?|heads?|pieces?|servings?)?\s*(of\s+)?/i;
+// Handles: "500g chicken breast", "1/2 cup olive oil", "2 cloves of garlic",
+//          "1 x onion", "2 cans tomatoes", "3 large eggs", "14 oz diced tomatoes".
+const QUANTITY_PREFIX_RE =
+  /^\d+(\s*\/\s*\d+|\.\d+)?\s*(x\s+|×\s+)?(g|kg|ml|l|oz|lb|lbs|tbsp|tsp|cup|cups|cloves?|heads?|pieces?|servings?|cans?|jars?|bags?|bunches?|slices?|stalks?|sprigs?|packets?)?\s*(of\s+)?(large\s+|small\s+|medium\s+|extra\s+large\s+|diced\s+|chopped\s+|sliced\s+|minced\s+|fresh\s+|dried\s+|frozen\s+|cooked\s+|ground\s+)?/i;
 
 export function stripIngredientPrefix(name) {
   return (name || '').replace(QUANTITY_PREFIX_RE, '').trim();
@@ -343,29 +391,36 @@ export function stripIngredientPrefix(name) {
 ```
 
 **Unit test requirement (Invariant 11):** `server/utils/foodNormalization.test.js` must cover:
-- Known plurals: `"tomatoes"` → `"tomato"`, `"anchovies"` → `"anchovy"`
-- Known synonyms: `"scallions"` → `"green onion"`, `"cilantro"` → `"coriander"`
-- Preparation expansions: `"chicken broth"` → `"chicken"`, `"ground beef"` → `"beef"`
+- Known plurals (direct, no chain): `"tomatoes"` → `"tomato"`, `"anchovies"` → `"anchovy"`, `"peas"` → `"pea"`
+- Chain-resolved plurals (requires flattening to pass): `"scallions"` → `"green onion"` (not `"scallion"`), `"zucchinis"` → `"courgette"` (not `"zucchini"`), `"eggplants"` → `"aubergine"` (not `"eggplant"`)
+- Known synonyms: `"scallion"` → `"green onion"`, `"cilantro"` → `"coriander"`, `"zucchini"` → `"courgette"`
+- Preparation expansions: `"chicken broth"` → `"chicken"`, `"ground beef"` → `"beef"`, `"heart of palm"` → `"palm vegetable"`
 - Non-breaking cases: `"cheese"` → `"cheese"`, `"hummus"` → `"hummus"`, `"glass"` → `"glass"`
-- `foodsMatch` true (≥2 token overlap): `"kidney bean soup"` / `"kidney bean stew"` (shares "kidney", "bean")
-- `foodsMatch` false (single token): `"red bean"` / `"bean sprouts"` (only "bean" shared → no match)
-- `foodsMatch` false (single token): `"pea"` / `"peach"`, `"ham"` / `"chamomile"`
+- `foodsMatch` true: `"kidney bean soup"` / `"kidney bean stew"` (≥2 shared tokens)
+- `foodsMatch` false: `"red bean"` / `"bean sprouts"` (1 token only), `"pea"` / `"peach"`, `"ham"` / `"chamomile"`
 - `containsWholeWord` true: `"almond (sliced)"` contains `"almond"`
 - `containsWholeWord` false: `"coconut"` does NOT contain `"nut"` as whole word
-- `lightNormalizeForAllergy`: strips punctuation, lowercases, does NOT expand synonyms (`"scallions"` → `"scallions"`, NOT `"green onion"`)
+- `lightNormalizeForAllergy`: strips punctuation, lowercases, does NOT expand synonyms
 - `normalizeUnit`: `"tbsp"` → `"tablespoon"`, `"ml"` → `"milliliter"`, unknown → passthrough
-- `stripIngredientPrefix` (exported from `foodNormalization.js`): `"2 cloves of garlic"` → `"garlic"`, `"500g chicken breast"` → `"chicken breast"`, `"1/2 cup olive oil"` → `"olive oil"`, `"olive oil"` → `"olive oil"` (unchanged)
+- `expandAllergen('shellfish')` returns array including `'shrimp'`, `'prawn'`, `'crab'`
+- `expandAllergen('peanut')` returns `['peanut']` (specific ingredient — no expansion)
+- `expandAllergen` + `containsWholeWord`: `'shellfish'` allergen matches `'shrimp'` ingredient; `'shellfish'` does NOT match `'fish'`
+- `stripIngredientPrefix`: `"2 cloves of garlic"` → `"garlic"`, `"500g chicken breast"` → `"chicken breast"`, `"1/2 cup olive oil"` → `"olive oil"`, `"1 x onion"` → `"onion"`, `"2 cans tomatoes"` → `"tomatoes"`, `"3 large eggs"` → `"eggs"`, `"14 oz diced tomatoes"` → `"tomatoes"`, `"olive oil"` → `"olive oil"`
 
 ## `server/data/purineIndex.js` (011A)
 
-Imports `normalizeFood` from `foodNormalization.js`. Does not contain its own normalization logic.
+Imports `normalizeFood` from `foodNormalization.js`. No local normalization logic.
+
+**DRAFT-9 change:** Added `matchesPurineKeyword()` helper using `\b` word boundaries. Replaced bare `'heart'` with explicit compound forms. Without word boundaries, `"pear".includes("pea")` is `true` (false positive: pear is NOT medium-purine). With bare `'heart'`, `"heart of palm".includes("heart")` is `true` (false positive: heart of palm is a low-purine vegetable, web-confirmed). Word-boundary matching and compound keywords eliminate both false positives.
 
 ```js
 import { normalizeFood } from '../utils/foodNormalization.js';
 
 const PURINE_KEYWORDS = {
   high: [
-    'organ meat', 'liver', 'kidney', 'heart', 'sweetbread',
+    'organ meat', 'liver', 'kidney',
+    'beef heart', 'pork heart', 'chicken heart', 'lamb heart', 'duck heart',
+    'sweetbread',
     'anchovy', 'sardine', 'herring', 'mackerel', 'sprat',
     'mussel', 'scallop', 'game meat', 'venison', 'goose',
     'yeast extract', 'marmite', "brewer's yeast",
@@ -379,29 +434,46 @@ const PURINE_KEYWORDS = {
   ],
 };
 
-// category may be null when called from recipeScorer (recipe ingredients have no category).
-// null/undefined category skips the category fallback — keyword match is the only signal.
-//
+// Word-boundary match for purine keywords.
+// Prevents "pear" matching "pea" and "sweetbreads" matching unexpected substrings.
+// Verified: "pear".includes("pea") === true (false positive without this fix).
+function matchesPurineKeyword(name, keyword) {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escaped}\\b`).test(name);
+}
+
 // KEYWORD CHECK ORDER: medium checked BEFORE high.
-// Reason: "kidney bean" contains the word "kidney" (high), but is a legume (medium).
-// Checking medium first lets "kidney bean" match the medium keyword "kidney bean" before
-// "kidney" (high) fires. Plain "kidney" (organ meat) does not contain "kidney bean", so it
-// correctly falls through medium and matches high.
-// Checking longer/more-specific keywords first within each level for same reason.
-const PURINE_CHECK_ORDER = ['medium', 'high'] as const;
+// Reason: "kidney bean" contains "kidney" (high), but is a legume (medium).
+// Checking medium first lets "kidney bean" match before "kidney" fires.
+// Longer keywords sorted first within each level for same reason.
+const PURINE_CHECK_ORDER = ['medium', 'high'];
 
 export function getPurineLevel(itemName, category) {
   const name = normalizeFood(itemName);
+  // normalizeFood maps "heart of palm" → "palm vegetable" before this check,
+  // preventing the 'heart' keyword from matching the low-purine vegetable.
   for (const level of PURINE_CHECK_ORDER) {
-    // Sort keywords by length descending — longer/more-specific keywords matched first
     const sorted = [...PURINE_KEYWORDS[level]].sort((a, b) => b.length - a.length);
-    if (sorted.some((k) => name.includes(k))) return level;
+    if (sorted.some((k) => matchesPurineKeyword(name, k))) return level;
   }
-  // Category fallback: only applied when category is a known string, never on null/undefined.
   if (category === 'Meat' || category === 'Seafood') return 'medium';
   return 'low';
 }
 ```
+
+**`purineIndex.js` test requirement:** A test file `server/data/purineIndex.test.js` should be created alongside `foodNormalization.test.js` before 011C ships, covering:
+- `getPurineLevel("pear", null)` → `'low'` (word boundary prevents "pea" match)
+- `getPurineLevel("peas", null)` → `'medium'` (normalizes to "pea" via PLURAL_FORMS... wait — "peas" is not in PLURAL_FORMS. Add `['peas', 'pea']` to PLURAL_FORMS.)
+- `getPurineLevel("heart of palm", null)` → `'low'` (PREPARATION_EXPANSIONS maps to "palm vegetable")
+- `getPurineLevel("beef heart", null)` → `'high'` (compound keyword match)
+- `getPurineLevel("chicken heart", null)` → `'high'`
+- `getPurineLevel("kidney", null)` → `'high'` (organ meat, not legume)
+- `getPurineLevel("kidney bean", null)` → `'medium'` (medium checked first)
+- `getPurineLevel("chicken", null)` → `'medium'`
+- `getPurineLevel("apple", null)` → `'low'`
+- `getPurineLevel("unknown meat", 'Meat')` → `'medium'` (category fallback)
+
+**Note on `"peas"` plural:** Add `['peas', 'pea']` to `PLURAL_FORMS` in `foodNormalization.js`. Without this, `getPurineLevel("peas", null)` normalizes to `"peas"` and then fails to match the `"pea"` medium keyword (even with word boundaries, `\bpea\b` would not match the un-normalized `"peas"`). This is a belt-and-suspenders entry since the model should pass canonical pantry names, but worth adding.
 
 ## Tool Declarations (011A)
 
@@ -413,7 +485,8 @@ export function getPurineLevel(itemName, category) {
     'Update one or more fields on an existing pantry item. ' +
     'Use the item id from the pantry summary. ' +
     'Only include fields the user actually wants to change. ' +
-    'Also use this to restore quantity if the user says they did not actually eat something.',
+    'Also use this to restore quantity if the user says they did not actually eat something — ' +
+    'pass the quantityBefore value returned by the previous consume_pantry_item call.',
   parameters: {
     type: 'object',
     properties: {
@@ -463,15 +536,18 @@ export function getPurineLevel(itemName, category) {
     'Pass the exact item name from the pantry summary. ' +
     'For finished items set fullyConsumed true. ' +
     'For Condiments (olive oil, soy sauce, vinegar, etc.) the server skips quantity deduction ' +
-    'automatically unless fullyConsumed is true — you do not need to set skipDeduction.',
+    'automatically unless fullyConsumed is true. ' +
+    'If units differ (e.g. recipe says "2 tbsp" but pantry is in ml), the server will log the ' +
+    'consumption but skip the quantity deduction — the response will include skipReason: unit_mismatch. ' +
+    'The response includes quantityBefore — retain this value in case the user says they did not actually eat the item.',
   parameters: {
     type: 'object',
     properties: {
       itemName:       { type: 'string', description: 'Exact name from pantry summary.' },
       amountConsumed: { type: 'number', description: 'Amount consumed. Omit if fullyConsumed is true.' },
-      unit:           { type: 'string', description: 'Unit of amountConsumed (e.g. "tbsp", "ml", "item"). Should match or be equivalent to the pantry entry unit.' },
+      unit:           { type: 'string', description: 'Unit of amountConsumed. Should match or be equivalent to the pantry entry unit.' },
       fullyConsumed:  { type: 'boolean', description: 'True if the item is completely gone.' },
-      skipDeduction:  { type: 'boolean', description: 'Advisory only — server applies its own rule based on item category. Set true if the user says they used a trace/negligible amount of a non-Condiment item. Has no effect on Condiments (always skipped unless fullyConsumed).' },
+      skipDeduction:  { type: 'boolean', description: 'Advisory only — server applies its own rules first.' },
     },
     required: ['itemName'],
   },
@@ -483,29 +559,33 @@ export function getPurineLevel(itemName, category) {
 ```
 1. Zod-validate: amountConsumed must be > 0 if provided.
 
-2. Fuzzy match itemName against allItems (scoped to householdId), in priority order:
-   a. Exact match (case-insensitive) — preferred; model should pass exact pantry names
-   b. itemName is a substring of pantryItem.name AND itemName.length >= 4 (prevents "oil" matching "olive oil spray" AND "fish oil")
+2. Name resolution (in priority order):
+   a. Exact match: find all items where item.name.toLowerCase() === itemName.toLowerCase()
+      If exactMatches.length > 1 → ambiguity error (two pantry items share the same name)
+      If exactMatches.length === 1 → use it; skip steps (b) and (c)
+   b. itemName is a substring of pantryItem.name AND itemName.length >= 4
    c. pantryItem.name is a substring of itemName AND pantryItem.name.length >= 4
-   Matches from (b) or (c) that produce 2+ candidates are treated as ambiguous regardless of which candidate matches.
+   Candidates from (b)/(c) that produce 2+ matches → ambiguity error.
 
 3. 0 matches → { ok: false, error: 'Item not found. Ask user which item they mean.' }
-   2+ matches → { ok: false, error: 'Ambiguous: [list]. Ask user to clarify.' }
+   2+ matches (any step) → { ok: false, error: 'Ambiguous: [list]. Ask user to clarify.' }
 
-4. Unit guard (when amountConsumed and unit are both provided):
-   const normalizedInputUnit = normalizeUnit(unit);
+4. Unit detection (when amountConsumed and unit are both provided):
+   const normalizedInputUnit  = normalizeUnit(unit);
    const normalizedPantryUnit = normalizeUnit(item.unit);
-   if (normalizedInputUnit && normalizedPantryUnit && normalizedInputUnit !== normalizedPantryUnit) {
-     return { ok: false, error: `Unit mismatch: pantry shows "${item.unit}", you passed "${unit}". Please clarify the amount in ${item.unit}.` }
-   }
-   // Both sides normalized before comparison — "tbsp" matches "tablespoon", "ml" matches "milliliter".
+   const unitMismatch = !!(normalizedInputUnit && normalizedPantryUnit &&
+                           normalizedInputUnit !== normalizedPantryUnit);
+   // Do NOT error on mismatch. Erroring breaks common liquid workflows
+   // (e.g. recipe says "2 tbsp olive oil" but pantry unit is "ml").
+   // Instead, unitMismatch causes effectiveSkip to be true (step 5).
 
-5. SERVER-SIDE skip-deduction rule — category-only, no ratio math:
-   // Condiments are skipped by default unless the user says they finished it.
-   // Ratio-based logic removed: it produced NaN when amountConsumed was absent (fullyConsumed case)
-   // and was unit-ambiguous when pantry and consumed units differed.
-   const serverSkip = (item.category === 'Condiments' && fullyConsumed !== true);
-   const effectiveSkip = serverSkip || (skipDeduction === true && !serverSkip);
+5. SERVER-SIDE skip-deduction rule:
+   const serverSkip    = (item.category === 'Condiments' && fullyConsumed !== true);
+   const effectiveSkip = serverSkip || unitMismatch || (skipDeduction === true && !serverSkip && !unitMismatch);
+   // Determine skipReason for model transparency:
+   const skipReason = effectiveSkip
+     ? (unitMismatch ? 'unit_mismatch' : serverSkip ? 'condiment' : 'advisory')
+     : null;
 
 6. Compute remaining:
    - fullyConsumed=true → remaining = 0
@@ -522,31 +602,37 @@ export function getPurineLevel(itemName, category) {
 
 9. mealLogService.create({
      householdId,
-     pantryItemId: item.id,
-     itemName:     item.name,
-     category:     item.category,
-     purineLevel:  getPurineLevel(item.name, item.category),
+     pantryItemId:   item.id,
+     itemName:       item.name,
+     category:       item.category,
+     purineLevel:    getPurineLevel(item.name, item.category),
      wasExpiring,
+     quantityBefore: item.quantity,
+     quantityAfter:  effectiveSkip ? item.quantity : remaining,
      source: 'agent',
    })
 
-10. Return { ok: true, item: { id: item.id, name: item.name, remaining, skipApplied: effectiveSkip } }
+10. Return {
+      ok: true,
+      item: {
+        id:             item.id,
+        name:           item.name,
+        remaining,
+        skipApplied:    effectiveSkip,
+        skipReason,     // null | 'condiment' | 'unit_mismatch' | 'advisory'
+        quantityBefore: item.quantity,
+      }
+    }
 ```
 
-**Concurrency note:** Two rapid `consume_pantry_item` calls for the same item can race on steps 2 and 7. For MVP, the risk is low (single-user household sessions). A future hardening task should wrap steps 2→7 in a DB transaction with a `SELECT FOR UPDATE` on the pantry item. This is not in scope for 011A.
+**Concurrency note:** Two rapid `consume_pantry_item` calls for the same item can race on steps 2 and 7. MVP risk is low. Future hardening: DB transaction with `SELECT FOR UPDATE`. Not in scope for 011A.
 
 ## `mealLogService.js` (011A)
 
-Follows the `serialize()`/`parse()` service boundary convention (Invariant 10). No JSON-text fields on `meal_logs`, but all future JSON additions must follow the pattern.
-
 **Methods:**
-- `create({ householdId, pantryItemId, itemName, category, purineLevel, wasExpiring, source })` — appends entry, sets `logged_at` to `new Date().toISOString()`
-- `getRecentLimit(householdId, n = 7)` — returns last N entries sorted DESC; used by `buildDietaryContext` for the display portion of the dietary context string
-- `getRecentSince(householdId, isoTimestamp)` — returns ALL entries since timestamp, sorted DESC, **no LIMIT**; used by `buildDietaryContext` for purine load classification
-
-**Why two methods:** A single `LIMIT 10` fetch makes 72h binge-detection statistically invalid — if a user logs 20 meals in 72 hours, the 10-entry cap hides the older meals in that window, causing purine load to be silently under-counted. `getRecentSince` gives `buildDietaryContext` full temporal visibility for health classification. `getRecentLimit` is only used for the human-readable "recent meals" display line in the prompt, where an exact count bound is appropriate.
-
-**`getRecentSince` safety:** No `LIMIT` is safe here because 72 hours of meal logs is naturally bounded (6 meals/day × 3 days = 18 entries maximum under normal usage). The `(household_id, logged_at DESC)` index in the migration makes this query efficient.
+- `create({ householdId, pantryItemId, itemName, category, purineLevel, wasExpiring, quantityBefore, quantityAfter, source })` — appends entry, sets `logged_at` to `new Date().toISOString()`
+- `getRecentLimit(householdId, n = 7)` — returns last N entries sorted DESC; for display
+- `getRecentSince(householdId, isoTimestamp)` — returns ALL entries since timestamp, sorted DESC, no LIMIT; for purine classification
 
 ```js
 export async function getRecentLimit(householdId, n = 7) {
@@ -564,14 +650,18 @@ export async function getRecentSince(householdId, isoTimestamp) {
     .from(mealLogs)
     .where(and(
       eq(mealLogs.householdId, householdId),
-      sql`${mealLogs.loggedAt} >= ${isoTimestamp}`,
+      // ::timestamptz cast on both sides makes the TEXT-based invariant code-enforced.
+      // Postgres will reject non-ISO strings at query time rather than silently mis-ordering.
+      // Web-verified: Drizzle sql template supports ::cast syntax on both column refs and params.
+      sql`(${mealLogs.loggedAt})::timestamptz >= (${isoTimestamp})::timestamptz`,
     ))
     .orderBy(desc(mealLogs.loggedAt));
-  // No .limit() — caller requires full temporal visibility for health classification.
 }
 ```
 
-`logged_at` is TEXT storing ISO 8601 UTC strings (`new Date().toISOString()`). The established codebase convention for all date fields — lexicographic sort on ISO UTC is chronological sort. Not a risk.
+`logged_at` is TEXT storing ISO 8601 UTC strings (`new Date().toISOString()`). This is accepted technical debt — consistent with every other date column in the codebase (`consumedAt`, `frozenAt`, `purchaseDate`) and tracked for migration in TASK-012. The `::timestamptz` cast makes the convention self-enforcing at query time.
+
+`getRecentSince` safety: 72 hours of meal logs is naturally bounded. Each cooking session may log multiple items (one per pantry item consumed), but a realistic upper bound for 72h is 40–80 rows.
 
 ## Tool Decision Rules — System Prompt Additions (011A)
 
@@ -581,30 +671,40 @@ Tool selection rules:
 - User threw out, discarded, binned, or wasted something → remove_pantry_item
 - User wants to correct a value (wrong date, wrong quantity) → update_pantry_item
 - User contradicts a recent consume action ("actually I didn't eat that") →
-    call update_pantry_item to restore the previous quantity.
-    Inform the user: the pantry has been restored, but the meal history entry cannot be reversed.
+    call update_pantry_item with id from the consumed item and quantity set to the
+    quantityBefore value returned in the consume_pantry_item response.
+    If quantityBefore is not in your context, ask the user what the quantity should be.
+    Inform the user: the pantry quantity has been restored, but the meal history entry cannot be reversed.
+- If consume_pantry_item returns skipReason: 'unit_mismatch':
+    Tell the user the consumption was logged for dietary tracking, but the pantry quantity
+    was not updated because the units differ (e.g. recipe uses tablespoons but pantry is in ml).
+    Suggest: use update_pantry_item to manually set the new quantity, or re-try using the pantry's unit.
 - Uncertain whether consumed or discarded → ask before calling either.
 - Name is ambiguous (multiple pantry items match) → ask for clarification before calling.
-- Trace condiment amounts: the server handles skip-deduction automatically — do not overthink it.
+- Trace condiment amounts: the server handles skip-deduction automatically.
 The pantry summary includes item IDs. Always use the id field for update_pantry_item and remove_pantry_item.
 ```
 
 ## Acceptance Criteria (011A)
 
-- [ ] `0005_meal_logs.sql` runs clean against Neon; `idx_meal_logs_household_logged_at` index created
+- [ ] `0005_meal_logs.sql` runs clean against Neon; index created; `quantity_before` and `quantity_after` columns present
 - [ ] `getRecentLimit(householdId, 7)` returns last 7 entries sorted DESC
 - [ ] `getRecentSince(householdId, cutoff72h)` returns ALL entries in the 72h window with no cap — verified by inserting 15 entries within 72h and confirming all 15 are returned
 - [ ] `pantrySummary` includes `id` and `category` in every chat turn
 - [ ] "Change the milk expiry to Friday" → `update_pantry_item` called; pantry reflects new date
 - [ ] "I threw out the expired cheese" → `remove_pantry_item` called; item removed
-- [ ] "I ate half the avocado" → avocado quantity halved; `meal_logs` row with `purine_level: low`; `was_expiring` correct
-- [ ] "I finished the chicken" → `consumedAt` set; `meal_logs` row created
-- [ ] "I used a splash of olive oil" (Condiments, `fullyConsumed` not set) → server auto-skips deduction by category rule; meal logged; quantity unchanged
+- [ ] "I ate half the avocado" → avocado quantity halved; `meal_logs` row with `purine_level: low`; `was_expiring` correct; `quantity_before` and `quantity_after` set correctly
+- [ ] "I finished the chicken" → `consumedAt` set; `meal_logs` row created with `quantity_after: 0`
+- [ ] `consume_pantry_item` response includes `quantityBefore` matching item's pre-consumption quantity
+- [ ] "I used a splash of olive oil" (Condiments, `fullyConsumed` not set) → server skips deduction; `skipReason: 'condiment'`; meal logged; `quantity_before === quantity_after`
 - [ ] "I finished the olive oil" (Condiments, `fullyConsumed: true`) → `markUsed` called; meal logged
-- [ ] "I used 2 tbsp of soy sauce" where pantry unit is `'tablespoon'` → `normalizeUnit` resolves both to `'tablespoon'`; no mismatch error; deduction proceeds
-- [ ] "I used 2 tbsp of soy sauce" where pantry unit is `'ml'` → normalized units differ (`'tablespoon'` ≠ `'milliliter'`); mismatch error returned; no DB write; agent asks user to clarify in ml
-- [ ] "I ate the chicken" with two chicken items → agent asks for clarification; no DB write
-- [ ] "Actually I didn't eat that" → `update_pantry_item` called to restore; agent tells user meal history entry remains
+- [ ] "I used 2 tbsp of soy sauce" where pantry unit is `'tablespoon'` → units match after normalization; deduction applied; `skipReason: null`
+- [ ] "I used 2 tbsp of soy sauce" where pantry unit is `'ml'` → units differ; consumption logged; `skipReason: 'unit_mismatch'`; pantry quantity NOT deducted; agent notifies user and suggests update_pantry_item or retry in ml
+- [ ] "I ate the chicken" with two `'chicken'` items → agent asks for clarification; no DB write (includes case of 2+ exact case-insensitive matches)
+- [ ] "Actually I didn't eat that" → agent uses `quantityBefore` from prior consume response; `update_pantry_item` called with that exact value; pantry restored deterministically; agent informs user meal history entry remains
+- [ ] `getPurineLevel("pear", null)` → `'low'` (word boundary, "pear" ≠ "pea")
+- [ ] `getPurineLevel("heart of palm", null)` → `'low'` (PREPARATION_EXPANSIONS + no matching keyword)
+- [ ] `getPurineLevel("beef heart", null)` → `'high'` (compound keyword match)
 - [ ] Quantity never goes below 0 in DB
 - [ ] `item_name` in `meal_logs` correct; `pantry_item_id` set to item's id
 
@@ -650,8 +750,6 @@ TEXT columns, JSON-serialised arrays. Consistent with ADR-004. Parsed at service
 
 ## `dietaryService.js` — Service Boundary Pattern
 
-Follows the `recipeService.js` serialize/parse convention exactly:
-
 ```js
 const JSON_FIELDS = ['conditions', 'allergies', 'foodPreferences'];
 
@@ -673,30 +771,28 @@ function parse(row) {
   return out;
 }
 
-export async function getProfile(householdId) { ... }     // returns parsed row
-export async function updateProfile(householdId, data) { ... }  // serializes before write
+export async function getProfile(householdId) { ... }
+export async function updateProfile(householdId, data) { ... }
 export async function buildDietaryContext(householdId) { ... }
 ```
 
-No `JSON.parse` in route handlers. All parsing happens here.
+No `JSON.parse` in route handlers.
 
 ## `buildDietaryContext(householdId)` — Output Specification
 
-Returns a single paragraph string or `''` (empty string if no profile and no meal history — zero token cost).
+Returns a single paragraph string or `''` (empty if no profile and no meal history).
 
 **Logic:**
 1. Load profile via `getProfile`
 2. `const cutoff72h = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString()`
-3. **Two independent queries** (both needed; neither substitutes for the other):
-   - `const recentDisplay = await mealLogService.getRecentLimit(householdId, 7)` — for the human-readable meal list in the prompt
-   - `const recent72h = await mealLogService.getRecentSince(householdId, cutoff72h)` — for purine load classification; unbounded, full temporal visibility
-4. Classify purine load using `recent72h` (the temporally correct dataset):
-   - Count `high` entries in `recent72h`
-   - Count `high + medium` entries in `recent72h`
+3. Two independent queries:
+   - `const recentDisplay = await mealLogService.getRecentLimit(householdId, 7)`
+   - `const recent72h = await mealLogService.getRecentSince(householdId, cutoff72h)`
+4. Classify purine load using `recent72h`:
    - HIGH: `high` ≥ 2 OR `high + medium` ≥ 4
    - MODERATE: `high + medium` ≥ 2
    - LOW: otherwise
-5. Build compressed string (target: ≤ 100 tokens), using `recentDisplay` for the meal list:
+5. Build compressed string (target: ≤ 100 tokens):
 
 ```
 Dietary profile: [conditions, or "none"]. Allergies: [allergies, or "none"]. Preferences: [preferences, or "none"].
@@ -704,7 +800,7 @@ Recent meals (last N): beef [high], chicken [med], pasta [low], ...
 Purine load: HIGH. Recommend limiting high-purine recipes until load normalises.
 ```
 
-If `conditions`, `allergies`, `foodPreferences` are all empty and both `getRecentLimit` and `getRecentSince` return 0 entries, return `''`.
+If all profile fields empty and both queries return 0 entries, return `''`.
 
 ## API (011B)
 
@@ -713,12 +809,11 @@ If `conditions`, `allergies`, `foodPreferences` are all empty and both `getRecen
 | GET | `/api/dietary` | — | `{ conditions, allergies, foodPreferences }` |
 | PATCH | `/api/dietary` | `{ conditions?, allergies?, foodPreferences? }` | `{ ok: true }` |
 
-Zod on PATCH: `z.array(z.string().min(1).max(100)).max(20).optional()` per field.
+Zod on PATCH: `z.array(z.string().min(1).max(100)).max(20).optional()` per field. (This is the authoritative validation — Invariant 6 reflects this.)
 
 ## `aiService.chat()` Signature Change (011B)
 
 ```js
-// AFTER
 export async function chat(
   pantrySummary,
   recipeSummary,
@@ -744,20 +839,15 @@ Dietary conditions are soft constraints — suggest alternatives, do not refuse.
 
 ## Client: `DietaryProfileForm.jsx` (011B)
 
-Mounted inside `HouseholdPage.jsx`. No new page or route needed.
-
-Fields:
-- **Health conditions** — tag input, free text (e.g. "gout", "type 2 diabetes")
-- **Allergies** — tag input, free text, labelled as safety-critical
-- **Food preferences** — tag input, free text (e.g. "vegetarian", "low-sodium")
-
-Calls `PATCH /api/dietary` on save via `useDietaryProfile` hook.
+Mounted inside `HouseholdPage.jsx`. Fields: health conditions, allergies (labelled safety-critical), food preferences. All tag inputs, free text. Calls `PATCH /api/dietary` on save via `useDietaryProfile` hook.
 
 ## Acceptance Criteria (011B)
 
 - [ ] `0006_household_dietary_profile.sql` runs clean
 - [ ] `GET /api/dietary` returns `{ conditions: [], allergies: [], foodPreferences: [] }` for new household
 - [ ] `PATCH /api/dietary` persists changes; `GET` reflects them immediately
+- [ ] `PATCH /api/dietary` with `conditions: [""]` (empty string) → Zod rejects with 400 (min(1) validation)
+- [ ] `PATCH /api/dietary` with 21 allergy entries → Zod rejects with 400 (max(20) validation)
 - [ ] `dietaryService.js` has no `JSON.parse` in route handlers — all parsing in service
 - [ ] After 2 high + 2 medium meal_log entries, `buildDietaryContext` returns `Purine load: HIGH`
 - [ ] Empty profile + 0 meal logs → `dietaryContext` is `''` → zero tokens added to chat prompt
@@ -784,19 +874,19 @@ Add `suggest_recipes` and `save_recipe` to the agent. Wire into existing `sugges
 
 ## `server/utils/recipeScorer.js` (011C)
 
-Imports `normalizeFood`, `foodsMatch`, and `containsWholeWord` from `foodNormalization.js`. No local normalization logic.
+Imports `normalizeFood`, `foodsMatch`, `lightNormalizeForAllergy`, `containsWholeWord`, `expandAllergen`, and `stripIngredientPrefix` from `foodNormalization.js`. No local normalization logic.
 
 ```js
 import {
   normalizeFood,
+  foodsMatch,
   lightNormalizeForAllergy,
   containsWholeWord,
-  stripIngredientPrefix,  // moved to foodNormalization.js — testable alongside other normalizations
+  expandAllergen,
+  stripIngredientPrefix,
 } from './foodNormalization.js';
 import { getPurineLevel } from '../data/purineIndex.js';
 
-// Pre-build normalized pantry structures once per score() call — O(n) build, O(1) exact lookup.
-// keysList extracted here, NOT inside the ingredient loop.
 function buildPantryStructures(pantryItems) {
   const exactMap = new Map();
   const keysList = [];
@@ -817,14 +907,13 @@ export function score(recipe, pantryItems) {
   const unmatched = [];
 
   for (const ing of ingredients) {
-    // Strip quantity prefix before normalization — handles AI-generated mixed strings
     const cleaned = stripIngredientPrefix(ing.name);
     const ingNorm = normalizeFood(cleaned);
     const exactHit = exactMap.has(ingNorm);
-    const substringHit = !exactHit && keysList.some(
-      (k) => k.includes(ingNorm) || ingNorm.includes(k)
-    );
-    (exactHit || substringHit) ? matched.push(ing.name) : unmatched.push(ing.name);
+    // foodsMatch() for fuzzy fallback — token-based overlap, not raw substring.
+    // Raw substring was removed: it reintroduced "pea"→"peach" and "ham"→"chamomile" false positives.
+    const fuzzyHit = !exactHit && keysList.some((k) => foodsMatch(k, ingNorm));
+    (exactHit || fuzzyHit) ? matched.push(ing.name) : unmatched.push(ing.name);
   }
 
   return {
@@ -838,20 +927,20 @@ export function annotateHealth(recipe, dietaryProfile) {
   const { conditions = [], allergies = [] } = dietaryProfile;
   const ingredients = recipe.ingredients ?? [];
 
-  // Allergy check: lightNormalizeForAllergy() + containsWholeWord() ONLY.
+  // Allergy: lightNormalizeForAllergy() + expandAllergen() + containsWholeWord() ONLY.
   // Per Invariant 12: normalizeFood() and foodsMatch() are banned from this code path.
-  // lightNormalizeForAllergy does NOT expand synonyms or preparations — raw text form
-  // only. This prevents alias changes from silently breaking allergy detection.
   let allergyHit = null;
   for (const allergen of allergies) {
     const allergenLight = lightNormalizeForAllergy(allergen);
-    const hit = ingredients.find((i) =>
-      containsWholeWord(lightNormalizeForAllergy(i.name), allergenLight)
-    );
+    const allergenTerms = expandAllergen(allergenLight);
+    const hit = ingredients.find((i) => {
+      const ingLight = lightNormalizeForAllergy(i.name);
+      return allergenTerms.some((term) => containsWholeWord(ingLight, term));
+    });
     if (hit) { allergyHit = allergen; break; }
   }
 
-  // Purine check (soft advisory for gout): null category — recipe ingredients have no category.
+  // Purine (soft advisory for gout): null category — recipe ingredients have no category.
   let healthNote = null;
   if (conditions.some((c) => c.toLowerCase().includes('gout'))) {
     const highCount = ingredients.filter(
@@ -867,8 +956,6 @@ export function annotateHealth(recipe, dietaryProfile) {
   };
 }
 ```
-
-**Note on scoring long ingredient lists (non-blocking):** `matched / total` penalises recipes with many ingredients. A 3-ingredient recipe with 3 matches scores 1.0; a 10-ingredient recipe with 8 matches scores 0.8. For MVP this is acceptable — it favours simple recipes, which is reasonable when pantry is sparse. A weighted score (`matched * log(matched + 1) / total`) can be introduced post-launch if user feedback indicates complex recipes are unfairly suppressed.
 
 ## Tool Declarations (011C)
 
@@ -901,15 +988,12 @@ export function annotateHealth(recipe, dietaryProfile) {
 
 **Handler logic:**
 1. Load `allItems`, `expiringItems` (≤7 days), `dietaryProfile` (via `dietaryService.getProfile`)
-2. Call `aiService.suggestRecipes(allItems, expiringItems)` → raw candidates (2 Gemini calls)
-3. For each candidate: `recipeScorer.score(candidate, allItems)` and `recipeScorer.annotateHealth(candidate, dietaryProfile)`
-4. Auto-select strategy when `strategy === 'any'`:
-   - `dietaryContext` contains `Purine load: HIGH` → `dietary_safe`
-   - else expiring items exist → `expiring_first`
-   - else → `pantry_overlap`
-5. Sort by strategy; return top 5
+2. `aiService.suggestRecipes(allItems, expiringItems)` → raw candidates (2 Gemini calls)
+3. For each: `recipeScorer.score(candidate, allItems)` + `recipeScorer.annotateHealth(candidate, dietaryProfile)`
+4. Auto-select strategy: HIGH purine load → `dietary_safe`; expiring items → `expiring_first`; else → `pantry_overlap`
+5. Sort; return top 5
 
-**Candidate shape returned to model:**
+**Candidate shape:**
 ```json
 {
   "name": "Beef Stir-Fry",
@@ -922,8 +1006,6 @@ export function annotateHealth(recipe, dietaryProfile) {
   "sourceUrl": "https://..."
 }
 ```
-
-The model crafts the conversational reply. Handler annotates; model narrates. No second Gemini call for substitution reasoning — the model uses the `unmatchedIngredients` list and its in-context reasoning.
 
 ### `save_recipe`
 ```js
@@ -945,52 +1027,58 @@ The model crafts the conversational reply. Handler annotates; model narrates. No
 
 **Handler:** `aiService.expandSuggestion(name, description, allItems)` → `recipeService.create(householdId, { ...recipe, source: 'agent_saved' })`. Returns `{ ok: true, recipe: { id, name } }`.
 
-**Note on API call count:** `suggest_recipes` triggers 2 Gemini calls internally (search grounding + format step in `suggestRecipes()`), plus the outer chat session = 3 total per "what should I cook?" turn. Acceptable for MVP. Caching deferred to post-launch telemetry phase per architect recommendation.
-
 ## Acceptance Criteria (011C)
 
-- [ ] "What should I cook?" → `suggest_recipes` tool call triggered; scored candidates in reply
+- [ ] "What should I cook?" → `suggest_recipes` triggered; scored candidates in reply
 - [ ] Higher `overlapScore` candidate surfaces before lower one
 - [ ] `expiring_first` returns at least one recipe using a `warning`/`critical` item
-- [ ] Gout in profile + ≥2 high-purine ingredients → `healthNote` present on candidate
-- [ ] Shellfish allergy + shrimp in recipe → `allergyNote: 'ALLERGY WARNING — contains shellfish'`; agent surfaces it explicitly
-- [ ] "nut" allergy does NOT trigger on "coconut" (`containsWholeWord` + `lightNormalizeForAllergy`)
-- [ ] "peanut" allergy DOES trigger on "peanut butter" (`containsWholeWord` matches "peanut" as whole word in "peanut butter")
-- [ ] "kidney bean" purine level is `medium`, not `high` (medium checked before high in `getPurineLevel`)
-- [ ] `"2 cloves of garlic"` as recipe ingredient name matches `"garlic"` pantry item after prefix stripping
-- [ ] `recipeScorer.js` imports `normalizeFood`, `foodsMatch`, `containsWholeWord` from `foodNormalization.js`; no local normalization code
-- [ ] `purineIndex.js` imports `normalizeFood` from `foodNormalization.js`; no local normalization code
-- [ ] `foodNormalization.test.js` exists and all fixtures pass
+- [ ] Gout in profile + ≥2 high-purine ingredients → `healthNote` present
+- [ ] Shellfish allergy + shrimp in recipe → `allergyNote: 'ALLERGY WARNING — contains shellfish'` (via `expandAllergen` + `containsWholeWord`)
+- [ ] "nut" allergy does NOT trigger on "coconut" (`containsWholeWord` boundary check)
+- [ ] "peanut" allergy DOES trigger on "peanut butter"
+- [ ] "fish" allergy does NOT trigger on "shellfish" (`expandAllergen('fish')` does not include 'shellfish')
+- [ ] "kidney bean" purine level is `medium`, not `high`
+- [ ] `"2 cloves of garlic"` matches `"garlic"` pantry item after prefix stripping
+- [ ] `"3 large eggs"` matches `"egg"` pantry item after prefix stripping + normalization
+- [ ] `recipeScorer.js` uses `foodsMatch()` for fuzzy fallback; no raw `includes()` matching; no local normalization code
+- [ ] `"pea"` does NOT match `"peach"`; `"ham"` does NOT match `"chamomile"` (token overlap, not substring)
+- [ ] `foodNormalization.test.js` and `purineIndex.test.js` exist and all fixtures pass
 - [ ] "Save that recipe" → `save_recipe` called; recipe in recipe list with `source: 'agent_saved'`
-- [ ] Overlap scoring handles "tomatoes" matching "tomato" correctly (normalization)
+- [ ] Overlap scoring handles "tomatoes" matching "tomato" correctly
 
 ---
 
-# Known Risks / Open Questions (DRAFT-3)
+# Known Risks / Open Questions
 
-1. **Tool selection ambiguity.** Mitigated by system prompt decision rules including the correction/reversal case (011A). Expect ~5% mis-routing on edge cases. Monitor via server logs.
+1. **Tool selection ambiguity.** Mitigated by system prompt decision rules. Expect ~5% mis-routing on edge cases. Monitor via server logs.
 
-2. **3 Gemini calls per suggestion turn.** Acceptable for MVP. Cache deferred per architect Q4 recommendation. Invalidation is non-trivial (pantry mutation + dietary profile change both invalidate).
+2. **3 Gemini calls per suggestion turn.** Acceptable for MVP. Cache deferred per architect recommendation.
 
-3. **Purine index coverage.** Normalization layer handles compound foods and common synonyms. Unknown Meat/Seafood defaults to `medium`. Will expand iteratively as coverage gaps are reported.
+3. **Purine index coverage.** Unknown Meat/Seafood defaults to `medium`. Will expand iteratively.
 
-4. **TEXT-JSON debt.** Tracked as TASK-012. Not addressed in this task.
+4. **TEXT-JSON debt.** Tracked as TASK-012.
 
-5. **`ratioConsumed` threshold requires `amountConsumed` in same unit as pantry entry.** If units differ (e.g. pantry: "500 ml", consumed: "2 tbsp"), ratio calculation is incorrect. The model is instructed to use the same unit. This is a known limitation. Unit conversion is out of scope.
+5. **Unit conversion not implemented.** When pantry and consumed units are incompatible (e.g. "2 tbsp" vs "500 ml"), the handler skips quantity deduction and returns `skipReason: 'unit_mismatch'`. The model informs the user. Full unit conversion (ml ↔ tbsp, g ↔ oz) is out of scope for MVP.
 
-6. **No settings page exists client-side.** `DietaryProfileForm` anchored to `HouseholdPage.jsx` (confirmed). No new page needed.
+6. **No settings page exists client-side.** `DietaryProfileForm` anchored to `HouseholdPage.jsx`. No new page needed.
 
-7. **`foodNormalization.js` is a semantic SPOF.** A bug here simultaneously corrupts health warnings, recipe overlap scoring, and allergy detection. Mitigated by Invariant 11 (unit tests required before 011C ships). Any change after shipping must include a regression test.
+7. **`foodNormalization.js` is a semantic SPOF.** Bugs here simultaneously corrupt health warnings, recipe overlap scoring, and allergy detection. Mitigated by Invariant 11 (unit tests required before 011C ships). Any change after shipping must include a regression test.
 
-8. **Concurrency on `consume_pantry_item`.** Two rapid calls for the same item can race on quantity reads. MVP risk is low (single-user households). Future hardening: DB transaction with `SELECT FOR UPDATE`. Not in scope for 011A.
+8. **Concurrency on `consume_pantry_item`.** Two rapid calls for the same item can race. MVP risk is low. Future hardening: DB transaction with `SELECT FOR UPDATE`. Not in scope for 011A.
 
-9. **`logged_at TEXT` sort correctness.** `meal_logs.logged_at` uses TEXT column with ISO 8601 UTC strings — the same convention used for every date field in the codebase (`consumedAt`, `frozenAt`, `updatedAt`, `purchaseDate`, all TEXT). Lexicographic sort on ISO UTC is chronological sort. This is not a risk given the established `new Date().toISOString()` write convention. Changing to a timestamp type would require migrating all existing date columns and is out of scope (TASK-012).
+9. **`logged_at TEXT` is accepted technical debt.** Same convention as every other date field in the codebase. The `::timestamptz` cast in `getRecentSince` makes the invariant self-enforcing at query time. Full column type migration tracked as TASK-012.
 
-10. **`foodsMatch` substring fallback is O(n) per ingredient miss.** For typical pantries (≤50 items) and recipes (≤15 ingredients), worst-case is 750 comparisons per recipe — acceptable. The `keysList` is now extracted once per `score()` call, not per-ingredient. Not a concern at MVP scale.
+10. **`foodsMatch` token overlap is O(n) per ingredient miss.** Worst-case 750 comparisons per recipe at MVP pantry sizes. Not a concern.
 
-11. **Scoring long ingredient lists.** `matched / total` mildly penalises complex recipes. Acceptable for MVP — favours simple recipes when pantry is sparse. A weighted scoring upgrade is documented in `recipeScorer.js` for post-launch consideration.
+11. **Scoring long ingredient lists.** `matched / total` mildly penalises complex recipes. Acceptable for MVP. Weighted scoring upgrade documented in `recipeScorer.js` for post-launch.
 
-7. **Post-consumption correction restores quantity but not meal log.** Documented in ADR-009 and system prompt rules. Model must inform the user of this limitation when reversing a consumption.
+12. **`ALLERGEN_ALIASES` coverage is intentionally conservative.** Covers the most common category-level allergens. Specific ingredient allergens (e.g. "shrimp" entered directly) still match via `containsWholeWord`. Any expansion requires a test update per Invariant 12.
+
+13. **Post-consumption correction is now deterministic.** `consume_pantry_item` returns `quantityBefore` and stores `quantity_before`/`quantity_after`. If that response has been compacted from context, model falls back to asking the user.
+
+14. **`foodsMatch` does not match different varieties of the same ingredient category.** `"black bean"` and `"kidney bean"` share only 1 token (`"bean"`) and return `false` — they are correctly treated as different ingredients. A recipe calling for black beans will not score against kidney beans in the pantry. This is intentional behavior (they are not interchangeable in most recipes) but means overlap scoring has no concept of "same family, different variety." If user feedback indicates this is causing mis-scores, a category-expansion mapping could be added post-launch.
+
+15. **Dietary context reflects recorded events, not verified history.** Reversing a consumption does not remove the meal_log entry. The purine window continues to include reversed events until they age out of the 72h window. This is by design (ADR-009) but developers should not assume dietary context is a ground-truth nutrition log.
 
 ---
 
@@ -1006,10 +1094,10 @@ The model crafts the conversational reply. Handler annotates; model narrates. No
 # Files Already Reviewed
 
 - `server/services/pantryService.js` — `update`, `remove`, `markUsed`, `getAll` sufficient; no changes
-- `server/services/recipeService.js` — `serialize`/`parse` pattern confirmed as canonical; `create` sufficient for `save_recipe`; `source: 'agent_saved'` is a new valid value
+- `server/services/recipeService.js` — `serialize`/`parse` pattern confirmed as canonical; `create` sufficient
 - `server/routes/ai.js` — full read; tool handler pattern confirmed
 - `server/services/aiService.js` — full read; `suggestRecipes`, `expandSuggestion`, `chat()` signature confirmed
-- `server/db/schema.js` — full read; TEXT-JSON pattern confirmed throughout; migration sequence confirmed (`0005` next)
+- `server/db/schema.js` — full read; TEXT-JSON pattern confirmed; migration sequence confirmed (`0005` next)
 - `client/src/pages/` — no settings page; `HouseholdPage.jsx` confirmed as dietary form host
 - `server/utils/` — `expiry.js`, `freezeDefaults.js` exist; `foodNormalization.js` is new
 
@@ -1017,6 +1105,6 @@ The model crafts the conversational reply. Handler annotates; model narrates. No
 
 # Future Task: TASK-012 — Migrate JSON-text columns to JSONB
 
-Stub raised per architect recommendation (Q1 answer). Not a blocker for 011A–C.
+Stub raised per architect recommendation. Not a blocker for 011A–C.
 
-**Scope:** Convert all `text` columns storing JSON arrays (`recipes.ingredients`, `recipes.steps`, `recipes.tags`, and new `households.conditions`, `households.allergies`, `households.food_preferences`) to native `jsonb` Postgres columns. Update Drizzle schema and all service `serialize()`/`parse()` helpers to use native JSONB (no manual `JSON.stringify`/`JSON.parse`). Single migration, single PR. Estimate: medium complexity.
+**Scope:** Convert all `text` columns storing JSON arrays and all date TEXT columns to native Postgres types (`jsonb`, `timestamptz`). Update Drizzle schema and all service `serialize()`/`parse()` helpers. Single migration, single PR.
