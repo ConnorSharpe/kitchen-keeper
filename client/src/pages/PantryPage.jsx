@@ -7,6 +7,7 @@ import AddItemModal from '../components/pantry/AddItemModal.jsx';
 import ReceiptUpload from '../components/pantry/ReceiptUpload.jsx';
 import StaplesChecklist from '../components/onboarding/StaplesChecklist.jsx';
 import { fetchProductByBarcode } from '../utils/openFoodFacts.js';
+import PushNotificationBanner from '../components/push/PushNotificationBanner.jsx';
 
 const BarcodeScanner = lazy(() => import('../components/pantry/BarcodeScanner.jsx'));
 
@@ -144,6 +145,8 @@ export default function PantryPage() {
           </button>
         </div>
       </div>
+
+      <PushNotificationBanner />
 
       {showOnboarding && (
         <StaplesChecklist

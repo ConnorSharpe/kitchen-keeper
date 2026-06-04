@@ -11,8 +11,10 @@ import aiRouter        from './routes/ai.js';
 import recipesRouter   from './routes/recipes.js';
 import shoppingRouter  from './routes/shopping.js';
 import householdRouter from './routes/household.js';
+import pushRouter      from './routes/push.js';
 
-const REQUIRED_ENV = ['GEMINI_API_KEY', 'JWT_SECRET'];
+// CRON_SECRET is validated at route level (optional for local dev)
+const REQUIRED_ENV = ['GEMINI_API_KEY', 'JWT_SECRET', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT'];
 for (const key of REQUIRED_ENV) {
   if (!process.env[key]) throw new Error(`Missing required env var: ${key}`);
 }
@@ -45,6 +47,7 @@ app.use('/api/ai',        aiRouter);
 app.use('/api/recipes',   recipesRouter);
 app.use('/api/shopping',  shoppingRouter);
 app.use('/api/household', householdRouter);
+app.use('/api/push',     pushRouter);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
