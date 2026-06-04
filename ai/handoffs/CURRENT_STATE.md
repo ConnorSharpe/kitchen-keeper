@@ -49,7 +49,7 @@ Run these manually before closing out TASK-004. Start dev server (`npm run dev`)
 - TASK-004: implementation complete — smoke test pending
 
 # Recommended Next Action
-Draft TASK-005 spec (Barcode Scanner + Open Food Facts). Pure client change — no backend needed.
+Implement TASK-005 (Barcode Scanner + Open Food Facts). Spec is DRAFT-3, approved after 2 architect review rounds. Pure client change — no backend needed.
 
 # Forbidden Exploration
 - server/db/* (no schema changes)
@@ -63,9 +63,9 @@ Draft TASK-005 spec (Barcode Scanner + Open Food Facts). Pure client change — 
 - context pressure: low
 - Completed tasks archived to: ai/tasks/archive/
 
-# Future Specs (priority order — none started)
+# Future Specs (priority order)
 
-## TASK-005 — Barcode Scanner + Open Food Facts (NEXT)
+## TASK-005 — Barcode Scanner + Open Food Facts (SPEC APPROVED — ready to implement)
 Zero-cost pantry onboarding. User points phone camera at a grocery item barcode →
 Open Food Facts API returns name + category → pre-fills add-item form.
 Pure client change. No backend changes needed.
