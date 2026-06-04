@@ -32,8 +32,13 @@ export function AuthProvider({ children }) {
     // ProtectedRoute detects user === null and redirects to /login automatically
   }
 
+  async function completeOnboarding() {
+    const data = await api.post('/api/auth/onboarding-complete');
+    setUser(data.user);
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, completeOnboarding }}>
       {children}
     </AuthContext.Provider>
   );

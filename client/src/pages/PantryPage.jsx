@@ -1,15 +1,30 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { usePantry } from '../hooks/usePantry.js';
+import { useAuth } from '../context/AuthContext.jsx';
 import PantryTable from '../components/pantry/PantryTable.jsx';
 import AddItemModal from '../components/pantry/AddItemModal.jsx';
 import ReceiptUpload from '../components/pantry/ReceiptUpload.jsx';
+import StaplesChecklist from '../components/onboarding/StaplesChecklist.jsx';
 import { fetchProductByBarcode } from '../utils/openFoodFacts.js';
 
 const BarcodeScanner = lazy(() => import('../components/pantry/BarcodeScanner.jsx'));
 
 export default function PantryPage() {
-  const { items, loading, addItem, updateItem, removeItem, markUsed, toggleFreeze, refresh } = usePantry();
+  const { items, loading: pantryLoading, addItem, updateItem, removeItem, markUsed, toggleFreeze, refresh } = usePantry();
+  const { user, loading: authLoading } = useAuth();
+
+  // Plain boolean. useEffect resets it on user identity change (System Invariant #11).
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+
+  useEffect(() => {
+    setOnboardingDismissed(false);
+  }, [user?.id]);
+
+  // isEligible: pure server truth (System Invariant #10).
+  const isEligible = !authLoading && user?.onboardingComplete === false;
+  // showOnboarding: render gate = server eligibility + session-scoped UI suppression.
+  const showOnboarding = isEligible && !onboardingDismissed;
   const [modalItem, setModalItem] = useState(undefined); // undefined = closed, null = add, item = edit
   const [showReceiptUpload, setShowReceiptUpload] = useState(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
@@ -88,6 +103,17 @@ export default function PantryPage() {
     }
   };
 
+  // Server-confirmed completion (Persistence Rule): refresh pantry list.
+  function handleOnboardingComplete() {
+    refresh();
+  }
+
+  // UI-only dismissal (UI Dismissal Rule): close modal for this session only.
+  // MUST NOT call completeOnboarding() or update auth state.
+  function handleOnboardingDismiss() {
+    setOnboardingDismissed(true);
+  }
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -119,7 +145,14 @@ export default function PantryPage() {
         </div>
       </div>
 
-      {loading ? (
+      {showOnboarding && (
+        <StaplesChecklist
+          onComplete={handleOnboardingComplete}
+          onDismiss={handleOnboardingDismiss}
+        />
+      )}
+
+      {pantryLoading ? (
         <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">

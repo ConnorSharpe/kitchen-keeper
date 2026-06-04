@@ -51,7 +51,13 @@ function signToken(user) {
 }
 
 function safeUser(user) {
-  return { id: user.id, email: user.email, name: user.name, householdId: user.householdId };
+  return {
+    id:                 user.id,
+    email:              user.email,
+    name:               user.name,
+    householdId:        user.householdId,
+    onboardingComplete: user.onboardingComplete,
+  };
 }
 
 // POST /api/auth/register
@@ -87,7 +93,7 @@ router.post('/register', validate(registerSchema), async (req, res) => {
 
   let user;
   try {
-    [user] = await db.insert(users).values({ email, passwordHash, name, householdId }).returning();
+    [user] = await db.insert(users).values({ email, passwordHash, name, householdId, onboardingComplete: false }).returning();
   } catch (err) {
     if (err.code === '23505') {
       const conflict = new Error('An account with this email already exists');
@@ -130,8 +136,25 @@ router.post('/logout', (req, res) => {
 });
 
 // GET /api/auth/me
-router.get('/me', requireAuth, (req, res) => {
-  res.json({ user: req.user });
+router.get('/me', requireAuth, async (req, res) => {
+  // Resolves user from authenticated identity's unique identifier (users.id = primary key).
+  const [user] = await db.select().from(users).where(eq(users.id, req.user.id));
+  if (!user) {
+    const err = new Error('User not found');
+    err.status = 401;
+    throw err;
+  }
+  res.json({ user: safeUser(user) });
+});
+
+// POST /api/auth/onboarding-complete
+router.post('/onboarding-complete', requireAuth, async (req, res) => {
+  const [updatedUser] = await db
+    .update(users)
+    .set({ onboardingComplete: true })
+    .where(eq(users.id, req.user.id))
+    .returning();
+  res.json({ user: safeUser(updatedUser) });
 });
 
 export default router;

@@ -12,9 +12,10 @@ export const users = pgTable('users', {
   householdId:  integer('household_id').notNull().references(() => households.id),
   email:        text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
-  name:         text('name').notNull(),
-  createdAt:    text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt:    text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+  name:               text('name').notNull(),
+  onboardingComplete: boolean('onboarding_complete').notNull().default(true),
+  createdAt:          text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt:          text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
 });
 
 export const pantryItems = pgTable('pantry_items', {
