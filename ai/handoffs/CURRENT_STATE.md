@@ -88,22 +88,32 @@ The spec's regex had `l` as a unit alias (for liters) without a word boundary. T
 # Remaining Work
 1. ~~Run `0005_meal_logs.sql` in Neon SQL Editor~~ ✅ DONE (2026-06-04)
 2. ~~Run `0006_household_dietary_profile.sql` in Neon SQL Editor~~ ✅ DONE (2026-06-04)
-3. Full flow smoke test: consume → meal log → dietary context → suggest_recipes → save_recipe
-4. TASK-012 — JSONB migration (separate task, not blocking)
+3. ~~Fix `VAPID_SUBJECT` env var in Vercel~~ ✅ DONE (2026-06-05) — was missing `mailto:` prefix; fixed in Vercel dashboard + redeploy triggered
+4. Full flow smoke test: consume → meal log → dietary context → suggest_recipes → save_recipe (BLOCKED pending redeploy)
+5. TASK-012 — JSONB migration (separate task, not blocking)
 
 # Known Risks
 - All prior known risks remain (see TASK-011.md)
 - Concurrency on `consume_pantry_item` — SELECT FOR UPDATE deferred to post-launch
 - `dietaryService.getProfile` also called inside `suggest_recipes` handler (second DB call); acceptable for MVP
+- `__drizzle_migrations` table does not exist in Neon — all migrations applied manually; never run `node server/db/migrate.js` against production or it will re-apply 0001–0006 and fail on already-dropped columns
 
 # Verification Results
 - `foodNormalization.test.js`: 48/48 PASS
 - `purineIndex.test.js`: 10/10 PASS (within foodNormalization suite run)
 - `npm run build`: PASS (clean, 352 modules)
 
-# Pre-Deploy Checklist
+# Smoke Test Status (2026-06-05)
+## Infrastructure issues found and resolved
+- manifest.json 401 — Vercel Deployment Protection on preview URL; not a code issue
+- /api/auth/me 401 — stale cookie on first load; clears after fresh login; `token` cookie confirmed present
+- /api/pantry 500 — stale Vercel function container running old code; DB schema confirmed correct (`household_id` present, `user_id` dropped)
+- Login 500 — `VAPID_SUBJECT` missing `mailto:` prefix; fixed in Vercel dashboard
+
+## Pre-Deploy Checklist
 - [x] Run `0005_meal_logs.sql` in Neon SQL Editor ✅ 2026-06-04
 - [x] Run `0006_household_dietary_profile.sql` in Neon SQL Editor ✅ 2026-06-04
+- [x] Fix `VAPID_SUBJECT` in Vercel env vars ✅ 2026-06-05
 - [ ] Smoke test: add item → chat "I ate the chicken" → verify meal_logs row
 - [ ] Smoke test: set dietary profile → chat → verify dietaryContext in system prompt log
 - [ ] Smoke test: "what should I cook?" → verify suggest_recipes returns scored candidates
