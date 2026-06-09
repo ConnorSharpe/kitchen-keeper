@@ -23,9 +23,10 @@ router.use(requireAuth);
 
 // POST /api/ai/eat-this-now
 router.post('/eat-this-now', async (req, res) => {
-  const [allItems, savedRecipes] = await Promise.all([
+  const [allItems, savedRecipes, aiConfig] = await Promise.all([
     pantryService.getAll(req.user.householdId),
     recipeService.getAll(req.user.householdId),
+    householdService.getAiConfig(req.user.householdId),
   ]);
 
   const expiringItems = allItems.filter((item) => {
@@ -33,7 +34,7 @@ router.post('/eat-this-now', async (req, res) => {
     return days !== null && days >= 0 && days <= 7;
   });
 
-  const suggestions = await aiService.eatThisNow(allItems, expiringItems, savedRecipes);
+  const suggestions = await aiService.eatThisNow(allItems, expiringItems, savedRecipes, aiConfig?.decryptedKey);
   res.json({ suggestions });
 });
 
@@ -45,9 +46,12 @@ const expandSchema = z.object({
 
 router.post('/expand-suggestion', validate(expandSchema), async (req, res) => {
   const { name, description } = req.body;
-  const allItems = await pantryService.getAll(req.user.householdId);
+  const [allItems, aiConfig] = await Promise.all([
+    pantryService.getAll(req.user.householdId),
+    householdService.getAiConfig(req.user.householdId),
+  ]);
 
-  const recipe = await aiService.expandSuggestion(name, description, allItems);
+  const recipe = await aiService.expandSuggestion(name, description, allItems, aiConfig?.decryptedKey);
 
   if (!recipe) {
     const err = new Error('AI returned an invalid recipe. Please try again.');
@@ -105,13 +109,16 @@ router.post('/parse-receipt', upload.single('receipt'), async (req, res) => {
 
 // POST /api/ai/suggest-recipes
 router.post('/suggest-recipes', async (req, res) => {
-  const allItems = await pantryService.getAll(req.user.householdId);
+  const [allItems, aiConfig] = await Promise.all([
+    pantryService.getAll(req.user.householdId),
+    householdService.getAiConfig(req.user.householdId),
+  ]);
   const expiringItems = allItems.filter((item) => {
     const days = getExpiryDays(item.expiryDate);
     return days !== null && days >= 0 && days <= 7;
   });
 
-  const suggestions = await aiService.suggestRecipes(allItems, expiringItems);
+  const suggestions = await aiService.suggestRecipes(allItems, expiringItems, aiConfig?.decryptedKey);
   res.json({ suggestions });
 });
 
@@ -400,7 +407,7 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
       const dietaryProfile = await dietaryService.getProfile(householdId);
 
       // Get raw candidates from Gemini (2 calls: search grounding + JSON format)
-      const candidates = await aiService.suggestRecipes(allItems, expiringItems);
+      const candidates = await aiService.suggestRecipes(allItems, expiringItems, aiConfig?.decryptedKey);
 
       // Score and annotate each candidate
       const scored = candidates.map((candidate) => {
@@ -455,7 +462,7 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
       try { parsed = saveSchema.parse(args); }
       catch (e) { return { ok: false, error: `Invalid data: ${e.message}` }; }
 
-      const full = await aiService.expandSuggestion(parsed.name, parsed.description, allItems);
+      const full = await aiService.expandSuggestion(parsed.name, parsed.description, allItems, aiConfig?.decryptedKey);
       if (!full) return { ok: false, error: 'AI could not expand the recipe. Try again.' };
 
       const saved = await recipeService.create(householdId, { ...full, source: 'agent_saved' });
