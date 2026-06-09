@@ -93,7 +93,7 @@ The spec's regex had `l` as a unit alias (for liters) without a word boundary. T
 4. ~~Fix `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` in Vercel~~ ✅ DONE (2026-06-09)
 5. ~~Switch Gemini model to free-tier `gemini-2.5-flash`~~ ✅ DONE (2026-06-09)
 6. **TASK-012 — implement BYOK** (spec at `ai/tasks/TASK-012.md`, approved DRAFT-3)
-   - ~~Pre-implementation: generate `API_KEY_ENCRYPTION_SECRET` and add to `.env` + Vercel~~ ✅ DONE (2026-06-09)
+   - ~~Pre-implementation: generate `API_KEY_ENCRYPTION_SECRET` and add to `.env` + Vercel~~ ✅ DONE (2026-06-09) — rotated after `.env.example` security fix
    - Pre-deploy: run `0007_household_ai_api_key.sql` in Neon SQL Editor
 7. TASK-011 smoke tests — deferred until TASK-012 is live (owner will use Claude API key)
 
@@ -102,6 +102,7 @@ The spec's regex had `l` as a unit alias (for liters) without a word boundary. T
 - Concurrency on `consume_pantry_item` — SELECT FOR UPDATE deferred to post-launch
 - `dietaryService.getProfile` also called inside `suggest_recipes` handler (second DB call); acceptable for MVP
 - `__drizzle_migrations` table does not exist in Neon — all migrations applied manually; never run `node server/db/migrate.js` against production or it will re-apply 0001–0006 and fail on already-dropped columns
+- `JWT_SECRET` and `API_KEY_ENCRYPTION_SECRET` were briefly exposed in git history via `.env.example` — both have been rotated (2026-06-09). No BYOK keys were ever stored with the old encryption secret.
 
 # Verification Results
 - `foodNormalization.test.js`: 48/48 PASS
