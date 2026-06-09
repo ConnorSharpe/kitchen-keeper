@@ -93,7 +93,7 @@ The spec's regex had `l` as a unit alias (for liters) without a word boundary. T
 4. ~~Fix `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` in Vercel~~ ✅ DONE (2026-06-09)
 5. ~~Switch Gemini model to free-tier `gemini-2.5-flash`~~ ✅ DONE (2026-06-09)
 6. **TASK-012 — implement BYOK** (spec at `ai/tasks/TASK-012.md`, approved DRAFT-3)
-   - Pre-implementation: generate `API_KEY_ENCRYPTION_SECRET` and add to `.env` + Vercel
+   - ~~Pre-implementation: generate `API_KEY_ENCRYPTION_SECRET` and add to `.env` + Vercel~~ ✅ DONE (2026-06-09)
    - Pre-deploy: run `0007_household_ai_api_key.sql` in Neon SQL Editor
 7. TASK-011 smoke tests — deferred until TASK-012 is live (owner will use Claude API key)
 
