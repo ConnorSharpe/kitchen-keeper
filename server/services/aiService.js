@@ -487,7 +487,6 @@ export async function chat(pantrySummary, recipeSummary, history, userMessage, t
   try {
     result = await chatSession.sendMessage(userMessage);
   } catch (err) {
-    console.error('[aiService] Gemini error:', err?.message, err?.status, err?.statusText);
     throw wrapAIError(err);
   }
 
