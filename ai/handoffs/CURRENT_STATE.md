@@ -1,8 +1,8 @@
 # Task
-TASK-012 — BYOK spec approved, ready for implementation (2026-06-09)
+TASK-012 — BYOK implementation complete (2026-06-09)
 
 # Current Status
-TASK-011 complete and deployed. TASK-012 (BYOK) spec approved after 3 architect review rounds — implementation ready.
+TASK-012 (BYOK) fully implemented. All 7 keyEncryption tests pass. Build clean (352 modules). Migration `0007_household_ai_api_key.sql` written — must be applied in Neon SQL Editor before deploying.
 
 Production infrastructure fixes applied this session:
 - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` were missing from Vercel env vars — regenerated and added
@@ -11,7 +11,27 @@ Production infrastructure fixes applied this session:
 
 TASK-011 smoke tests not yet completed — deferred; owner will use their own Claude API key via TASK-012 BYOK for testing.
 
-# Files Modified (this session)
+# Files Modified (TASK-012 session)
+
+### New
+- `server/db/migrations/0007_household_ai_api_key.sql`
+- `server/utils/keyEncryption.js`
+- `server/utils/keyEncryption.test.js`
+- `server/services/ai/providerInterface.js`
+- `server/services/ai/geminiProvider.js`
+- `server/services/ai/anthropicProvider.js`
+- `server/services/ai/resolveProvider.js`
+
+### Edited
+- `server/db/schema.js` — added `aiProvider`, `aiApiKey` to `households`
+- `server/services/householdService.js` — added `getAiConfig`, `getAiKeyPreview`, `setAiApiKey`, `removeAiApiKey`
+- `server/services/aiService.js` — `chat()` accepts `aiConfig`, uses provider adapter, `wrapAIError` catches `AIProviderError`
+- `server/routes/ai.js` — added `householdService` import, `getAiConfig()` call before `chat()`
+- `server/routes/household.js` — GET returns `provider`/`maskedKey`; added PATCH `/api/household/ai-key`
+- `client/src/pages/HouseholdPage.jsx` — added AI Provider section
+- `server/package.json` — `@anthropic-ai/sdk` installed
+
+# Files Modified (TASK-011 session)
 
 ### New
 - `server/db/migrations/0005_meal_logs.sql`
@@ -92,10 +112,10 @@ The spec's regex had `l` as a unit alias (for liters) without a word boundary. T
 3. ~~Fix `VAPID_SUBJECT` in Vercel~~ ✅ DONE (2026-06-05)
 4. ~~Fix `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` in Vercel~~ ✅ DONE (2026-06-09)
 5. ~~Switch Gemini model to free-tier `gemini-2.5-flash`~~ ✅ DONE (2026-06-09)
-6. **TASK-012 — implement BYOK** (spec at `ai/tasks/TASK-012.md`, approved DRAFT-3)
-   - ~~Pre-implementation: generate `API_KEY_ENCRYPTION_SECRET` and add to `.env` + Vercel~~ ✅ DONE (2026-06-09) — rotated after `.env.example` security fix
-   - Pre-deploy: run `0007_household_ai_api_key.sql` in Neon SQL Editor
-7. TASK-011 smoke tests — deferred until TASK-012 is live (owner will use Claude API key)
+6. ~~**TASK-012 — implement BYOK**~~ ✅ DONE (2026-06-09)
+   - **Pre-deploy: run `0007_household_ai_api_key.sql` in Neon SQL Editor** ← DO THIS BEFORE DEPLOYING
+   - Commit and deploy all TASK-012 files
+7. TASK-011 smoke tests + TASK-012 live verification — run after deploy
 
 # Known Risks
 - All prior known risks remain (see TASK-011.md)

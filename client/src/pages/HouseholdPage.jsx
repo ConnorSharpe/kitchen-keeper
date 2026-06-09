@@ -14,6 +14,12 @@ export default function HouseholdPage() {
   const [inviteStatus, setInviteStatus]     = useState(null); // 'sent' | 'error'
   const [inviteError, setInviteError]       = useState('');
 
+  const [aiProvider, setAiProvider]         = useState('platform');
+  const [aiKey, setAiKey]                   = useState('');
+  const [aiSaving, setAiSaving]             = useState(false);
+  const [aiStatus, setAiStatus]             = useState(null); // 'saved' | 'removed' | 'error'
+  const [aiError, setAiError]               = useState('');
+
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
@@ -24,6 +30,12 @@ export default function HouseholdPage() {
       ]);
       setHousehold(h.household);
       setMembers(m.members);
+      // Initialise AI provider state from saved household config
+      if (h.household.provider) {
+        setAiProvider(h.household.provider);
+      } else {
+        setAiProvider('platform');
+      }
     } catch (err) {
       setLoadError(err.message || 'Failed to load household');
     } finally {
@@ -37,6 +49,42 @@ export default function HouseholdPage() {
     await navigator.clipboard.writeText(household.joinCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleSaveAiKey(e) {
+    e.preventDefault();
+    setAiSaving(true);
+    setAiStatus(null);
+    setAiError('');
+    try {
+      const result = await api.patch('/api/household/ai-key', { provider: aiProvider, key: aiKey || null });
+      setHousehold((prev) => ({ ...prev, provider: result.provider, maskedKey: result.maskedKey }));
+      setAiKey('');
+      setAiStatus('saved');
+    } catch (err) {
+      setAiStatus('error');
+      setAiError(err.message);
+    } finally {
+      setAiSaving(false);
+    }
+  }
+
+  async function handleRemoveAiKey() {
+    setAiSaving(true);
+    setAiStatus(null);
+    setAiError('');
+    try {
+      await api.patch('/api/household/ai-key', { provider: null, key: null });
+      setHousehold((prev) => ({ ...prev, provider: null, maskedKey: null }));
+      setAiProvider('platform');
+      setAiKey('');
+      setAiStatus('removed');
+    } catch (err) {
+      setAiStatus('error');
+      setAiError(err.message);
+    } finally {
+      setAiSaving(false);
+    }
   }
 
   async function handleInvite(e) {
@@ -133,6 +181,81 @@ export default function HouseholdPage() {
           Shared across all household members. Used by the AI assistant to personalise meal suggestions.
         </p>
         <DietaryProfileForm />
+      </section>
+
+      {/* AI Provider */}
+      <section className="bg-white border border-gray-200 rounded-2xl p-6">
+        <h2 className="text-base font-semibold text-gray-800 mb-1">AI provider</h2>
+        <p className="text-xs text-gray-500 mb-4">
+          Optional. Your key is encrypted at rest. If not set, the shared platform key (Gemini) is used.
+        </p>
+
+        {household?.maskedKey && (
+          <p className="text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2 mb-4 font-mono">
+            Current key: <span className="font-semibold">{household.maskedKey}</span>
+            {' '}({household.provider})
+          </p>
+        )}
+
+        <form onSubmit={handleSaveAiKey} className="space-y-3">
+          <select
+            value={aiProvider}
+            onChange={(e) => { setAiProvider(e.target.value); setAiStatus(null); }}
+            className="w-full rounded-lg border-gray-300 shadow-sm focus:border-orange-400 focus:ring-orange-400 text-sm"
+          >
+            <option value="platform">Platform default (Gemini)</option>
+            <option value="gemini">Gemini (my key)</option>
+            <option value="anthropic">Anthropic Claude</option>
+          </select>
+
+          {aiProvider !== 'platform' && (
+            <input
+              type="password"
+              value={aiKey}
+              onChange={(e) => setAiKey(e.target.value)}
+              placeholder={household?.maskedKey ? `Current: ${household.maskedKey} — paste to replace` : 'Paste your API key'}
+              className="w-full rounded-lg border-gray-300 shadow-sm focus:border-orange-400 focus:ring-orange-400 text-sm font-mono"
+            />
+          )}
+
+          <div className="flex gap-2">
+            {aiProvider !== 'platform' && (
+              <button
+                type="submit"
+                disabled={aiSaving || (aiProvider !== 'platform' && !aiKey)}
+                className="flex-1 py-2 px-4 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors text-sm"
+              >
+                {aiSaving ? 'Saving…' : 'Save key'}
+              </button>
+            )}
+            {household?.maskedKey && (
+              <button
+                type="button"
+                onClick={handleRemoveAiKey}
+                disabled={aiSaving}
+                className="flex-1 py-2 px-4 border border-gray-300 hover:bg-gray-50 disabled:opacity-50 text-gray-700 font-medium rounded-lg transition-colors text-sm"
+              >
+                Remove key
+              </button>
+            )}
+          </div>
+        </form>
+
+        {aiStatus === 'saved' && (
+          <p className="mt-3 text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">
+            Key saved. AI chat will now use your {aiProvider} key.
+          </p>
+        )}
+        {aiStatus === 'removed' && (
+          <p className="mt-3 text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">
+            Key removed. AI chat will use the shared platform key.
+          </p>
+        )}
+        {aiStatus === 'error' && (
+          <p className="mt-3 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
+            {aiError}
+          </p>
+        )}
       </section>
 
       {/* Members list */}

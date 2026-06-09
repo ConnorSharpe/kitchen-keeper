@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { upload } from '../middleware/upload.js';
+import * as householdService from '../services/householdService.js';
 import * as pantryService from '../services/pantryService.js';
 import * as recipeService from '../services/recipeService.js';
 import * as chatService from '../services/chatService.js';
@@ -462,8 +463,9 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
     },
   };
 
+  const aiConfig = await householdService.getAiConfig(householdId);
   const { reply, itemsAdded } = await aiService.chat(
-    pantrySummary, recipeSummary, history, message, toolHandlers, dietaryContext
+    pantrySummary, recipeSummary, history, message, toolHandlers, dietaryContext, aiConfig
   );
 
   await chatService.savePair(householdId, message, reply);
