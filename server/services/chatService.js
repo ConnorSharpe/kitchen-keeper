@@ -13,12 +13,11 @@ export async function getHistory(householdId, limit = 50) {
     .limit(limit);
 }
 
-// Inserts user message and assistant reply atomically — no orphan messages on AI failure.
+// Inserts user message and assistant reply sequentially.
+// neon-http driver does not support transactions; sequential inserts are acceptable for chat history.
 export async function savePair(householdId, userMessage, assistantReply) {
-  await db.transaction(async (tx) => {
-    await tx.insert(chatMessages).values({ householdId, role: 'user',      content: userMessage });
-    await tx.insert(chatMessages).values({ householdId, role: 'assistant', content: assistantReply });
-  });
+  await db.insert(chatMessages).values({ householdId, role: 'user',      content: userMessage });
+  await db.insert(chatMessages).values({ householdId, role: 'assistant', content: assistantReply });
 }
 
 // Deletes oldest messages so only the most recent keepLast remain.
