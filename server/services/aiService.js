@@ -2,7 +2,7 @@ import { GoogleGenerativeAI, GoogleGenerativeAIError } from '@google/generative-
 import { getExpiryDays } from '../utils/expiry.js';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const MODEL = 'gemini-2.0-flash';
+const MODEL = 'gemini-2.5-flash';
 
 // Strip markdown code fences the model may add despite instructions, then parse.
 // Returns fallback on failure rather than throwing — callers decide how to surface the error.
