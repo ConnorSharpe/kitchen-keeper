@@ -57,13 +57,15 @@ export default function QuickAdd() {
           className={`${inputCls} flex-1 min-w-0`}
           required
         />
-        <input
-          type="date"
-          value={expiryDate}
-          onChange={(e) => setExpiryDate(e.target.value)}
-          className={`${inputCls} w-36 flex-shrink-0`}
-          title="Expiry date (optional)"
-        />
+        <label className="flex flex-col gap-0.5 flex-shrink-0">
+          <span className="text-xs text-gray-500 leading-none">Expires</span>
+          <input
+            type="date"
+            value={expiryDate}
+            onChange={(e) => setExpiryDate(e.target.value)}
+            className={`${inputCls} w-36`}
+          />
+        </label>
         <button
           type="submit"
           disabled={saving || !name.trim()}

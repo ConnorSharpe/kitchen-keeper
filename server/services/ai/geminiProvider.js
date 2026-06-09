@@ -35,7 +35,7 @@ export class GeminiProvider extends AIProvider {
   }
 
   extractToolCalls(response) {
-    return (response.functionCalls() ?? []).map((c) => ({
+    return (response.response.functionCalls() ?? []).map((c) => ({
       callId: c.name,
       name: c.name,
       args: c.args,
