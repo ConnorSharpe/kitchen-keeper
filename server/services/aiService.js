@@ -380,7 +380,7 @@ export async function suggestRecipes(allItems, expiringItems, apiKey = null) {
   const formatModel = client.getGenerativeModel({
     model: MODEL,
     systemInstruction: 'You are a data formatter. Respond only with valid JSON. No prose.',
-    generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 3000 },
+    generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 8000 },
   });
 
   let formatResult;
@@ -397,7 +397,9 @@ export async function suggestRecipes(allItems, expiringItems, apiKey = null) {
     throw wrapAIError(err);
   }
 
-  return safeParseJSON(formatResult.response.text(), []);
+  const formatText = formatResult.response.text();
+  console.log('[suggestRecipes] step2 formatText length:', formatText.length, '| preview:', formatText.slice(0, 300));
+  return safeParseJSON(formatText, []);
 }
 
 /**
