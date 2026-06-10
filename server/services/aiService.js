@@ -23,6 +23,7 @@ export function safeParseJSON(text, fallback) {
 // Both remap to 503 — prevents leaking auth/rate-limit details to the client.
 function wrapAIError(err) {
   if (err instanceof AIProviderError || err instanceof GoogleGenerativeAIError) {
+    console.error('[aiService] provider error:', err.cause ?? err);
     const wrapped = new Error('AI service unavailable. Please try again later.');
     wrapped.status = 503;
     return wrapped;
