@@ -1,15 +1,30 @@
 # Task
-TASK-012 — BYOK implementation complete (2026-06-09)
+TASK-013 — Recipe Suggestion Cards in Chat (ready for implementation)
 
 # Current Status
-TASK-012 (BYOK) fully implemented. All 7 keyEncryption tests pass. Build clean (352 modules). Migration `0007_household_ai_api_key.sql` written — must be applied in Neon SQL Editor before deploying.
+TASK-013 spec approved (Revision 2, architect sign-off 2026-06-10). Ready for implementation.
 
-Production infrastructure fixes applied this session:
-- `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` were missing from Vercel env vars — regenerated and added
-- Gemini model changed from `gemini-2.0-flash` (no free tier) to `gemini-2.5-flash` (1,500 req/day free tier)
-- Debug log added then removed from `aiService.js` during diagnosis
+Smoke testing completed this session:
+- Test 1 (meal logging): ✅ PASS
+- Test 2 (dietary profile in chat): ✅ PASS
+- Tests 3 & 4 (recipe suggestion, save recipe): deferred — blocked on TASK-013 implementation
 
-TASK-011 smoke tests not yet completed — deferred; owner will use their own Claude API key via TASK-012 BYOK for testing.
+Two bugs diagnosed and fixed this session (deployed to production):
+- `suggestRecipes` Step 2 `maxOutputTokens` raised 3000 → 8000 (was truncating JSON mid-string)
+- Two diagnostic `console.log` statements added to `aiService.js` during investigation — MUST BE REMOVED in TASK-013 (see spec Change 1a)
+
+TASK-013 is the next task. Full spec at `ai/tasks/TASK-013.md`.
+
+# Files Modified (TASK-013 session — docs only)
+
+- `ai/handoffs/CURRENT_STATE.md` — updated for TASK-013 handoff
+- `ai/tasks/TASK-013.md` — spec written, architect-approved (Revision 2)
+
+# Files to Modify (TASK-013 implementation)
+
+- `server/services/aiService.js` — remove 2 debug logs; add `prepSteps` to Step 2 format prompt
+- `server/routes/ai.js` — declare request-scoped `recipeSuggestions`; capture from tool handler; return in response
+- `client/src/pages/ChatPage.jsx` — render recipe cards below assistant messages
 
 # Files Modified (TASK-012 session)
 
@@ -112,10 +127,10 @@ The spec's regex had `l` as a unit alias (for liters) without a word boundary. T
 3. ~~Fix `VAPID_SUBJECT` in Vercel~~ ✅ DONE (2026-06-05)
 4. ~~Fix `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` in Vercel~~ ✅ DONE (2026-06-09)
 5. ~~Switch Gemini model to free-tier `gemini-2.5-flash`~~ ✅ DONE (2026-06-09)
-6. ~~**TASK-012 — implement BYOK**~~ ✅ DONE (2026-06-09)
-   - **Pre-deploy: run `0007_household_ai_api_key.sql` in Neon SQL Editor** ← DO THIS BEFORE DEPLOYING
-   - Commit and deploy all TASK-012 files
-7. TASK-011 smoke tests + TASK-012 live verification — run after deploy
+6. ~~**TASK-012 — implement BYOK**~~ ✅ DONE + DEPLOYED (2026-06-09)
+7. ~~Fix `suggestRecipes` JSON truncation (`maxOutputTokens` 3000→8000)~~ ✅ DONE + DEPLOYED (2026-06-10)
+8. **TASK-013 — implement recipe suggestion cards** — spec approved, ready to implement
+9. Complete smoke tests 3 & 4 after TASK-013 ships
 
 # Known Risks
 - All prior known risks remain (see TASK-011.md)
@@ -129,16 +144,16 @@ The spec's regex had `l` as a unit alias (for liters) without a word boundary. T
 - `purineIndex.test.js`: 10/10 PASS (within foodNormalization suite run)
 - `npm run build`: PASS (clean, 352 modules)
 
-# Smoke Test Status (2026-06-09)
+# Smoke Test Status (2026-06-10)
 ## Infrastructure issues resolved
 - Login 500 — `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` missing from Vercel; regenerated and added ✅
 - Chat 503 — `gemini-2.0-flash` has no free tier (limit: 0); switched to `gemini-2.5-flash` ✅
 
-## Smoke tests (deferred — pending TASK-012)
-- [ ] add item → chat "I ate the chicken" → verify meal_logs row
-- [ ] set dietary profile → chat → verify dietaryContext in system prompt
-- [ ] "what should I cook?" → verify suggest_recipes returns scored candidates
-- [ ] "save that recipe" → verify recipe appears in recipe book
+## Smoke tests
+- [x] add item → chat "I ate the chicken" → verify meal_logs row ✅ (2026-06-10)
+- [x] set dietary profile → chat → verify dietaryContext in system prompt ✅ (2026-06-10)
+- [ ] "what should I cook?" → verify suggest_recipes returns scored candidates — deferred pending TASK-013
+- [ ] "save that recipe" → verify recipe appears in recipe book — deferred pending TASK-013
 
 # Forbidden Exploration
 - server/middleware/auth.js
@@ -155,6 +170,7 @@ The spec's regex had `l` as a unit alias (for liters) without a word boundary. T
 - branch: main
 - worktree: none
 - context pressure: low
+- next agent: read TASK-013.md in full before starting — spec is architect-approved and implementation-ready
 
 # PowerShell Merge Block
 N/A — working directly on main. Commit all implementation files.
