@@ -1,164 +1,124 @@
 # Task
-TASK-013 — Recipe Suggestion Cards in Chat (implementation complete)
+TASK-014 — Replace Gemini with Groq + Spoonacular (spec drafting in progress)
 
 # Current Status
-TASK-013 implemented and build verified (2026-06-10). Ready for deploy + smoke test.
+TASK-014 spec drafted, architect-reviewed internally, and gap-analysed (2026-06-10).
+Spec is ready to send to GPT architect for external review.
 
-Smoke testing completed this session:
-- Test 1 (meal logging): ✅ PASS
-- Test 2 (dietary profile in chat): ✅ PASS
-- Tests 3 & 4 (recipe suggestion, save recipe): deferred — blocked on TASK-013 implementation
+TASK-013 smoke tests 3 & 4 are blocked by Gemini free tier quota exhaustion (20 RPD).
+Root cause confirmed via Vercel logs: `429 Too Many Requests` on `gemini-2.5-flash`.
+Decision made: do not fix Gemini quota — proceed directly to TASK-014 (Groq migration).
+Smoke tests 3 & 4 will be completed after TASK-014 deploys.
 
-TASK-013 changes implemented:
-- `aiService.js`: removed 2 debug logs; added `prepSteps` to Step 2 format prompt
-- `ai.js`: `recipeSuggestions` declared request-scoped; captured from `suggest_recipes` handler; returned in response
-- `ChatPage.jsx`: recipe cards rendered below assistant messages; `savedRecipeNames` state prevents double-save
+Debug log added to `wrapAIError` this session (commit d0a9856) — can be removed after TASK-014.
 
-# Files Modified (TASK-013 session — docs only)
+# Files Modified This Session
 
-- `ai/handoffs/CURRENT_STATE.md` — updated for TASK-013 handoff
-- `ai/tasks/TASK-013.md` — spec written, architect-approved (Revision 2)
+- `ai/handoffs/CURRENT_STATE.md` — this file
+- `ai/tasks/TASK-014.md` — NEW: full spec drafted + gap-analysed
+- `server/services/aiService.js` — added `console.error` in `wrapAIError` to expose root cause (debug only; remove in TASK-014)
 
-# Files Modified (TASK-013 implementation)
+# Files Modified (TASK-013 session — preserved for reference)
 
 - `server/services/aiService.js` — removed 2 debug logs; added `prepSteps` to Step 2 format prompt
 - `server/routes/ai.js` — declared request-scoped `recipeSuggestions`; captured from `suggest_recipes`; returned in response
 - `client/src/pages/ChatPage.jsx` — recipe cards with `savedRecipeNames` state, ingredient bold/normal, allergy/health notes
 
-# Files Modified (TASK-012 session)
-
-### New
-- `server/db/migrations/0007_household_ai_api_key.sql`
-- `server/utils/keyEncryption.js`
-- `server/utils/keyEncryption.test.js`
-- `server/services/ai/providerInterface.js`
-- `server/services/ai/geminiProvider.js`
-- `server/services/ai/anthropicProvider.js`
-- `server/services/ai/resolveProvider.js`
-
-### Edited
-- `server/db/schema.js` — added `aiProvider`, `aiApiKey` to `households`
-- `server/services/householdService.js` — added `getAiConfig`, `getAiKeyPreview`, `setAiApiKey`, `removeAiApiKey`
-- `server/services/aiService.js` — `chat()` accepts `aiConfig`, uses provider adapter, `wrapAIError` catches `AIProviderError`
-- `server/routes/ai.js` — added `householdService` import, `getAiConfig()` call before `chat()`
-- `server/routes/household.js` — GET returns `provider`/`maskedKey`; added PATCH `/api/household/ai-key`
-- `client/src/pages/HouseholdPage.jsx` — added AI Provider section
-- `server/package.json` — `@anthropic-ai/sdk` installed
-
-# Files Modified (TASK-011 session)
-
-### New
-- `server/db/migrations/0005_meal_logs.sql`
-- `server/db/migrations/0006_household_dietary_profile.sql`
-- `server/utils/foodNormalization.js`
-- `server/utils/foodNormalization.test.js`
-- `server/data/purineIndex.js`
-- `server/data/purineIndex.test.js`
-- `server/services/mealLogService.js`
-- `server/services/dietaryService.js`
-- `server/routes/dietary.js`
-- `server/utils/recipeScorer.js`
-- `client/src/hooks/useDietaryProfile.js`
-- `client/src/components/settings/DietaryProfileForm.jsx`
-
-### Edited
-- `server/db/schema.js` — added `mealLogs` table + 3 columns to `households`
-- `server/app.js` — mounted `dietaryRouter` at `/api/dietary`
-- `server/services/aiService.js` — added 5 tool declarations; updated `chat()` signature + system prompt
-- `server/routes/ai.js` — added 5 tool handlers; updated `pantrySummary`; injected `dietaryContext`
-- `client/src/pages/HouseholdPage.jsx` — mounted `DietaryProfileForm`
-
-# Files Already Reviewed (do not re-read without cause)
-All files from prior session remain valid. See previous CURRENT_STATE for list.
-
 # Dependency Chain
 
 ```
-Editing (complete):
-- server/db/schema.js
-- server/db/migrations/0005_meal_logs.sql
-- server/db/migrations/0006_household_dietary_profile.sql
-- server/utils/foodNormalization.js
-- server/data/purineIndex.js
-- server/services/mealLogService.js
-- server/services/dietaryService.js
-- server/routes/dietary.js
-- server/utils/recipeScorer.js
+Editing (TASK-014 — not yet implemented):
 - server/services/aiService.js
-- server/routes/ai.js
-- client/src/components/settings/DietaryProfileForm.jsx
-- client/src/hooks/useDietaryProfile.js
-- client/src/pages/HouseholdPage.jsx
-- server/app.js
+- server/services/recipeSearchService.js        (new)
+- server/services/ai/groqProvider.js            (new)
+- server/services/ai/resolveProvider.js
+- server/services/ai/anthropicProvider.js       (coupled with PANTRY_TOOLS format change)
+- server/services/ai/geminiProvider.js          (delete)
+- server/services/householdService.js           (comment update only)
+- server/db/schema.js                           (comment update only)
+- server/db/migrations/0008_migrate_gemini_provider.sql  (new)
+- server/routes/ai.js                           (remove apiKey arg from suggestRecipes calls)
+- server/routes/household.js                    (Zod enum: gemini → groq)
+- client/src/pages/HouseholdPage.jsx            (dropdown + hardcoded strings)
+- .env.example                                  (swap GEMINI_API_KEY → GROQ_API_KEY + SPOONACULAR_API_KEY)
+- server/package.json                           (add groq-sdk, remove @google/generative-ai)
 
-Requires (read-only, unchanged):
-- server/services/pantryService.js
-- server/services/recipeService.js
-- server/middleware/auth.js
-- server/middleware/validate.js
+Deleting:
+- server/services/ai/geminiProvider.js
+
+Requires (read-only):
+- server/services/ai/providerInterface.js
 
 Irrelevant (unchanged):
 - server/routes/recipes.js
 - server/routes/shopping.js
 - server/routes/push.js
 - client/public/sw.js
+- server/db/migrations/0001-0007
 ```
 
 # Architecture Notes
 
-## Spec Deviation: purineIndex sort strategy
-The spec specified "medium checked BEFORE high" with per-level length sorting. This was correct for the `"kidney bean"` → `"medium"` case but caused `"beef heart"` and `"chicken heart"` (HIGH) to incorrectly return `"medium"` because `\bbeef\b` / `\bchicken\b` fired first.
+## Why Groq
+Gemini 2.5 Flash free tier: 20 RPD, 10 RPM — confirmed exhausted during smoke testing.
+Groq llama-3.3-70b-versatile free tier: 1,000 RPD, 30 RPM, 100K TPD.
+50× more daily requests; real binding constraint is 100K TPD (~33 chat sessions/day).
 
-**Fix applied:** Merged all keywords into a single list sorted globally by length descending. This means compound forms (e.g. `"beef heart"` 9 chars) always take precedence over their shorter base words (e.g. `"beef"` 4 chars), regardless of level. All test cases pass. This is a strict improvement — the spec's reasoning holds but the implementation mechanism is different.
+## Why Spoonacular + TheMealDB for suggestRecipes
+Current `suggestRecipes` burns ~5,000 Groq tokens per call (2 LLM calls via compound-beta).
+Spoonacular returns structured recipe JSON directly — zero LLM tokens for recipe discovery.
+Saves the full 100K TPD budget for chat sessions.
+Spoonacular: 365K recipes, 150 free points/day, no credit card (sign up at spoonacular.com).
+TheMealDB: ~300 meals, unlimited free, used as fallback when Spoonacular quota exhausted.
 
-## QUANTITY_PREFIX_RE regex fix
-The spec's regex had `l` as a unit alias (for liters) without a word boundary. This caused `"3 large eggs"` to consume the leading `l` from `large`, producing `"arge eggs"`. Fixed by changing `g|...|l|...` to `g\b|...|l\b|...` for single-letter units.
+## Critical Coupled Change
+`PANTRY_TOOLS` must convert from Gemini `functionDeclarations` format → OpenAI `tools` format.
+`anthropicProvider.js` `_translateTools` currently reads `group.functionDeclarations` — will silently
+return `[]` (no tools) for Anthropic BYOK users if not updated in the same phase.
+Both changes must land together in Phase 3.
+
+## BYOK After Migration
+`resolveProvider` default: null → GroqProvider (env GROQ_API_KEY)
+BYOK options: 'groq' | 'anthropic' (Gemini removed)
+`household.js` Zod enum must change: `z.enum(['gemini','anthropic'])` → `z.enum(['groq','anthropic'])`
+DB migration 0008: NULL out any rows where ai_provider = 'gemini' (apply in Neon SQL Editor)
 
 # Decisions Made
-- All prior ADRs preserved as-is (ADR-001 through ADR-009)
-- Purine check order changed from per-level to global-sort (compatible with all acceptance criteria)
-- `real` type used in Drizzle schema for `quantity_before`/`quantity_after` (consistent with pantry schema; spec said NUMERIC in SQL which the migration correctly uses)
-- `expiringItems` computed once in POST /api/ai/chat route and shared across all handlers via closure
+- Gemini removed entirely — no partial retention for vision or any other function
+- Groq llama-3.3-70b-versatile for chat + eatThisNow + expandSuggestion
+- Groq llama-3.2-11b-vision-instruct for parseReceipt + parseRecipeImage
+- Spoonacular (primary) + TheMealDB (fallback) for suggestRecipes — zero LLM tokens
+- PANTRY_TOOLS converted to OpenAI format; AnthropicProvider updated in same phase
+- suggestRecipes signature: remove apiKey param (recipe APIs don't need it)
+- eatThisNow / expandSuggestion: retain apiKey param (thread Groq BYOK key)
 
 # Remaining Work
-1. ~~Run `0005_meal_logs.sql` in Neon SQL Editor~~ ✅ DONE (2026-06-04)
-2. ~~Run `0006_household_dietary_profile.sql` in Neon SQL Editor~~ ✅ DONE (2026-06-04)
-3. ~~Fix `VAPID_SUBJECT` in Vercel~~ ✅ DONE (2026-06-05)
-4. ~~Fix `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` in Vercel~~ ✅ DONE (2026-06-09)
-5. ~~Switch Gemini model to free-tier `gemini-2.5-flash`~~ ✅ DONE (2026-06-09)
-6. ~~**TASK-012 — implement BYOK**~~ ✅ DONE + DEPLOYED (2026-06-09)
-7. ~~Fix `suggestRecipes` JSON truncation (`maxOutputTokens` 3000→8000)~~ ✅ DONE + DEPLOYED (2026-06-10)
-8. ~~**TASK-013 — implement recipe suggestion cards**~~ ✅ DONE (2026-06-10) — build verified
-9. **Deploy to Vercel + complete smoke tests 3 & 4**
+1. **Send TASK-014.md to GPT architect for review** — spec is ready
+2. Sign up for Spoonacular free API key (spoonacular.com, no credit card)
+3. After architect approval: implement TASK-014
+4. After TASK-014 deploys: complete smoke tests 3 & 4
+5. Remove debug `console.error` in `wrapAIError` (added commit d0a9856 — folded into TASK-014 cleanup)
 
 # Known Risks
-- All prior known risks remain (see TASK-011.md)
-- Concurrency on `consume_pantry_item` — SELECT FOR UPDATE deferred to post-launch
-- `dietaryService.getProfile` also called inside `suggest_recipes` handler (second DB call); acceptable for MVP
-- `__drizzle_migrations` table does not exist in Neon — all migrations applied manually; never run `node server/db/migrate.js` against production or it will re-apply 0001–0006 and fail on already-dropped columns
-- `JWT_SECRET` and `API_KEY_ENCRYPTION_SECRET` were briefly exposed in git history via `.env.example` — both have been rotated (2026-06-09). No BYOK keys were ever stored with the old encryption secret.
+- Llama 3.3 70b tool calling fidelity vs Gemini — system prompt may need tuning after migration
+- Spoonacular 150 points/day (~50 suggestRecipes calls) — TheMealDB fallback covers overflow
+- TheMealDB ~300 meal coverage gaps — graceful `[]` return already handled in UI
+- 100K TPD ceiling — recipe API saves ~5K tokens/suggestRecipes call, extending headroom
+- AnthropicProvider _translateTools break if PANTRY_TOOLS change lands without the provider fix
 
-# Verification Results
+# Verification Results (TASK-013)
 - `foodNormalization.test.js`: 48/48 PASS
-- `purineIndex.test.js`: 10/10 PASS (within foodNormalization suite run)
+- `purineIndex.test.js`: 10/10 PASS
 - `npm run build`: PASS (clean, 352 modules)
-
-# Smoke Test Status (2026-06-10)
-## Infrastructure issues resolved
-- Login 500 — `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` missing from Vercel; regenerated and added ✅
-- Chat 503 — `gemini-2.0-flash` has no free tier (limit: 0); switched to `gemini-2.5-flash` ✅
-
-## Smoke tests
-- [x] add item → chat "I ate the chicken" → verify meal_logs row ✅ (2026-06-10)
-- [x] set dietary profile → chat → verify dietaryContext in system prompt ✅ (2026-06-10)
-- [ ] "what should I cook?" → verify recipe cards appear below assistant reply — READY (deploy first)
-- [ ] "save that recipe" → verify recipe appears in recipe book — READY (deploy first)
+- Smoke test 1 (meal logging): ✅ PASS
+- Smoke test 2 (dietary profile): ✅ PASS (503 errors were Gemini quota, not code bugs)
+- Smoke test 3 (recipe cards): ⏳ pending TASK-014 deploy
+- Smoke test 4 (save recipe): ⏳ pending TASK-014 deploy
 
 # Forbidden Exploration
 - server/middleware/auth.js
 - server/routes/recipes.js
 - server/routes/shopping.js
-- server/routes/household.js
 - server/routes/push.js
 - server/services/pushService.js
 - client/public/sw.js
@@ -169,7 +129,7 @@ The spec's regex had `l` as a unit alias (for liters) without a word boundary. T
 - branch: main
 - worktree: none
 - context pressure: low
-- next agent: read TASK-013.md in full before starting — spec is architect-approved and implementation-ready
+- next agent: read TASK-014.md in full before starting — spec is architect-reviewed and gap-analysed
 
 # PowerShell Merge Block
-N/A — working directly on main. Commit all implementation files.
+N/A — working directly on main. Use commit block below.
