@@ -20,6 +20,7 @@ export default function ChatPage() {
   const [input, setInput]             = useState('');
   const [loading, setLoading]         = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [savedRecipeNames, setSavedRecipeNames] = useState(new Set());
   const bottomRef  = useRef(null);
   const textareaRef = useRef(null);
 
@@ -54,10 +55,16 @@ export default function ChatPage() {
     setLoading(true);
 
     try {
-      const { reply, itemsAdded } = await api.post('/api/ai/chat', { message: userText });
+      const { reply, itemsAdded, recipeSuggestions } = await api.post('/api/ai/chat', { message: userText });
       setMessages((prev) => [
         ...prev,
-        { key: nextTempId(), role: 'assistant', content: reply, itemsAdded: itemsAdded ?? [] },
+        {
+          key: nextTempId(),
+          role: 'assistant',
+          content: reply,
+          itemsAdded: itemsAdded ?? [],
+          recipeSuggestions: recipeSuggestions ?? [],
+        },
       ]);
     } catch (err) {
       // Remove the optimistic user message — it was not saved to the DB
@@ -68,6 +75,11 @@ export default function ChatPage() {
       setLoading(false);
       textareaRef.current?.focus();
     }
+  }
+
+  function handleSaveRecipe(recipeName) {
+    setSavedRecipeNames((prev) => new Set([...prev, recipeName]));
+    send(`save ${recipeName}`);
   }
 
   function handleSubmit(e) {
@@ -178,6 +190,134 @@ export default function ChatPage() {
                     {item.name} added to pantry
                   </span>
                 ))}
+              </div>
+            )}
+
+            {msg.role === 'assistant' && msg.recipeSuggestions?.length > 0 && (
+              <div className="flex flex-col gap-3 mt-2 ml-9">
+                {msg.recipeSuggestions.map((recipe) => {
+                  const prepSteps = recipe.prepSteps ?? [];
+                  const ingredients = recipe.ingredients ?? [];
+                  const unmatchedSet = new Set(
+                    (recipe.unmatchedIngredients ?? []).map((n) => n.toLowerCase())
+                  );
+                  const isSaved = savedRecipeNames.has(recipe.name);
+
+                  return (
+                    <div
+                      key={recipe.name}
+                      className="w-full max-w-md sm:max-w-[75%] bg-white border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-800"
+                    >
+                      {/* Header row: name + save button */}
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <div className="font-semibold leading-snug">
+                          {recipe.sourceUrl ? (
+                            <a
+                              href={recipe.sourceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-orange-600 hover:underline"
+                            >
+                              {recipe.name} <span aria-hidden>↗</span>
+                            </a>
+                          ) : (
+                            recipe.name
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleSaveRecipe(recipe.name)}
+                          disabled={isSaved || loading}
+                          className="flex-shrink-0 px-3 py-1 rounded-lg bg-orange-500 text-white text-xs font-medium hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {isSaved ? 'Saved' : 'Save Recipe'}
+                        </button>
+                      </div>
+
+                      {/* Description */}
+                      {recipe.description && (
+                        <p className="text-gray-500 text-xs mb-2">{recipe.description}</p>
+                      )}
+
+                      {/* Time / servings metadata */}
+                      {(recipe.prepMins != null || recipe.cookMins != null || recipe.servings != null) && (
+                        <p className="text-xs text-gray-400 mb-3">
+                          ⏱{' '}
+                          {[
+                            recipe.prepMins != null && `${recipe.prepMins} min prep`,
+                            recipe.cookMins != null && `${recipe.cookMins} min cook`,
+                            recipe.servings != null && `${recipe.servings} servings`,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </p>
+                      )}
+
+                      {/* Prep steps */}
+                      {prepSteps.length > 0 && (
+                        <div className="mb-3">
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                            Before You Start
+                          </p>
+                          <ul className="space-y-0.5">
+                            {prepSteps.map((step, i) => (
+                              <li key={i} className="text-xs text-gray-600 flex gap-1.5">
+                                <span aria-hidden>•</span>
+                                <span>{step}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Ingredients */}
+                      {ingredients.length > 0 && (
+                        <div className="mb-2">
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                            Ingredients
+                          </p>
+                          <ul className="space-y-0.5">
+                            {ingredients.map((ing, i) => {
+                              const isMissing = unmatchedSet.has(ing.name.toLowerCase());
+                              const qty = [
+                                ing.quantity != null && String(ing.quantity),
+                                ing.unit,
+                              ]
+                                .filter(Boolean)
+                                .join(' ');
+                              return (
+                                <li key={i} className="text-xs text-gray-600 flex gap-1.5">
+                                  <span aria-hidden>•</span>
+                                  <span>
+                                    {qty && <span className="text-gray-400">{qty} </span>}
+                                    {isMissing ? (
+                                      <strong>{ing.name}</strong>
+                                    ) : (
+                                      ing.name
+                                    )}
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Allergy note */}
+                      {recipe.allergyNote && (
+                        <p className="mt-2 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg px-2 py-1">
+                          ⚠ {recipe.allergyNote}
+                        </p>
+                      )}
+
+                      {/* Health note */}
+                      {recipe.healthNote && (
+                        <p className="mt-1.5 text-xs text-blue-600 bg-blue-50 rounded-lg px-2 py-1">
+                          ℹ {recipe.healthNote}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

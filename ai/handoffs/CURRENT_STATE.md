@@ -1,30 +1,29 @@
 # Task
-TASK-013 — Recipe Suggestion Cards in Chat (ready for implementation)
+TASK-013 — Recipe Suggestion Cards in Chat (implementation complete)
 
 # Current Status
-TASK-013 spec approved (Revision 2, architect sign-off 2026-06-10). Ready for implementation.
+TASK-013 implemented and build verified (2026-06-10). Ready for deploy + smoke test.
 
 Smoke testing completed this session:
 - Test 1 (meal logging): ✅ PASS
 - Test 2 (dietary profile in chat): ✅ PASS
 - Tests 3 & 4 (recipe suggestion, save recipe): deferred — blocked on TASK-013 implementation
 
-Two bugs diagnosed and fixed this session (deployed to production):
-- `suggestRecipes` Step 2 `maxOutputTokens` raised 3000 → 8000 (was truncating JSON mid-string)
-- Two diagnostic `console.log` statements added to `aiService.js` during investigation — MUST BE REMOVED in TASK-013 (see spec Change 1a)
-
-TASK-013 is the next task. Full spec at `ai/tasks/TASK-013.md`.
+TASK-013 changes implemented:
+- `aiService.js`: removed 2 debug logs; added `prepSteps` to Step 2 format prompt
+- `ai.js`: `recipeSuggestions` declared request-scoped; captured from `suggest_recipes` handler; returned in response
+- `ChatPage.jsx`: recipe cards rendered below assistant messages; `savedRecipeNames` state prevents double-save
 
 # Files Modified (TASK-013 session — docs only)
 
 - `ai/handoffs/CURRENT_STATE.md` — updated for TASK-013 handoff
 - `ai/tasks/TASK-013.md` — spec written, architect-approved (Revision 2)
 
-# Files to Modify (TASK-013 implementation)
+# Files Modified (TASK-013 implementation)
 
-- `server/services/aiService.js` — remove 2 debug logs; add `prepSteps` to Step 2 format prompt
-- `server/routes/ai.js` — declare request-scoped `recipeSuggestions`; capture from tool handler; return in response
-- `client/src/pages/ChatPage.jsx` — render recipe cards below assistant messages
+- `server/services/aiService.js` — removed 2 debug logs; added `prepSteps` to Step 2 format prompt
+- `server/routes/ai.js` — declared request-scoped `recipeSuggestions`; captured from `suggest_recipes`; returned in response
+- `client/src/pages/ChatPage.jsx` — recipe cards with `savedRecipeNames` state, ingredient bold/normal, allergy/health notes
 
 # Files Modified (TASK-012 session)
 
@@ -129,8 +128,8 @@ The spec's regex had `l` as a unit alias (for liters) without a word boundary. T
 5. ~~Switch Gemini model to free-tier `gemini-2.5-flash`~~ ✅ DONE (2026-06-09)
 6. ~~**TASK-012 — implement BYOK**~~ ✅ DONE + DEPLOYED (2026-06-09)
 7. ~~Fix `suggestRecipes` JSON truncation (`maxOutputTokens` 3000→8000)~~ ✅ DONE + DEPLOYED (2026-06-10)
-8. **TASK-013 — implement recipe suggestion cards** — spec approved, ready to implement
-9. Complete smoke tests 3 & 4 after TASK-013 ships
+8. ~~**TASK-013 — implement recipe suggestion cards**~~ ✅ DONE (2026-06-10) — build verified
+9. **Deploy to Vercel + complete smoke tests 3 & 4**
 
 # Known Risks
 - All prior known risks remain (see TASK-011.md)
@@ -152,8 +151,8 @@ The spec's regex had `l` as a unit alias (for liters) without a word boundary. T
 ## Smoke tests
 - [x] add item → chat "I ate the chicken" → verify meal_logs row ✅ (2026-06-10)
 - [x] set dietary profile → chat → verify dietaryContext in system prompt ✅ (2026-06-10)
-- [ ] "what should I cook?" → verify suggest_recipes returns scored candidates — deferred pending TASK-013
-- [ ] "save that recipe" → verify recipe appears in recipe book — deferred pending TASK-013
+- [ ] "what should I cook?" → verify recipe cards appear below assistant reply — READY (deploy first)
+- [ ] "save that recipe" → verify recipe appears in recipe book — READY (deploy first)
 
 # Forbidden Exploration
 - server/middleware/auth.js

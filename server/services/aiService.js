@@ -374,7 +374,6 @@ export async function suggestRecipes(allItems, expiringItems, apiKey = null) {
   }
 
   const rawText = searchResult.response.text();
-  console.log('[suggestRecipes] step1 rawText length:', rawText.length, '| preview:', rawText.slice(0, 300));
 
   // Step 2: Format grounded text into structured JSON
   const formatModel = client.getGenerativeModel({
@@ -389,17 +388,19 @@ export async function suggestRecipes(allItems, expiringItems, apiKey = null) {
       'Format the following recipe information as a JSON array. ' +
       'Each element: { "name": string, "description": string, "sourceUrl": string|null, ' +
       '"ingredients": [{"name": string, "quantity": number|null, "unit": string|null}], ' +
+      '"prepSteps": [string], ' +
       '"steps": [string], "tags": [string], "prepMins": number|null, ' +
       '"cookMins": number|null, "servings": number|null }. ' +
+      'prepSteps: array of any steps that must be completed before active cooking begins — ' +
+      'e.g. marinating, brining, bringing meat to room temperature, soaking, chilling dough, or blooming spices. ' +
+      'Empty array [] if none. Do NOT duplicate these in steps. ' +
       'Return ONLY the JSON array.\n\n' + rawText,
     );
   } catch (err) {
     throw wrapAIError(err);
   }
 
-  const formatText = formatResult.response.text();
-  console.log('[suggestRecipes] step2 formatText length:', formatText.length, '| preview:', formatText.slice(0, 300));
-  return safeParseJSON(formatText, []);
+  return safeParseJSON(formatResult.response.text(), []);
 }
 
 /**

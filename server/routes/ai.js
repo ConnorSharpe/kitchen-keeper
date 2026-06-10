@@ -219,6 +219,8 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
 
   const dietaryContext = await dietaryService.buildDietaryContext(householdId);
 
+  let recipeSuggestions = [];
+
   const toolHandlers = {
     add_pantry_item: async (args) => {
       const addItemSchema = z.object({
@@ -449,7 +451,8 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
         return (b.overlapScore ?? 0) - (a.overlapScore ?? 0);
       });
 
-      return { ok: true, suggestions: sorted.slice(0, 5), strategy: effectiveStrategy };
+      recipeSuggestions = sorted.slice(0, 5);
+      return { ok: true, suggestions: recipeSuggestions, strategy: effectiveStrategy };
     },
 
     save_recipe: async (args) => {
@@ -478,7 +481,7 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
   await chatService.savePair(householdId, message, reply);
   await chatService.trimHistory(householdId, 50);
 
-  res.json({ reply, itemsAdded });
+  res.json({ reply, itemsAdded, recipeSuggestions });
 });
 
 export default router;
