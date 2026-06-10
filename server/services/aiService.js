@@ -374,6 +374,7 @@ export async function suggestRecipes(allItems, expiringItems, apiKey = null) {
   }
 
   const rawText = searchResult.response.text();
+  console.log('[suggestRecipes] step1 rawText length:', rawText.length, '| preview:', rawText.slice(0, 300));
 
   // Step 2: Format grounded text into structured JSON
   const formatModel = client.getGenerativeModel({
