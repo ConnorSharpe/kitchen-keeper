@@ -187,7 +187,7 @@ export default function HouseholdPage() {
       <section className="bg-white border border-gray-200 rounded-2xl p-6">
         <h2 className="text-base font-semibold text-gray-800 mb-1">AI provider</h2>
         <p className="text-xs text-gray-500 mb-4">
-          Optional. Your key is encrypted at rest. If not set, the shared platform key (Gemini) is used.
+          Optional. Your key is encrypted at rest. If not set, the shared platform key (Groq) is used.
         </p>
 
         {household?.maskedKey && (
@@ -203,8 +203,8 @@ export default function HouseholdPage() {
             onChange={(e) => { setAiProvider(e.target.value); setAiStatus(null); }}
             className="w-full rounded-lg border-gray-300 shadow-sm focus:border-orange-400 focus:ring-orange-400 text-sm"
           >
-            <option value="platform">Platform default (Gemini)</option>
-            <option value="gemini">Gemini (my key)</option>
+            <option value="platform">Platform default (Groq)</option>
+            <option value="groq">Groq (my key)</option>
             <option value="anthropic">Anthropic Claude</option>
           </select>
 

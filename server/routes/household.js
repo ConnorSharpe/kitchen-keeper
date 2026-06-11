@@ -29,7 +29,7 @@ router.get('/', async (req, res) => {
 
 // PATCH /api/household/ai-key — set or remove BYOK household AI key
 const aiKeySchema = z.object({
-  provider: z.enum(['gemini', 'anthropic']).nullable(),
+  provider: z.enum(['groq', 'anthropic']).nullable(),
   key:      z.string().nullable(),
 });
 

@@ -1,4 +1,5 @@
 import express from 'express';
+import { randomUUID } from 'crypto';
 import { put } from '@vercel/blob';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
@@ -17,12 +18,14 @@ import * as recipeScorer from '../utils/recipeScorer.js';
 import { normalizeUnit } from '../utils/foodNormalization.js';
 import { getPurineLevel } from '../data/purineIndex.js';
 import { getExpiryDays, getExpiryStatus } from '../utils/expiry.js';
+import { resolveProvider } from '../services/ai/resolveProvider.js';
 
 const router = express.Router();
 router.use(requireAuth);
 
 // POST /api/ai/eat-this-now
 router.post('/eat-this-now', async (req, res) => {
+  const requestId = randomUUID().split('-')[0];
   const [allItems, savedRecipes, aiConfig] = await Promise.all([
     pantryService.getAll(req.user.householdId),
     recipeService.getAll(req.user.householdId),
@@ -34,8 +37,14 @@ router.post('/eat-this-now', async (req, res) => {
     return days !== null && days >= 0 && days <= 7;
   });
 
-  const suggestions = await aiService.eatThisNow(allItems, expiringItems, savedRecipes, aiConfig?.decryptedKey);
-  res.json({ suggestions });
+  const provider = resolveProvider(aiConfig?.provider ?? null, aiConfig?.decryptedKey ?? null);
+  const isByok = !!aiConfig?.provider;
+
+  const suggestions = await aiService.eatThisNow(allItems, expiringItems, savedRecipes, provider, isByok, requestId);
+  const warning = suggestions._limitWarning;
+  delete suggestions._limitWarning;
+
+  res.json({ suggestions, ...(warning ? { warning } : {}) });
 });
 
 // POST /api/ai/expand-suggestion
@@ -45,13 +54,17 @@ const expandSchema = z.object({
 });
 
 router.post('/expand-suggestion', validate(expandSchema), async (req, res) => {
+  const requestId = randomUUID().split('-')[0];
   const { name, description } = req.body;
   const [allItems, aiConfig] = await Promise.all([
     pantryService.getAll(req.user.householdId),
     householdService.getAiConfig(req.user.householdId),
   ]);
 
-  const recipe = await aiService.expandSuggestion(name, description, allItems, aiConfig?.decryptedKey);
+  const provider = resolveProvider(aiConfig?.provider ?? null, aiConfig?.decryptedKey ?? null);
+  const isByok = !!aiConfig?.provider;
+
+  const recipe = await aiService.expandSuggestion(name, description, allItems, provider, isByok, requestId);
 
   if (!recipe) {
     const err = new Error('AI returned an invalid recipe. Please try again.');
@@ -59,12 +72,15 @@ router.post('/expand-suggestion', validate(expandSchema), async (req, res) => {
     throw err;
   }
 
+  const warning = recipe._limitWarning;
+  delete recipe._limitWarning;
+
   const saved = await recipeService.create(req.user.householdId, { ...recipe, source: 'ai_suggested' });
-  res.status(201).json({ recipe: saved });
+  res.status(201).json({ recipe: saved, ...(warning ? { warning } : {}) });
 });
 
 // POST /api/ai/parse-receipt
-// Receipt is never persisted — buffer goes directly to Gemini, then discarded.
+// Receipt is never persisted — buffer goes directly to Groq vision, then discarded.
 const dateField = z.string().datetime().nullable().optional();
 
 const candidateItemSchema = z.object({
@@ -82,8 +98,9 @@ router.post('/parse-receipt', upload.single('receipt'), async (req, res) => {
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
+  const requestId = randomUUID().split('-')[0];
   const base64 = req.file.buffer.toString('base64');
-  const rawItems = await aiService.parseReceipt(base64, req.file.mimetype);
+  const rawItems = await aiService.parseReceipt(base64, req.file.mimetype, requestId);
 
   const candidates = rawItems
     .map((item) => {
@@ -109,16 +126,13 @@ router.post('/parse-receipt', upload.single('receipt'), async (req, res) => {
 
 // POST /api/ai/suggest-recipes
 router.post('/suggest-recipes', async (req, res) => {
-  const [allItems, aiConfig] = await Promise.all([
-    pantryService.getAll(req.user.householdId),
-    householdService.getAiConfig(req.user.householdId),
-  ]);
+  const allItems = await pantryService.getAll(req.user.householdId);
   const expiringItems = allItems.filter((item) => {
     const days = getExpiryDays(item.expiryDate);
     return days !== null && days >= 0 && days <= 7;
   });
 
-  const suggestions = await aiService.suggestRecipes(allItems, expiringItems, aiConfig?.decryptedKey);
+  const suggestions = await aiService.suggestRecipes(allItems, expiringItems);
   res.json({ suggestions });
 });
 
@@ -146,8 +160,9 @@ router.post('/parse-recipe-image', upload.single('recipe'), async (req, res) => 
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
+  const requestId = randomUUID().split('-')[0];
   const base64 = req.file.buffer.toString('base64');
-  const raw = await aiService.parseRecipeImage(base64, req.file.mimetype);
+  const raw = await aiService.parseRecipeImage(base64, req.file.mimetype, requestId);
 
   if (!raw) {
     const err = new Error('AI could not parse the recipe image. Please try again.');
@@ -162,7 +177,6 @@ router.post('/parse-recipe-image', upload.single('recipe'), async (req, res) => 
     return res.status(422).json({ error: 'Recipe image could not be parsed into a valid recipe.' });
   }
 
-  // Upload to Vercel Blob — the full URL is stored in the DB and used directly by the client
   const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg';
   const { url } = await put(`${uuidv4()}${ext}`, req.file.buffer, { access: 'public' });
 
@@ -189,6 +203,7 @@ const chatMessageSchema = z.object({
 router.post('/chat', validate(chatMessageSchema), async (req, res) => {
   const { message } = req.body;
   const householdId = req.user.householdId;
+  const requestId = randomUUID().split('-')[0];
 
   const [allItems, allRecipes, history] = await Promise.all([
     pantryService.getAll(householdId),
@@ -220,6 +235,7 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
   const dietaryContext = await dietaryService.buildDietaryContext(householdId);
 
   let recipeSuggestions = [];
+  let chatWarning = null;
 
   const toolHandlers = {
     add_pantry_item: async (args) => {
@@ -319,10 +335,8 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
 
       const { itemName, amountConsumed, unit, fullyConsumed, skipDeduction } = parsed;
 
-      // Name resolution
       const lowerTarget = itemName.toLowerCase();
 
-      // Step 2a: exact case-insensitive matches
       const exactMatches = allItems.filter((i) => i.name.toLowerCase() === lowerTarget);
       let item;
       if (exactMatches.length > 1) {
@@ -330,11 +344,9 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
       } else if (exactMatches.length === 1) {
         item = exactMatches[0];
       } else {
-        // Step 2b: itemName is substring of pantry name (min 4 chars)
         const bMatches = lowerTarget.length >= 4
           ? allItems.filter((i) => i.name.toLowerCase().includes(lowerTarget))
           : [];
-        // Step 2c: pantry name is substring of itemName (min 4 chars)
         const cMatches = allItems.filter((i) => i.name.length >= 4 && lowerTarget.includes(i.name.toLowerCase()));
         const combined = [...new Set([...bMatches, ...cMatches])];
 
@@ -343,19 +355,16 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
         item = combined[0];
       }
 
-      // Unit mismatch detection
       const normalizedInputUnit  = unit ? normalizeUnit(unit) : '';
       const normalizedPantryUnit = item.unit ? normalizeUnit(item.unit) : '';
       const unitMismatch = !!(normalizedInputUnit && normalizedPantryUnit && normalizedInputUnit !== normalizedPantryUnit);
 
-      // Server-side skip-deduction rule (ADR-007)
       const serverSkip    = (item.category === 'Condiments' && fullyConsumed !== true);
       const effectiveSkip = serverSkip || unitMismatch || (skipDeduction === true && !serverSkip && !unitMismatch);
       const skipReason    = effectiveSkip
         ? (unitMismatch ? 'unit_mismatch' : serverSkip ? 'condiment' : 'advisory')
         : null;
 
-      // Compute remaining (Invariant 1: quantity ≥ 0)
       let remaining;
       if (fullyConsumed) {
         remaining = 0;
@@ -364,7 +373,6 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
         remaining = Math.max(0, remaining);
       }
 
-      // Apply pantry mutation
       if (!effectiveSkip) {
         if (remaining === 0) {
           await pantryService.markUsed(householdId, item.id);
@@ -373,11 +381,9 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
         }
       }
 
-      // Expiry status
       const status = getExpiryStatus(item.expiryDate);
       const wasExpiring = ['warning', 'critical', 'expired'].includes(status);
 
-      // Log the meal
       await mealLogService.create({
         householdId,
         pantryItemId:   item.id,
@@ -408,10 +414,8 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
 
       const dietaryProfile = await dietaryService.getProfile(householdId);
 
-      // Get raw candidates from Gemini (2 calls: search grounding + JSON format)
-      const candidates = await aiService.suggestRecipes(allItems, expiringItems, aiConfig?.decryptedKey);
+      const candidates = await aiService.suggestRecipes(allItems, expiringItems);
 
-      // Score and annotate each candidate
       const scored = candidates.map((candidate) => {
         const { overlapScore, matchedIngredients, unmatchedIngredients } =
           recipeScorer.score(candidate, allItems);
@@ -420,7 +424,6 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
         return { ...candidate, overlapScore, matchedIngredients, unmatchedIngredients, allergyNote, healthNote };
       });
 
-      // Auto-select strategy
       let effectiveStrategy = requestedStrategy;
       if (requestedStrategy === 'any') {
         const cutoff72h = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
@@ -429,12 +432,11 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
         const medCount  = recent72h.filter((m) => m.purineLevel === 'medium').length;
         const isHighPurine = highCount >= 2 || (highCount + medCount) >= 4;
 
-        if (isHighPurine)            effectiveStrategy = 'dietary_safe';
+        if (isHighPurine)                  effectiveStrategy = 'dietary_safe';
         else if (expiringItems.length > 0) effectiveStrategy = 'expiring_first';
-        else                         effectiveStrategy = 'pantry_overlap';
+        else                               effectiveStrategy = 'pantry_overlap';
       }
 
-      // Sort
       const expiringNames = new Set(expiringItems.map((i) => i.name.toLowerCase()));
       const sorted = [...scored].sort((a, b) => {
         if (effectiveStrategy === 'expiring_first') {
@@ -465,8 +467,16 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
       try { parsed = saveSchema.parse(args); }
       catch (e) { return { ok: false, error: `Invalid data: ${e.message}` }; }
 
-      const full = await aiService.expandSuggestion(parsed.name, parsed.description, allItems, aiConfig?.decryptedKey);
+      const saveProvider = resolveProvider(aiConfig?.provider ?? null, aiConfig?.decryptedKey ?? null);
+      const saveIsByok = !!aiConfig?.provider;
+
+      const full = await aiService.expandSuggestion(parsed.name, parsed.description, allItems, saveProvider, saveIsByok, requestId);
       if (!full) return { ok: false, error: 'AI could not expand the recipe. Try again.' };
+
+      if (full._limitWarning) {
+        chatWarning = full._limitWarning;
+        delete full._limitWarning;
+      }
 
       const saved = await recipeService.create(householdId, { ...full, source: 'agent_saved' });
       return { ok: true, recipe: { id: saved.id, name: saved.name } };
@@ -475,13 +485,13 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
 
   const aiConfig = await householdService.getAiConfig(householdId);
   const { reply, itemsAdded } = await aiService.chat(
-    pantrySummary, recipeSummary, history, message, toolHandlers, dietaryContext, aiConfig
+    pantrySummary, recipeSummary, history, message, toolHandlers, dietaryContext, aiConfig, requestId
   );
 
   await chatService.savePair(householdId, message, reply);
   await chatService.trimHistory(householdId, 50);
 
-  res.json({ reply, itemsAdded, recipeSuggestions });
+  res.json({ reply, itemsAdded, recipeSuggestions, ...(chatWarning ? { warning: chatWarning } : {}) });
 });
 
 export default router;

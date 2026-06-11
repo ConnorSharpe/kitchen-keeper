@@ -9,11 +9,23 @@ export class GeminiProvider extends AIProvider {
     this.genAI = new GoogleGenerativeAI(apiKey);
   }
 
+  // OpenAI tools format → Gemini functionDeclarations format.
+  _translateTools(openAiTools) {
+    return [{
+      functionDeclarations: openAiTools.map((tool) => ({
+        name: tool.function.name,
+        description: tool.function.description,
+        parameters: tool.function.parameters,
+      })),
+    }];
+  }
+
   startChatSession({ systemPrompt, tools, history }) {
+    const geminiTools = this._translateTools(tools);
     const model = this.genAI.getGenerativeModel({
       model: MODEL,
       systemInstruction: systemPrompt,
-      tools,
+      tools: geminiTools,
       generationConfig: { maxOutputTokens: 1500 },
     });
 

@@ -71,14 +71,12 @@ export class AnthropicProvider extends AIProvider {
   }
 }
 
-// Gemini functionDeclarations → Anthropic tools format.
+// OpenAI tools format → Anthropic tools format.
 // Both use JSON Schema for parameters/input_schema.
-function _translateTools(geminiTools) {
-  return geminiTools.flatMap((group) =>
-    (group.functionDeclarations || []).map((fn) => ({
-      name: fn.name,
-      description: fn.description,
-      input_schema: fn.parameters,
-    }))
-  );
+function _translateTools(openAiTools) {
+  return openAiTools.map((tool) => ({
+    name: tool.function.name,
+    description: tool.function.description,
+    input_schema: tool.function.parameters,
+  }));
 }
