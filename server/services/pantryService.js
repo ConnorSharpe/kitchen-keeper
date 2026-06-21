@@ -3,6 +3,17 @@ import { db } from '../db/client.js';
 import { pantryItems } from '../db/schema.js';
 import { getExpiryStatus } from '../utils/expiry.js';
 import { getStaticFreezeExtension } from '../utils/freezeDefaults.js';
+import { lookup } from './shelfLifeService.js';
+
+function enrichWithExpiry(item) {
+  if (item.expiryDate) return item;
+  const result = lookup(item.name);
+  if (!result) return item;
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() + result.recommendedDays);
+  return { ...item, expiryDate: d.toISOString() };
+}
 
 export async function getAll(householdId, { expiringWithin } = {}) {
   const conditions = [
@@ -22,7 +33,8 @@ export async function getAll(householdId, { expiringWithin } = {}) {
 }
 
 export async function create(householdId, data) {
-  const [row] = await db.insert(pantryItems).values({ ...data, householdId }).returning();
+  const enriched = enrichWithExpiry(data);
+  const [row] = await db.insert(pantryItems).values({ ...enriched, householdId }).returning();
   return row;
 }
 
@@ -104,16 +116,19 @@ export async function toggleFreeze(householdId, id) {
   return { status: 'ok', item };
 }
 
-// Inserts multiple items atomically inside a transaction.
+// Inserts items independently — best-effort, non-atomic. One failure does not roll back others.
 export async function bulkCreate(householdId, items) {
-  return db.transaction(async (tx) => {
-    const results = [];
-    for (const item of items) {
-      const [row] = await tx.insert(pantryItems).values({ ...item, householdId }).returning();
+  const results = [];
+  for (const item of items) {
+    try {
+      const enriched = enrichWithExpiry(item);
+      const [row] = await db.insert(pantryItems).values({ ...enriched, householdId }).returning();
       results.push(row);
+    } catch (err) {
+      console.error('[pantryService] bulkCreate: failed to insert item:', item?.name, err.message);
     }
-    return results;
-  });
+  }
+  return results;
 }
 
 export async function getWasteSaved(householdId, since) {

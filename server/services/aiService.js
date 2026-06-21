@@ -451,11 +451,14 @@ export async function parseReceipt(imageBase64, mimeType, requestId = 'n/a') {
           {
             type: 'text',
             text:
-              'Extract every food item from this grocery receipt. ' +
+              'Extract every line item from this grocery receipt. ' +
               'Return a JSON array. Each element: ' +
               '{ "name": string, "category": one of [Produce|Dairy|Meat|Seafood|Bakery|Frozen|Pantry|Beverages|Condiments|Other], ' +
-              '"quantity": number, "unit": string, "estimatedExpiryDays": integer|null }. ' +
+              '"quantity": number, "unit": string, "estimatedExpiryDays": integer|null, ' +
+              '"classification": one of [produce|dairy|meat|packaged|beverage|non_food|uncertain] }. ' +
               'estimatedExpiryDays is days from today. null if non-perishable or unknown. ' +
+              'classification: classify each item. Use "non_food" ONLY for items clearly and unambiguously not for human consumption (household supplies, cleaning products, hardware, garden, personal care). ' +
+              'Default to "uncertain" when unsure — a real food item incorrectly filtered is a worse error than a non-food item included. ' +
               'Return ONLY a raw JSON array. No markdown, no explanation.',
           },
         ],
@@ -469,11 +472,22 @@ export async function parseReceipt(imageBase64, mimeType, requestId = 'n/a') {
   const text = response.choices[0].message.content ?? '[]';
   const parsed = safeParseJSON(text, []);
   const items = Array.isArray(parsed) ? parsed : (parsed.items ?? []);
+
+  const food = items.filter(i => i.classification !== 'non_food');
+  const dropped = items.filter(i => i.classification === 'non_food');
+
+  if (dropped.length > 0) {
+    console.log(
+      `[kitchen-keeper] request_id=${requestId} function=parseReceipt` +
+      ` dropped_non_food_count=${dropped.length} dropped=${dropped.map(i => i.name).join(', ')}`
+    );
+  }
+
   console.log(
     `[kitchen-keeper] request_id=${requestId} function=parseReceipt` +
-    ` model=${GROQ_VISION_MODEL} item_count_extracted=${items.length}`
+    ` model=${GROQ_VISION_MODEL} item_count_extracted=${items.length} item_count_food=${food.length}`
   );
-  return items;
+  return food;
 }
 
 /**
