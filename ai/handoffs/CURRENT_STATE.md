@@ -4,14 +4,14 @@ TASK-016A — OpenAI provider migration — IMPLEMENTED, pending deployment
 # Current Status
 TASK-016A code is complete and committed. Build passes. Grep checks pass.
 
-Pending before declaring done:
-- `OPENAI_API_KEY` added to Vercel env vars (user action)
-- OpenAI monthly spending cap set (user action, recommended $20)
-- Run Deployment SQL in Neon SQL Editor (user action)
-- Deploy to Vercel
-- Behavioral regression matrix B1–B8
-- Receipt vision benchmark (≥85% accuracy, 5 receipts)
-- Verify Anthropic BYOK tool calling still works
+Progress:
+- [x] `OPENAI_API_KEY` added to Vercel env vars
+- [x] OpenAI monthly spending cap set
+- [x] Deployment SQL run in Neon
+- [x] Deployed to Vercel
+- [ ] **IN PROGRESS — Step 5: Behavioral regression matrix B1–B8 (smoke test)**
+- [ ] Receipt vision benchmark (≥85% accuracy, 5 receipts)
+- [ ] Verify Anthropic BYOK tool calling still works
 
 # Files Modified (TASK-016A)
 
