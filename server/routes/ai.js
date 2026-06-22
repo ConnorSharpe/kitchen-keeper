@@ -18,18 +18,15 @@ import * as recipeScorer from '../utils/recipeScorer.js';
 import { normalizeUnit } from '../utils/foodNormalization.js';
 import { getPurineLevel } from '../data/purineIndex.js';
 import { getExpiryDays, getExpiryStatus } from '../utils/expiry.js';
-import { resolveProvider } from '../services/ai/resolveProvider.js';
-
 const router = express.Router();
 router.use(requireAuth);
 
 // POST /api/ai/eat-this-now
 router.post('/eat-this-now', async (req, res) => {
   const requestId = randomUUID().split('-')[0];
-  const [allItems, savedRecipes, aiConfig] = await Promise.all([
+  const [allItems, savedRecipes] = await Promise.all([
     pantryService.getAll(req.user.householdId),
     recipeService.getAll(req.user.householdId),
-    householdService.getAiConfig(req.user.householdId),
   ]);
 
   const expiringItems = allItems.filter((item) => {
@@ -37,14 +34,8 @@ router.post('/eat-this-now', async (req, res) => {
     return days !== null && days >= 0 && days <= 7;
   });
 
-  const provider = resolveProvider(aiConfig?.provider ?? null, aiConfig?.decryptedKey ?? null);
-  const isByok = !!aiConfig?.provider;
-
-  const suggestions = await aiService.eatThisNow(allItems, expiringItems, savedRecipes, provider, isByok, requestId);
-  const warning = suggestions._limitWarning;
-  delete suggestions._limitWarning;
-
-  res.json({ suggestions, ...(warning ? { warning } : {}) });
+  const suggestions = await aiService.eatThisNow(allItems, expiringItems, savedRecipes, requestId);
+  res.json({ suggestions });
 });
 
 // POST /api/ai/expand-suggestion
@@ -56,15 +47,9 @@ const expandSchema = z.object({
 router.post('/expand-suggestion', validate(expandSchema), async (req, res) => {
   const requestId = randomUUID().split('-')[0];
   const { name, description } = req.body;
-  const [allItems, aiConfig] = await Promise.all([
-    pantryService.getAll(req.user.householdId),
-    householdService.getAiConfig(req.user.householdId),
-  ]);
+  const allItems = await pantryService.getAll(req.user.householdId);
 
-  const provider = resolveProvider(aiConfig?.provider ?? null, aiConfig?.decryptedKey ?? null);
-  const isByok = !!aiConfig?.provider;
-
-  const recipe = await aiService.expandSuggestion(name, description, allItems, provider, isByok, requestId);
+  const recipe = await aiService.expandSuggestion(name, description, allItems, requestId);
 
   if (!recipe) {
     const err = new Error('AI returned an invalid recipe. Please try again.');
@@ -72,11 +57,8 @@ router.post('/expand-suggestion', validate(expandSchema), async (req, res) => {
     throw err;
   }
 
-  const warning = recipe._limitWarning;
-  delete recipe._limitWarning;
-
   const saved = await recipeService.create(req.user.householdId, { ...recipe, source: 'ai_suggested' });
-  res.status(201).json({ recipe: saved, ...(warning ? { warning } : {}) });
+  res.status(201).json({ recipe: saved });
 });
 
 // POST /api/ai/parse-receipt
@@ -235,7 +217,6 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
   const dietaryContext = await dietaryService.buildDietaryContext(householdId);
 
   let recipeSuggestions = [];
-  let chatWarning = null;
 
   const toolHandlers = {
     add_pantry_item: async (args) => {
@@ -467,16 +448,8 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
       try { parsed = saveSchema.parse(args); }
       catch (e) { return { ok: false, error: `Invalid data: ${e.message}` }; }
 
-      const saveProvider = resolveProvider(aiConfig?.provider ?? null, aiConfig?.decryptedKey ?? null);
-      const saveIsByok = !!aiConfig?.provider;
-
-      const full = await aiService.expandSuggestion(parsed.name, parsed.description, allItems, saveProvider, saveIsByok, requestId);
+      const full = await aiService.expandSuggestion(parsed.name, parsed.description, allItems, requestId);
       if (!full) return { ok: false, error: 'AI could not expand the recipe. Try again.' };
-
-      if (full._limitWarning) {
-        chatWarning = full._limitWarning;
-        delete full._limitWarning;
-      }
 
       const saved = await recipeService.create(householdId, { ...full, source: 'agent_saved' });
       return { ok: true, recipe: { id: saved.id, name: saved.name } };
@@ -491,7 +464,7 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
   await chatService.savePair(householdId, message, reply);
   await chatService.trimHistory(householdId, 50);
 
-  res.json({ reply, itemsAdded, recipeSuggestions, ...(chatWarning ? { warning: chatWarning } : {}) });
+  res.json({ reply, itemsAdded, recipeSuggestions });
 });
 
 export default router;

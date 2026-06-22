@@ -55,7 +55,7 @@ export default function ChatPage() {
     setLoading(true);
 
     try {
-      const { reply, itemsAdded, recipeSuggestions, warning } = await api.post('/api/ai/chat', { message: userText });
+      const { reply, itemsAdded, recipeSuggestions } = await api.post('/api/ai/chat', { message: userText });
       setMessages((prev) => [
         ...prev,
         {
@@ -64,7 +64,6 @@ export default function ChatPage() {
           content: reply,
           itemsAdded: itemsAdded ?? [],
           recipeSuggestions: recipeSuggestions ?? [],
-          warning: warning ?? null,
         },
       ]);
     } catch (err) {
@@ -179,14 +178,6 @@ export default function ChatPage() {
                 )}
               </div>
             </div>
-
-            {msg.role === 'assistant' && msg.warning && (
-              <div className="flex justify-start mt-1.5 ml-9">
-                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
-                  ⚠ {msg.warning}
-                </p>
-              </div>
-            )}
 
             {msg.role === 'assistant' && msg.itemsAdded?.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-1.5 ml-9">
