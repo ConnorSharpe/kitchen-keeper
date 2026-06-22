@@ -20,6 +20,7 @@ export function safeParseJSON(text, fallback) {
 // Maps AIProviderError to a user-facing HTTP error.
 function wrapAIError(err) {
   if (!(err instanceof AIProviderError)) return err;
+  console.error('[AI] provider error:', err.cause ?? err);
   const wrapped = new Error('AI service unavailable. Please try again later.');
   wrapped.status = 503;
   return wrapped;
