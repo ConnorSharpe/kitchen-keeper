@@ -407,6 +407,7 @@ export async function chat(pantrySummary, recipeSummary, history, userMessage, t
     `When the user asks to add multiple pantry items in one message, ` +
     `call add_pantry_item once for each item separately. ` +
     `Do not combine items into a single call.\n\n` +
+    `When an action is required, always call the tool first. Never describe what you are about to do — just do it. Only respond with text after all tool calls are complete.\n\n` +
     `Tool selection rules:\n` +
     `- User ate, used, cooked with, or consumed something → consume_pantry_item\n` +
     `- User threw out, discarded, binned, or wasted something → remove_pantry_item\n` +
