@@ -2,7 +2,6 @@ import OpenAI from 'openai';
 import { getExpiryDays } from '../utils/expiry.js';
 import { resolveProvider } from './ai/resolveProvider.js';
 import { AIProviderError } from './ai/providerInterface.js';
-import { AnthropicProvider } from './ai/anthropicProvider.js';
 import { findByPantry } from './recipeSearchService.js';
 
 // Strip markdown code fences the model may add despite instructions, then parse.
@@ -27,7 +26,6 @@ function wrapAIError(err) {
 }
 
 // PANTRY_TOOLS in OpenAI tools format.
-// AnthropicProvider._translateTools reads this format.
 const PANTRY_TOOLS = [
   {
     type: 'function',
@@ -434,8 +432,8 @@ export async function chat(pantrySummary, recipeSummary, history, userMessage, t
 
   const provider = resolveProvider(aiConfig?.provider ?? null, aiConfig?.decryptedKey ?? null);
 
-  const providerName = provider instanceof AnthropicProvider ? 'anthropic' : 'openai';
-  const modelName = provider instanceof AnthropicProvider ? 'claude-sonnet-4-6' : 'gpt-4o-mini';
+  const providerName = 'openai';
+  const modelName = 'gpt-4o-mini';
 
   const session = provider.startChatSession({ systemPrompt, tools: PANTRY_TOOLS, history });
 

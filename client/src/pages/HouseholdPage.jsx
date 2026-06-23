@@ -9,16 +9,15 @@ export default function HouseholdPage() {
   const [loadError, setLoadError] = useState(null);
   const [copied, setCopied]       = useState(false);
 
-  const [inviteEmail, setInviteEmail]       = useState('');
-  const [inviting, setInviting]             = useState(false);
-  const [inviteStatus, setInviteStatus]     = useState(null); // 'sent' | 'error'
-  const [inviteError, setInviteError]       = useState('');
+  const [inviteEmail, setInviteEmail]   = useState('');
+  const [inviting, setInviting]         = useState(false);
+  const [inviteStatus, setInviteStatus] = useState(null); // 'sent' | 'error'
+  const [inviteError, setInviteError]   = useState('');
 
-  const [aiProvider, setAiProvider]         = useState('platform');
-  const [aiKey, setAiKey]                   = useState('');
-  const [aiSaving, setAiSaving]             = useState(false);
-  const [aiStatus, setAiStatus]             = useState(null); // 'saved' | 'removed' | 'error'
-  const [aiError, setAiError]               = useState('');
+  const [aiKey, setAiKey]       = useState('');
+  const [aiSaving, setAiSaving] = useState(false);
+  const [aiStatus, setAiStatus] = useState(null); // 'saved' | 'removed' | 'error'
+  const [aiError, setAiError]   = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -30,12 +29,6 @@ export default function HouseholdPage() {
       ]);
       setHousehold(h.household);
       setMembers(m.members);
-      // Initialise AI provider state from saved household config
-      if (h.household.provider) {
-        setAiProvider(h.household.provider);
-      } else {
-        setAiProvider('platform');
-      }
     } catch (err) {
       setLoadError(err.message || 'Failed to load household');
     } finally {
@@ -57,8 +50,8 @@ export default function HouseholdPage() {
     setAiStatus(null);
     setAiError('');
     try {
-      const result = await api.patch('/api/household/ai-key', { provider: aiProvider, key: aiKey || null });
-      setHousehold((prev) => ({ ...prev, provider: result.provider, maskedKey: result.maskedKey }));
+      const result = await api.patch('/api/household/ai-key', { key: aiKey });
+      setHousehold((prev) => ({ ...prev, maskedKey: result.maskedKey }));
       setAiKey('');
       setAiStatus('saved');
     } catch (err) {
@@ -74,9 +67,8 @@ export default function HouseholdPage() {
     setAiStatus(null);
     setAiError('');
     try {
-      await api.patch('/api/household/ai-key', { provider: null, key: null });
-      setHousehold((prev) => ({ ...prev, provider: null, maskedKey: null }));
-      setAiProvider('platform');
+      await api.patch('/api/household/ai-key', { key: null });
+      setHousehold((prev) => ({ ...prev, maskedKey: null }));
       setAiKey('');
       setAiStatus('removed');
     } catch (err) {
@@ -183,50 +175,39 @@ export default function HouseholdPage() {
         <DietaryProfileForm />
       </section>
 
-      {/* AI Provider */}
+      {/* OpenAI API key */}
       <section className="bg-white border border-gray-200 rounded-2xl p-6">
-        <h2 className="text-base font-semibold text-gray-800 mb-1">AI provider</h2>
+        <h2 className="text-base font-semibold text-gray-800 mb-1">OpenAI API key</h2>
         <p className="text-xs text-gray-500 mb-4">
-          Optional. Your key is encrypted at rest. If not set, the shared platform key (OpenAI) is used.
+          Required to use AI features. Your key is encrypted at rest and never logged.
+          Get one at{' '}
+          <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-orange-600 hover:underline">
+            platform.openai.com
+          </a>.
         </p>
 
         {household?.maskedKey && (
           <p className="text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2 mb-4 font-mono">
             Current key: <span className="font-semibold">{household.maskedKey}</span>
-            {' '}({household.provider})
           </p>
         )}
 
         <form onSubmit={handleSaveAiKey} className="space-y-3">
-          <select
-            value={aiProvider}
-            onChange={(e) => { setAiProvider(e.target.value); setAiStatus(null); }}
-            className="w-full rounded-lg border-gray-300 shadow-sm focus:border-orange-400 focus:ring-orange-400 text-sm"
-          >
-            <option value="platform">Platform default (OpenAI)</option>
-            <option value="anthropic">Anthropic Claude</option>
-          </select>
-
-          {aiProvider !== 'platform' && (
-            <input
-              type="password"
-              value={aiKey}
-              onChange={(e) => setAiKey(e.target.value)}
-              placeholder={household?.maskedKey ? `Current: ${household.maskedKey} — paste to replace` : 'Paste your API key'}
-              className="w-full rounded-lg border-gray-300 shadow-sm focus:border-orange-400 focus:ring-orange-400 text-sm font-mono"
-            />
-          )}
-
+          <input
+            type="password"
+            value={aiKey}
+            onChange={(e) => setAiKey(e.target.value)}
+            placeholder={household?.maskedKey ? `Current: ${household.maskedKey} — paste to replace` : 'sk-...'}
+            className="w-full rounded-lg border-gray-300 shadow-sm focus:border-orange-400 focus:ring-orange-400 text-sm font-mono"
+          />
           <div className="flex gap-2">
-            {aiProvider !== 'platform' && (
-              <button
-                type="submit"
-                disabled={aiSaving || (aiProvider !== 'platform' && !aiKey)}
-                className="flex-1 py-2 px-4 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors text-sm"
-              >
-                {aiSaving ? 'Saving…' : 'Save key'}
-              </button>
-            )}
+            <button
+              type="submit"
+              disabled={aiSaving || !aiKey}
+              className="flex-1 py-2 px-4 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors text-sm"
+            >
+              {aiSaving ? 'Saving…' : 'Save key'}
+            </button>
             {household?.maskedKey && (
               <button
                 type="button"
@@ -242,12 +223,12 @@ export default function HouseholdPage() {
 
         {aiStatus === 'saved' && (
           <p className="mt-3 text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">
-            Key saved. AI chat will now use your {aiProvider} key.
+            Key saved. AI features are now active.
           </p>
         )}
         {aiStatus === 'removed' && (
           <p className="mt-3 text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">
-            Key removed. AI chat will use the shared platform key.
+            Key removed.
           </p>
         )}
         {aiStatus === 'error' && (

@@ -5,7 +5,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
-import authRouter      from './routes/auth.js';
+import { clerkMiddleware } from '@clerk/express';
 import pantryRouter    from './routes/pantry.js';
 import aiRouter        from './routes/ai.js';
 import recipesRouter   from './routes/recipes.js';
@@ -14,13 +14,22 @@ import householdRouter from './routes/household.js';
 import pushRouter      from './routes/push.js';
 import dietaryRouter   from './routes/dietary.js';
 
-// CRON_SECRET is validated at route level (optional for local dev)
-const REQUIRED_ENV = ['GEMINI_API_KEY', 'JWT_SECRET', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT'];
+const REQUIRED_ENV = [
+  'CLERK_SECRET_KEY',
+  'ENCRYPTION_KEY',
+  'OWNER_CLERK_ID',
+  'OPENAI_API_KEY',
+  'VAPID_PUBLIC_KEY',
+  'VAPID_PRIVATE_KEY',
+  'VAPID_SUBJECT',
+];
 for (const key of REQUIRED_ENV) {
   if (!process.env[key]) throw new Error(`Missing required env var: ${key}`);
 }
 
 const app = express();
+
+app.use(clerkMiddleware());
 
 app.use(helmet({
   contentSecurityPolicy: {
@@ -33,7 +42,6 @@ app.use(helmet({
 
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-// Support comma-separated origins so Vercel preview URLs can be added via env var
 const corsOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
   .split(',')
   .map(s => s.trim());
@@ -42,7 +50,6 @@ app.use(cors({ origin: corsOrigins, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 
-app.use('/api/auth',      authRouter);
 app.use('/api/pantry',    pantryRouter);
 app.use('/api/ai',        aiRouter);
 app.use('/api/recipes',   recipesRouter);
@@ -53,12 +60,13 @@ app.use('/api/dietary',  dietaryRouter);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
-// Global error handler — receives errors from all async routes via express-async-errors
 app.use((err, req, res, _next) => {
   console.error(err.stack);
   const status = err.status || 500;
   const message = status < 500 ? err.message : 'Internal server error';
-  res.status(status).json({ error: message });
+  const body = { error: message };
+  if (err.code) body.code = err.code;
+  res.status(status).json(body);
 });
 
 export default app;

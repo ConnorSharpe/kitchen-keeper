@@ -1,3 +1,4 @@
+/* DEPRECATED — replaced by clerkAuth.js (TASK-016B). Kept for rollback only. Delete after Clerk is stable in production. */
 import jwt from 'jsonwebtoken';
 
 // Synchronous middleware — uses next(err) rather than throw since express-async-errors only patches async functions.

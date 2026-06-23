@@ -1,13 +1,13 @@
 import express from 'express';
 import { z } from 'zod';
 import * as householdService from '../services/householdService.js';
-import { requireAuth } from '../middleware/auth.js';
+import { clerkAuth } from '../middleware/clerkAuth.js';
 import { validate } from '../middleware/validate.js';
 import { sendHouseholdInvite } from '../services/emailService.js';
 import { maskKey } from '../utils/keyEncryption.js';
 
 const router = express.Router();
-router.use(requireAuth);
+router.use(clerkAuth);
 
 // GET /api/household — household info + join code + AI key preview
 router.get('/', async (req, res) => {
@@ -21,32 +21,26 @@ router.get('/', async (req, res) => {
       id:        household.id,
       name:      household.name,
       joinCode:  household.joinCode,
-      provider:  aiPreview.provider,
       maskedKey: aiPreview.maskedKey,
     },
   });
 });
 
-// PATCH /api/household/ai-key — set or remove BYOK household AI key
+// PATCH /api/household/ai-key — set or remove BYOK OpenAI key
 const aiKeySchema = z.object({
-  provider: z.enum(['anthropic']).nullable(),
-  key:      z.string().nullable(),
+  key: z.string().min(1).nullable(),
 });
 
 router.patch('/ai-key', validate(aiKeySchema), async (req, res) => {
-  const { provider, key } = req.body;
+  const { key } = req.body;
 
-  if (provider === null) {
+  if (key === null) {
     await householdService.removeAiApiKey(req.user.householdId);
-    return res.json({ provider: null, maskedKey: null });
+    return res.json({ maskedKey: null });
   }
 
-  if (!key || key.trim() === '') {
-    return res.status(400).json({ error: 'key is required when provider is set' });
-  }
-
-  await householdService.setAiApiKey(req.user.householdId, provider, key);
-  res.json({ provider, maskedKey: maskKey(key) });
+  await householdService.setAiApiKey(req.user.householdId, key);
+  res.json({ maskedKey: maskKey(key) });
 });
 
 // GET /api/household/members — all users in this household

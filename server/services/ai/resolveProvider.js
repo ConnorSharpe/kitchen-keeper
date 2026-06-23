@@ -1,16 +1,18 @@
 import { OpenAIProvider } from './openaiProvider.js';
-import { AnthropicProvider } from './anthropicProvider.js';
 
-// Resolves the provider adapter from an explicit stored value — never inferred from key prefix.
-// provider: 'anthropic' | null
-// key: decrypted API key string | null
-export function resolveProvider(provider, key) {
-  if (provider === 'anthropic' && key) {
-    return new AnthropicProvider(key);
+export class NoApiKeyError extends Error {
+  constructor() {
+    super('Please add your OpenAI API key in Settings to use AI features.');
+    this.status = 403;
+    this.code = 'NO_API_KEY';
   }
-  const openaiKey = process.env.OPENAI_API_KEY;
-  if (!openaiKey) {
-    throw new Error('OPENAI_API_KEY is not set. Add it to Vercel environment variables.');
-  }
-  return new OpenAIProvider(openaiKey);
+}
+
+// clerkUserId: the requesting household's Clerk user ID (used to identify the owner)
+// decryptedKey: the household's stored OpenAI key (null if not set)
+export function resolveProvider(clerkUserId, decryptedKey) {
+  const isOwner = clerkUserId === process.env.OWNER_CLERK_ID;
+  const key = isOwner ? process.env.OPENAI_API_KEY : decryptedKey;
+  if (!key) throw new NoApiKeyError();
+  return new OpenAIProvider(key);
 }

@@ -4,7 +4,7 @@ import { put } from '@vercel/blob';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/auth.js';
+import { clerkAuth } from '../middleware/clerkAuth.js';
 import { validate } from '../middleware/validate.js';
 import { upload } from '../middleware/upload.js';
 import * as householdService from '../services/householdService.js';
@@ -19,7 +19,7 @@ import { normalizeUnit } from '../utils/foodNormalization.js';
 import { getPurineLevel } from '../data/purineIndex.js';
 import { getExpiryDays, getExpiryStatus } from '../utils/expiry.js';
 const router = express.Router();
-router.use(requireAuth);
+router.use(clerkAuth);
 
 // POST /api/ai/eat-this-now
 router.post('/eat-this-now', async (req, res) => {

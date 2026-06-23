@@ -1,12 +1,20 @@
-// Vite proxies /api and /uploads to http://localhost:3001 — no base URL needed.
-// All requests include credentials so the httpOnly cookie is sent automatically.
+// Vite proxies /api to http://localhost:3001 — no base URL needed.
+// Auth: Clerk Bearer token injected from window.Clerk (set by ClerkProvider in main.jsx).
+
+async function getClerkToken() {
+  return window.Clerk?.session?.getToken() ?? null;
+}
 
 async function request(method, path, body) {
+  const token = await getClerkToken();
   const opts = {
     method,
-    credentials: 'include',
     headers: {},
   };
+
+  if (token) {
+    opts.headers['Authorization'] = `Bearer ${token}`;
+  }
 
   if (body !== undefined) {
     opts.headers['Content-Type'] = 'application/json';
@@ -15,10 +23,9 @@ async function request(method, path, body) {
 
   const res = await fetch(path, opts);
 
-  // Mid-session 401: redirect to login. Skip if already on /login to avoid
-  // redirect loops during the initial auth check on mount.
-  if (res.status === 401 && !window.location.pathname.startsWith('/login')) {
-    window.location.href = '/login';
+  // Mid-session 401: redirect to sign-in. Skip if already on /sign-in to avoid redirect loops.
+  if (res.status === 401 && !window.location.pathname.startsWith('/sign-in')) {
+    window.location.href = '/sign-in';
     throw new Error('Session expired');
   }
 
@@ -40,6 +47,7 @@ async function request(method, path, body) {
     }
     const err = new Error(data.error || `Request failed (${res.status})`);
     err.status = res.status;
+    err.code = data.code ?? null;
     throw err;
   }
 

@@ -1,11 +1,11 @@
 import express from 'express';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/auth.js';
+import { clerkAuth } from '../middleware/clerkAuth.js';
 import { validate } from '../middleware/validate.js';
 import * as dietaryService from '../services/dietaryService.js';
 
 const router = express.Router();
-router.use(requireAuth);
+router.use(clerkAuth);
 
 // GET /api/dietary
 router.get('/', async (req, res) => {

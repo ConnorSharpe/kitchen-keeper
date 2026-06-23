@@ -7,7 +7,7 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.104.0",
+    "@clerk/express": "^1.7.81",
     "@neondatabase/serverless": "^0.10.4",
     "@vercel/blob": "^0.27.0",
     "bcrypt": "^6.0.0",

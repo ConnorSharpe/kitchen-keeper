@@ -2,9 +2,9 @@ import { randomBytes } from 'crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { households, users } from '../db/schema.js';
-import { encrypt, decrypt, maskKey } from '../utils/keyEncryption.js';
+import { encrypt, decrypt } from '../utils/encryption.js';
+import { maskKey } from '../utils/keyEncryption.js';
 
-// Drizzle convention: {tableName}_{columnName}_unique → households_join_code_unique
 const JOIN_CODE_CONSTRAINT = 'households_join_code_unique';
 
 function generateJoinCode() {
@@ -23,7 +23,6 @@ export async function getMembers(householdId) {
     .where(eq(users.householdId, householdId));
 }
 
-// Normalization (trim + toUpperCase) is performed here — callers pass raw input.
 export async function getByJoinCode(code) {
   const [row] = await db
     .select()
@@ -32,19 +31,43 @@ export async function getByJoinCode(code) {
   return row ?? null;
 }
 
-// Returns { provider, decryptedKey } for chat routing.
+// Lazy household creation on first authenticated Clerk request.
+// INSERT ... ON CONFLICT DO UPDATE is idempotent and returns the row — safe under concurrent requests.
+// Retries up to 3 times on join-code uniqueness collisions only.
+export async function getOrCreate(clerkUserId) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const [row] = await db
+        .insert(households)
+        .values({ clerkUserId, name: 'My Household', joinCode: generateJoinCode() })
+        .onConflictDoUpdate({
+          target: households.clerkUserId,
+          set: { clerkUserId }, // no-op update; returns existing row via RETURNING
+        })
+        .returning();
+      return row;
+    } catch (err) {
+      const isJoinCodeCollision =
+        err.code === '23505' && err.constraint === JOIN_CODE_CONSTRAINT;
+      if (!isJoinCodeCollision || attempt === 2) throw err;
+    }
+  }
+}
+
+// Returns { provider: clerkUserId, decryptedKey } for resolveProvider.
+// The 'provider' field carries clerkUserId so aiService.js requires no changes.
 // Throws with status 422 if key is stored but cannot be decrypted.
 export async function getAiConfig(householdId) {
   const row = await getById(householdId);
-  if (!row?.aiApiKey) {
-    return { provider: null, decryptedKey: null };
+  if (!row?.openaiApiKey) {
+    return { provider: row?.clerkUserId ?? null, decryptedKey: null };
   }
   try {
-    const decryptedKey = decrypt(row.aiApiKey);
-    return { provider: row.aiProvider, decryptedKey };
+    const decryptedKey = decrypt(row.openaiApiKey);
+    return { provider: row.clerkUserId, decryptedKey };
   } catch {
     const err = new Error(
-      'Your configured AI provider key could not be decrypted. Please update or remove it in Household Settings.'
+      'Your configured AI key could not be decrypted. Please update it in Household Settings.'
     );
     err.status = 422;
     throw err;
@@ -54,25 +77,25 @@ export async function getAiConfig(householdId) {
 // Safe preview for the settings GET endpoint — never throws on decrypt failure.
 export async function getAiKeyPreview(householdId) {
   const row = await getById(householdId);
-  if (!row?.aiApiKey) return { provider: null, maskedKey: null };
+  if (!row?.openaiApiKey) return { maskedKey: null };
   try {
-    const decryptedKey = decrypt(row.aiApiKey);
-    return { provider: row.aiProvider, maskedKey: maskKey(decryptedKey) };
+    const decryptedKey = decrypt(row.openaiApiKey);
+    return { maskedKey: maskKey(decryptedKey) };
   } catch {
-    return { provider: row.aiProvider, maskedKey: null };
+    return { maskedKey: null };
   }
 }
 
-export async function setAiApiKey(householdId, provider, key) {
+export async function setAiApiKey(householdId, key) {
   const encryptedKey = encrypt(key);
   await db.update(households)
-    .set({ aiApiKey: encryptedKey, aiProvider: provider })
+    .set({ openaiApiKey: encryptedKey })
     .where(eq(households.id, householdId));
 }
 
 export async function removeAiApiKey(householdId) {
   await db.update(households)
-    .set({ aiApiKey: null, aiProvider: null })
+    .set({ openaiApiKey: null })
     .where(eq(households.id, householdId));
 }
 

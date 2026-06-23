@@ -1,44 +1,32 @@
 // @refresh reset
-import { createContext, useContext, useState, useEffect } from 'react';
-import { api } from '../api/index.js';
+import { createContext, useContext } from 'react';
+import { useUser, useClerk } from '@clerk/clerk-react';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { user: clerkUser, isLoaded } = useUser();
+  const { signOut } = useClerk();
 
-  // Restore session on page load — if the cookie is still valid, /me returns the user.
-  useEffect(() => {
-    api.get('/api/auth/me')
-      .then((data) => setUser(data.user))
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
-  }, []);
-
-  async function login(email, password) {
-    const data = await api.post('/api/auth/login', { email, password });
-    setUser(data.user);
-  }
-
-  async function register(email, password, name, inviteCode, householdCode) {
-    const data = await api.post('/api/auth/register', { email, password, name, inviteCode, householdCode });
-    setUser(data.user);
-  }
+  const user = clerkUser
+    ? {
+        id:    clerkUser.id,
+        name:  clerkUser.fullName ?? clerkUser.firstName ?? clerkUser.username ?? 'User',
+        email: clerkUser.primaryEmailAddress?.emailAddress ?? '',
+      }
+    : null;
 
   async function logout() {
-    await api.post('/api/auth/logout');
-    setUser(null);
-    // ProtectedRoute detects user === null and redirects to /login automatically
+    await signOut();
   }
 
-  async function completeOnboarding() {
-    const data = await api.post('/api/auth/onboarding-complete');
-    setUser(data.user);
-  }
+  // Stubs — Clerk handles login/register via its own components
+  async function login() {}
+  async function register() {}
+  async function completeOnboarding() {}
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, completeOnboarding }}>
+    <AuthContext.Provider value={{ user, loading: !isLoaded, login, register, logout, completeOnboarding }}>
       {children}
     </AuthContext.Provider>
   );

@@ -2,14 +2,14 @@ import { Router } from 'express';
 import { db } from '../db/client.js';
 import { pushSubscriptions } from '../db/schema.js';
 import { and, eq, ne } from 'drizzle-orm';
-import { requireAuth } from '../middleware/auth.js';
+import { clerkAuth } from '../middleware/clerkAuth.js';
 import { sendDailyNotifications } from '../services/pushService.js';
 
 const router = Router();
 
 // GET /api/push/vapid-public-key — returns the VAPID public key to the client.
-// requireAuth: banner only renders for authenticated users; no reason to expose publicly.
-router.get('/vapid-public-key', requireAuth, (_req, res) => {
+// clerkAuth: banner only renders for authenticated users; no reason to expose publicly.
+router.get('/vapid-public-key', clerkAuth, (_req, res) => {
   res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
 });
 
@@ -20,7 +20,7 @@ router.get('/vapid-public-key', requireAuth, (_req, res) => {
 //   1. endpoint bound to DIFFERENT user → pre-delete old row (device reuse)
 //   2. endpoint bound to SAME user      → upsert updates keys only
 //   3. endpoint is new                  → insert
-router.post('/subscribe', requireAuth, async (req, res) => {
+router.post('/subscribe', clerkAuth, async (req, res) => {
   const { endpoint, keys } = req.body;
 
   if (
@@ -62,7 +62,7 @@ router.post('/subscribe', requireAuth, async (req, res) => {
 // Uses POST because api.delete() in the client wrapper does not support a body
 // (confirmed: client/src/api/index.js:53).
 // Scoped to req.user.id — cannot delete another user's subscription (Constraint 12).
-router.post('/unsubscribe', requireAuth, async (req, res) => {
+router.post('/unsubscribe', clerkAuth, async (req, res) => {
   const { endpoint } = req.body;
   if (typeof endpoint !== 'string' || !endpoint) {
     return res.status(422).json({ error: 'endpoint required' });

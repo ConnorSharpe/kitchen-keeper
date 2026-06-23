@@ -8,8 +8,10 @@ export const households = pgTable('households', {
   conditions:       text('conditions').notNull().default('[]'),
   allergies:        text('allergies').notNull().default('[]'),
   foodPreferences:  text('food_preferences').notNull().default('[]'),
-  aiProvider:       text('ai_provider'),   // nullable: 'groq' | 'anthropic'
-  aiApiKey:         text('ai_api_key'),    // nullable, AES-256-GCM encrypted, versioned format
+  aiProvider:       text('ai_provider'),   // deprecated — kept for schema compat; unused after TASK-016B
+  aiApiKey:         text('ai_api_key'),    // deprecated — kept for schema compat; unused after TASK-016B
+  clerkUserId:      text('clerk_user_id').unique(),
+  openaiApiKey:     text('openai_api_key'), // AES-256-GCM ciphertext: iv:authTag:encrypted
 });
 
 export const users = pgTable('users', {

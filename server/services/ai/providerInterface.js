@@ -11,7 +11,7 @@ export class AIProviderError extends Error {
 
 // Contract all provider adapters must implement.
 // history passed to startChatSession uses DB format: [{ role: 'user'|'assistant', content: string }]
-// tools passed to startChatSession use OpenAI function-calling format — AnthropicProvider translates internally.
+// tools passed to startChatSession use OpenAI function-calling format.
 export class AIProvider {
   // Initialises a chat session. Returns an opaque session object.
   startChatSession({ systemPrompt, tools, history }) {

@@ -1,11 +1,11 @@
 import express from 'express';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/auth.js';
+import { clerkAuth } from '../middleware/clerkAuth.js';
 import { validate } from '../middleware/validate.js';
 import * as recipeService from '../services/recipeService.js';
 
 const router = express.Router();
-router.use(requireAuth);
+router.use(clerkAuth);
 
 const ingredientSchema = z.object({
   name:     z.string().min(1),
