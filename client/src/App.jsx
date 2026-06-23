@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { SignIn, SignUp, SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react';
 import { AuthProvider } from './context/AuthContext.jsx';
@@ -10,6 +10,7 @@ import RecipesPage from './pages/RecipesPage.jsx';
 import ShoppingPage from './pages/ShoppingPage.jsx';
 import ChatPage from './pages/ChatPage.jsx';
 import HouseholdPage from './pages/HouseholdPage.jsx';
+import JoinPage from './pages/JoinPage.jsx';
 
 function PrivateRoute({ children }) {
   return (
@@ -29,17 +30,19 @@ export default function App() {
         <Routes>
           <Route path="/sign-in/*" element={<SignIn routing="path" path="/sign-in" />} />
           <Route path="/sign-up/*" element={<SignUp routing="path" path="/sign-up" />} />
+          <Route path="/join" element={<JoinPage />} />
 
           <Route element={
             <PrivateRoute>
               <AppLayout />
             </PrivateRoute>
           }>
-            <Route index element={<DashboardPage />} />
+            <Route index element={<ChatPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/chat" element={<Navigate to="/" replace />} />
             <Route path="/pantry" element={<PantryPage />} />
             <Route path="/recipes" element={<RecipesPage />} />
             <Route path="/shopping" element={<ShoppingPage />} />
-            <Route path="/chat" element={<ChatPage />} />
             <Route path="/household" element={<HouseholdPage />} />
           </Route>
         </Routes>

@@ -451,8 +451,9 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
       const full = await aiService.expandSuggestion(parsed.name, parsed.description, allItems, requestId);
       if (!full) return { ok: false, error: 'AI could not expand the recipe. Try again.' };
 
-      const saved = await recipeService.create(householdId, { ...full, source: 'agent_saved' });
-      return { ok: true, recipe: { id: saved.id, name: saved.name } };
+      const saved = await recipeService.createOrIgnore(householdId, { ...full, source: 'agent_saved' });
+      const name = saved?.name ?? parsed.name;
+      return { ok: true, recipe: { id: saved?.id, name } };
     },
   };
 
@@ -461,7 +462,12 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
     pantrySummary, recipeSummary, history, message, toolHandlers, dietaryContext, aiConfig, requestId
   );
 
-  await chatService.savePair(householdId, message, reply);
+  await chatService.savePair(
+    householdId,
+    message,
+    reply,
+    recipeSuggestions.length > 0 ? { version: 1, recipeSuggestions } : null
+  );
   await chatService.trimHistory(householdId, 50);
 
   res.json({ reply, itemsAdded, recipeSuggestions });

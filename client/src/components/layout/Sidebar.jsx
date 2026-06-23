@@ -31,6 +31,11 @@ export default function Sidebar() {
 
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
         <NavLink to="/" end className={navClass} onClick={() => setMobileOpen(false)}>
+          <span aria-hidden>💬</span>
+          Chat
+        </NavLink>
+
+        <NavLink to="/dashboard" className={navClass} onClick={() => setMobileOpen(false)}>
           <span aria-hidden>🏠</span>
           Dashboard
         </NavLink>
@@ -59,21 +64,6 @@ export default function Sidebar() {
         </NavLink>
 
         <div className="my-2 border-t border-gray-100" />
-
-        <NavLink
-          to="/chat"
-          onClick={() => setMobileOpen(false)}
-          className={({ isActive }) =>
-            `flex items-center gap-2 px-3 py-2 rounded-md text-xs font-medium transition-colors ${
-              isActive
-                ? 'bg-gray-100 text-gray-700'
-                : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'
-            }`
-          }
-        >
-          <span aria-hidden>💬</span>
-          Explore
-        </NavLink>
 
         <NavLink
           to="/household"

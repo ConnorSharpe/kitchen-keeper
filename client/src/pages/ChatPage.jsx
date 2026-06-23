@@ -24,17 +24,27 @@ export default function ChatPage() {
   const bottomRef  = useRef(null);
   const textareaRef = useRef(null);
 
-  // Load persisted history on mount — chat survives navigation
+  // Load persisted history and saved recipe names on mount
   useEffect(() => {
     api.get('/api/ai/chat/history')
       .then(({ messages: history }) => {
-        // DB rows have integer id; normalise to string key for React
-        setMessages(history.map((m) => ({ ...m, key: String(m.id) })));
+        setMessages(history.map((m) => ({
+          ...m,
+          key: String(m.id),
+          recipeSuggestions: m.metadata?.recipeSuggestions ?? [],
+        })));
         setHistoryLoaded(true);
       })
       .catch(() => {
         setHistoryLoaded(true);
       });
+
+    // Seed savedRecipeNames so history-loaded cards show correct "Saved" state
+    api.get('/api/recipes')
+      .then(({ recipes }) => {
+        setSavedRecipeNames(new Set(recipes.map((r) => r.name)));
+      })
+      .catch(() => {}); // non-fatal — falls back to empty Set; createOrIgnore guards DB integrity
   }, []);
 
   // Scroll to the bottom whenever messages update
@@ -104,7 +114,7 @@ export default function ChatPage() {
 
       {/* ── Header ── */}
       <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 bg-white">
-        <h1 className="text-lg font-semibold text-gray-800">Explore</h1>
+        <h1 className="text-lg font-semibold text-gray-800">Kitchen Keeper</h1>
         <p className="text-xs text-gray-500 mt-0.5">
           Ask anything about your kitchen, ingredients, or recipes.
         </p>

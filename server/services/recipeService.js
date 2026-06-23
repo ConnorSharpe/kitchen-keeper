@@ -46,6 +46,17 @@ export async function create(householdId, data) {
   return parse(row);
 }
 
+// Returns row if inserted, undefined if (household_id, name) already exists.
+// Only the save_recipe tool handler should call this.
+export async function createOrIgnore(householdId, data) {
+  const [row] = await db
+    .insert(recipes)
+    .values({ ...serialize(data), householdId })
+    .onConflictDoNothing({ target: [recipes.householdId, recipes.name] })
+    .returning();
+  return row ? parse(row) : undefined;
+}
+
 // Two-step ownership: find by id first (→ 404), then check householdId (→ 403).
 export async function update(householdId, id, data) {
   const [existing] = await db.select().from(recipes).where(eq(recipes.id, id));

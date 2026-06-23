@@ -1,4 +1,4 @@
-import { pgTable, text, integer, real, boolean, serial } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, real, boolean, serial, jsonb } from 'drizzle-orm/pg-core';
 
 export const households = pgTable('households', {
   id:               serial('id').primaryKey(),
@@ -86,12 +86,20 @@ export const shoppingListItems = pgTable('shopping_list_items', {
 });
 
 export const pushSubscriptions = pgTable('push_subscriptions', {
-  id:        serial('id').primaryKey(),
-  userId:    integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  endpoint:  text('endpoint').notNull().unique(),
-  p256dh:    text('p256dh').notNull(),
-  auth:      text('auth').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  id:          serial('id').primaryKey(),
+  householdId: integer('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  endpoint:    text('endpoint').notNull().unique(),
+  p256dh:      text('p256dh').notNull(),
+  auth:        text('auth').notNull(),
+  createdAt:   text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+});
+
+export const householdMembers = pgTable('household_members', {
+  id:          serial('id').primaryKey(),
+  householdId: integer('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  clerkUserId: text('clerk_user_id').notNull().unique(),
+  role:        text('role').notNull().default('member'),
+  joinedAt:    text('joined_at').notNull().$defaultFn(() => new Date().toISOString()),
 });
 
 export const chatMessages = pgTable('chat_messages', {
@@ -99,6 +107,7 @@ export const chatMessages = pgTable('chat_messages', {
   householdId: integer('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
   role:      text('role').notNull(), // 'user' | 'assistant'
   content:   text('content').notNull(),
+  metadata:  jsonb('metadata'),     // { version: 1, recipeSuggestions: [...] } | null
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 });
 
