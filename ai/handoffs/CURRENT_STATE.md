@@ -2,130 +2,104 @@
 TASK-016B — Clerk Auth + Per-User OpenAI BYOK
 
 # Current Status
-TASK-016B implementation complete. Client build passes. Packages installed. Pending:
-1. Clerk account creation + env var setup (user action)
-2. Migration 0010 applied in Neon SQL Editor (user action)
-3. npm install verification in server (packages added, build not run — server build is Node, checked by start)
-4. Push notifications follow-on: pushSubscriptions.userId is an integer FK to users table; req.user.id is now a Clerk string — push subscribe/unsubscribe will fail at runtime until schema updated (known, non-blocking for auth/BYOK)
+TASK-016B complete and stable in production. Clerk auth live. Connor's household uses platform OpenAI key. Migration 0010 applied in Neon. Build and deploy verified.
 
-# Files Modified (TASK-016B)
+# Files Modified (TASK-016B — complete)
 
 - `server/utils/encryption.js` — NEW: AES-256-GCM encrypt/decrypt (ENCRYPTION_KEY env var)
 - `server/middleware/clerkAuth.js` — NEW: Clerk session verification + household getOrCreate
-- `server/middleware/auth.js` — DEPRECATED: added comment; kept for rollback
+- `server/middleware/auth.js` — DEPRECATED: comment added; kept for rollback
 - `server/db/schema.js` — added clerkUserId + openaiApiKey columns to households
-- `server/db/migrations/0010_clerk_byok.sql` — NEW: SQL migration for Neon
-- `server/services/householdService.js` — added getOrCreate; updated getAiConfig/getAiKeyPreview/setAiApiKey/removeAiApiKey for new openaiApiKey column
-- `server/services/ai/resolveProvider.js` — OWNER_CLERK_ID enforcement; removed anthropic case; added NoApiKeyError
-- `server/services/aiService.js` — removed AnthropicProvider import and instanceof checks (only surgical removal; system prompt unchanged)
+- `server/db/migrations/0010_clerk_byok.sql` — applied in Neon
+- `server/services/householdService.js` — getOrCreate; getAiConfig/setAiApiKey/removeAiApiKey use openaiApiKey column
+- `server/services/ai/resolveProvider.js` — OWNER_CLERK_ID enforcement; NoApiKeyError
+- `server/services/aiService.js` — AnthropicProvider import/instanceof removed
 - `server/services/ai/anthropicProvider.js` — DELETED
-- `server/services/ai/providerInterface.js` — removed stale AnthropicProvider comment
-- `server/app.js` — added clerkMiddleware; removed authRouter; updated REQUIRED_ENV; error handler includes err.code
 - `server/routes/auth.js` — DELETED (old JWT login/register routes)
-- `server/routes/ai.js` — import swap: requireAuth → clerkAuth
-- `server/routes/pantry.js` — import swap: requireAuth → clerkAuth
-- `server/routes/recipes.js` — import swap: requireAuth → clerkAuth
-- `server/routes/shopping.js` — import swap: requireAuth → clerkAuth
-- `server/routes/household.js` — import swap + ai-key endpoint updated (OpenAI only, no provider field)
-- `server/routes/push.js` — import swap: requireAuth → clerkAuth
-- `server/routes/dietary.js` — import swap: requireAuth → clerkAuth
-- `client/src/api/index.js` — Bearer token auth via window.Clerk.session.getToken(); err.code propagated
-- `client/src/main.jsx` — wrapped with ClerkProvider
-- `client/src/App.jsx` — Clerk routes (/sign-in, /sign-up); PrivateRoute uses SignedIn/SignedOut
+- All route files — requireAuth → clerkAuth import swap
+- `server/routes/household.js` — ai-key endpoint updated (OpenAI only)
+- `server/app.js` — clerkMiddleware; authRouter removed; error handler propagates err.code
+- `client/src/context/AuthContext.jsx` — backed by Clerk useUser/useClerk; same interface preserved
+- `client/src/api/index.js` — Bearer token via window.Clerk.session.getToken(); err.code propagated
+- `client/src/main.jsx` — ClerkProvider wrapper
+- `client/src/App.jsx` — Clerk sign-in/sign-up routes; PrivateRoute via SignedIn/SignedOut; AuthProvider restored
 - `client/src/pages/HouseholdPage.jsx` — OpenAI key input only; Anthropic option removed
-- `server/package.json` — added @clerk/express; removed @anthropic-ai/sdk
-- `client/package.json` — added @clerk/clerk-react
-- `.env.example` — added CLERK_SECRET_KEY, VITE_CLERK_PUBLISHABLE_KEY, ENCRYPTION_KEY, OWNER_CLERK_ID; removed JWT_SECRET
-
-# Files Required Next (deployment)
-
-- Apply migration 0010 in Neon SQL Editor
-- Set env vars in Vercel: CLERK_SECRET_KEY, VITE_CLERK_PUBLISHABLE_KEY, ENCRYPTION_KEY, OWNER_CLERK_ID
-- After deploy: run `UPDATE households SET clerk_user_id = '<clerk-id>' WHERE id = <connor-id>` in Neon
-- Verify OWNER_CLERK_ID matches Connor's Clerk user ID before deploying
-
-# Files Already Reviewed
-
-- `server/services/ai/openaiProvider.js` — untouched; implements all 6 interface methods
-- `server/services/ai/providerInterface.js` — comment cleaned; interface unchanged
-
-# Dependency Chain
-
-Editing:
-- All files listed above
-
-Requires (read-only):
-- `server/services/ai/openaiProvider.js`
-
-Irrelevant (do not touch):
-- `server/services/pantryService.js`
-- `server/services/shelfLifeService.js`
-- `server/services/recipeSearchService.js`
+- `server/package.json` — @clerk/express added; @anthropic-ai/sdk removed
+- `client/package.json` — @clerk/clerk-react added
+- `.env.example` — CLERK_SECRET_KEY, VITE_CLERK_PUBLISHABLE_KEY, ENCRYPTION_KEY, OWNER_CLERK_ID added; JWT_SECRET removed
 
 # Architecture Notes
 
-## Post-TASK-016B provider state
+## Post-TASK-016B provider state (stable, production)
 - All LLM: OpenAI gpt-4o-mini only
-- BYOK: OpenAI only (Anthropic BYOK removed)
+- BYOK: OpenAI only (Anthropic BYOK fully removed)
 - `resolveProvider(clerkUserId, decryptedKey)`: isOwner check via OWNER_CLERK_ID env var
-- `aiConfig.provider` field now carries clerkUserId (pragmatic compat with aiService.js call signature)
+- `aiConfig.provider` field carries clerkUserId (compat with aiService.js call signature — no change needed there)
 - `NoApiKeyError` → HTTP 403 + `{ error: "...", code: "NO_API_KEY" }`
 - Client propagates `err.code` from API responses
 
-## Key design decisions
-- `getOrCreate` uses `onConflictDoUpdate` on clerkUserId + retry loop for join code collisions — safe under concurrent first-requests
-- `encryption.js` uses `ENCRYPTION_KEY` (new); `keyEncryption.js` kept for `maskKey` only
-- `req.user.id` = Clerk string ID; `req.user.householdId` = integer — all services unchanged
-- Client token: `window.Clerk?.session?.getToken()` — no React hooks needed in api module
-- `auth.js` (middleware) kept deprecated for rollback; `routes/auth.js` deleted
+## Auth architecture
+- Server: `clerkMiddleware()` global + `clerkAuth` per-route middleware
+- `clerkAuth` calls `householdService.getOrCreate(clerkUserId)` on every authenticated request
+- `getOrCreate` is idempotent: `onConflictDoUpdate` on clerkUserId + join-code collision retry loop
+- `req.user = { id: clerkUserId, householdId }` — all services unchanged
+- Client: `window.Clerk?.session?.getToken()` for Bearer token — no React hooks in api module
+- `AuthContext` backed by Clerk `useUser`/`useClerk` — existing components unchanged
 
-## Known issue: push notifications
-- `pushSubscriptions.userId` is integer FK to `users` table
-- `req.user.id` is now a Clerk string ID
-- Push subscribe/unsubscribe will fail with FK constraint error
-- Fix in follow-on task: update pushSubscriptions to use householdId or a new clerk_user_id column
+## Env vars (production Vercel)
+- CLERK_SECRET_KEY ✓
+- VITE_CLERK_PUBLISHABLE_KEY ✓ (currently pk_test_... dev key)
+- ENCRYPTION_KEY ✓
+- OWNER_CLERK_ID = user_3FVuvJJGq9W65mQ1SrVwLaz48wS ✓
 
-## Pre-deployment checklist (user actions required)
-1. Create Clerk account at clerk.com; create application
-2. Generate ENCRYPTION_KEY: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
-3. Note your Clerk user ID (shown after sign-in) → OWNER_CLERK_ID
-4. Add all env vars to .env.local and Vercel
-5. Apply migration 0010 in Neon SQL Editor
-6. Deploy
-7. Sign in via Clerk → note your user ID → run UPDATE in Neon to link Connor's household
-8. Verify: chat works for Connor; non-owner without key gets NO_API_KEY error
+## Connor's household
+- clerk_user_id linked in Neon via manual UPDATE
+- Uses platform OPENAI_API_KEY (no BYOK key required)
 
-# Decisions Made
+# Known Follow-On Issues (TASK-017 candidates)
 
-- `aiService.js` Anthropic references removed (AnthropicProvider import + instanceof checks) — minimal surgical change, system prompt and all TASK-016A work preserved
-- `providerName`/`modelName` hardcoded to 'openai'/'gpt-4o-mini' in aiService.js (was `instanceof` branch)
-- Push notifications intentionally left broken (FK type mismatch) — follow-on task
-- HouseholdPage members section kept; invite section kept (though users table no longer populated by new signups — cosmetic issue, non-blocking)
+## 1. Push notifications broken (HIGH — affects all new Clerk users)
+- `pushSubscriptions.userId` is an integer FK referencing the `users` table
+- `req.user.id` is now a Clerk string ID (e.g. `user_xxx`)
+- `POST /api/push/subscribe` and `/unsubscribe` will fail with a FK constraint error for any user
+- Fix: migrate `pushSubscriptions` to use `householdId` (integer, already on req.user) or add a `clerk_user_id TEXT` column
+- Simplest fix: change `userId` references in `server/routes/push.js` to use `req.user.householdId` and update the schema/migration accordingly
 
-# Remaining Work
+## 2. Household members list empty for Clerk users (LOW)
+- `GET /api/household/members` queries the `users` table (old JWT system)
+- New Clerk users are never inserted into `users` — so members list shows 0
+- `server/routes/household.js` `getMembers()` and the members section of `HouseholdPage.jsx` are affected
+- Fix options: populate `users` table on Clerk sign-in, or remove/replace the members feature
 
-- Push notifications: update pushSubscriptions schema to use clerk_user_id or householdId
-- HouseholdPage members section: will show 0 members for Clerk users (users table not populated) — update in follow-on
-- Behavioral regression B1-B8 for Connor's household post-deploy
-- Receipt vision benchmark (pending from 016A)
+## 3. Production Clerk keys (MEDIUM — before public launch)
+- Currently using development instance keys (`pk_test_...`, `sk_test_...`)
+- Must switch to production instance in Clerk Dashboard before public launch
+- Requires: create production instance in Clerk → update CLERK_SECRET_KEY + VITE_CLERK_PUBLISHABLE_KEY in Vercel
 
-# Known Risks
+## 4. Invite by email broken (LOW)
+- `POST /api/household/invite` sends a join code via email
+- Join codes still work at the DB level, but new users sign up via Clerk (not a join code form)
+- The join code flow has no Clerk-aware registration path — new users who receive a join code have no way to use it
+- Fix: design a Clerk-compatible household join flow (e.g. invite link that sets a cookie/param before Clerk sign-up)
 
-- **OWNER_CLERK_ID not set before deploy** → Connor's household gets NO_API_KEY errors. Document clearly.
-- **Push notification FK failure** — push.js uses `req.user.id` (Clerk string) as integer userId
-- **Rollback path**: revert `server/app.js` to import authRouter + requireAuth; add back JWT_SECRET to Vercel env
-- **Clerk package version** — installed @clerk/express@1.7.81 and @clerk/clerk-react@5.61.8; verify these are stable at docs.clerk.com
+# Remaining Work (outstanding from earlier tasks)
+- Receipt vision benchmark (≥85%, 5 receipts) — pending from TASK-016A
+- Behavioral regression B1–B8 for Connor's household in production
 
 # Verification Results
 
-- Client build: PASS (`npm run build` in client/)
+- TASK-016B build: PASS
+- TASK-016B deployment: PASS
+- Migration 0010: APPLIED in Neon
+- Connor household clerk_user_id: LINKED
+- Production smoke (Connor): PASS — signed in, AI features confirmed working
 - AnthropicProvider grep: CLEAN
 - requireAuth in active routes: CLEAN
-- Server install: PASS (@clerk/express installed)
 
 # Recommended Next Action
 
-User pre-deployment checklist (items 1-8 above). After env vars set and migration applied, deploy and run production smoke test.
+TASK-017: Fix push notifications (replace pushSubscriptions.userId integer FK with householdId).
+This is the only issue that actively breaks existing functionality for all users.
 
 # Forbidden Exploration
 
@@ -139,6 +113,7 @@ User pre-deployment checklist (items 1-8 above). After env vars set and migratio
 - branch: main
 - worktree: none
 - context pressure: low
+- next agent: implement TASK-017 (push notifications fix) or address follow-ons above
 
 # PowerShell Merge Block
 
