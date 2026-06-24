@@ -57,9 +57,9 @@ Irrelevant (do not open):
 - `ai/tasks/archive/`
 
 # Remaining Work
-- **TASK-017 Issue 3** — Switch to Clerk production keys (ops checklist in TASK-017.md Step 1–6)
-  Order: create prod instance → configure domains → rotate Vercel env vars → deploy → update OWNER_CLERK_ID → verify
-- Receipt vision benchmark (≥85%, 5 receipts) — pending from TASK-016A
+- **TASK-019** — Fix clarification confirmation drops tool call — IMPLEMENTED, awaiting manual verification
+- **TASK-017 Issue 3** — Switch to Clerk production keys — BLOCKED (requires custom domain; staying on dev keys for now)
+- Receipt vision benchmark — COMPLETE (90% across 3 receipts, exceeds 85% threshold)
 - Members card with display names — deferred; requires Clerk backend SDK or display name stored at join time
 
 # Known Risks

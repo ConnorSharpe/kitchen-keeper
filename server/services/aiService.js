@@ -423,6 +423,10 @@ export async function chat(pantrySummary, recipeSummary, history, userMessage, t
     `    set the new quantity, or retry using the pantry's unit.\n` +
     `- Uncertain whether consumed or discarded → ask before calling either.\n` +
     `- Name is ambiguous (multiple pantry items match) → ask for clarification before calling.\n` +
+    `  If a clarification question has been asked and the user provides a direct confirmation\n` +
+    `  (e.g. "yes", "correct", "that one", "yeah"), treat the clarification as resolved and\n` +
+    `  immediately continue the action that required clarification.\n` +
+    `  Do not switch tasks, suggest recipes, or begin a new workflow until the requested action is completed.\n` +
     `- User asks what to cook, what to make, or wants recipe ideas → suggest_recipes\n` +
     `- User confirms they want to save a suggested recipe → save_recipe\n` +
     `- Trace condiment amounts: the server handles skip-deduction automatically.\n` +
