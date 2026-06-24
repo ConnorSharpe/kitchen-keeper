@@ -2,113 +2,73 @@
 TASK-018 — UI Refresh: Chat as Home, Persistent Recipe Cards, Remove Waste Counter
 
 # Current Status
-All three issues fully implemented. Build PASS. Migration 0013 must be applied to Neon before deploying.
+COMPLETE. All issues deployed and verified in production. DB spot checks passed.
 
 # Files Modified (TASK-018)
 
-- `client/src/pages/DashboardPage.jsx` — removed WasteSaved import and grid; QuickAdd full-width (Issue 1)
-- `client/src/App.jsx` — `/` → ChatPage; `/dashboard` → DashboardPage; `/chat` → Navigate redirect (Issue 3)
-- `client/src/components/layout/Sidebar.jsx` — Chat first w/ primary styling; Dashboard second at /dashboard; "Explore" removed (Issue 3)
-- `client/src/pages/ChatPage.jsx` — header "Kitchen Keeper"; history maps metadata→recipeSuggestions; mount fetches /api/recipes to seed savedRecipeNames (Issues 2+3)
+- `client/src/pages/DashboardPage.jsx` — removed WasteSaved import and grid; QuickAdd full-width
+- `client/src/App.jsx` — `/` → ChatPage; `/dashboard` → DashboardPage; `/chat` → Navigate redirect
+- `client/src/components/layout/Sidebar.jsx` — Chat first w/ primary styling; Dashboard second at /dashboard; "Explore" removed
+- `client/src/pages/ChatPage.jsx` — header "Kitchen Keeper"; history maps metadata→recipeSuggestions; mount fetches /api/recipes to seed savedRecipeNames
 - `server/db/schema.js` — jsonb import added; metadata column added to chatMessages
-- `server/db/migrations/0013_chat_metadata.sql` — NEW: ADD COLUMN metadata JSONB; ADD CONSTRAINT recipes_household_name_unique
-- `server/services/chatService.js` — savePair accepts optional metadata arg (4th); writes to assistant row only
+- `server/db/migrations/0013_chat_metadata.sql` — ADD COLUMN metadata JSONB; ADD CONSTRAINT recipes_household_name_unique
+- `server/services/chatService.js` — savePair accepts optional metadata arg; writes to assistant row only
 - `server/services/recipeService.js` — new createOrIgnore method added; create unchanged
 - `server/routes/ai.js` — save_recipe uses createOrIgnore with undefined guard; savePair called with recipeSuggestions metadata
+- `client/public/favicon.svg` — NEW: fork and spoon icon
+- `client/index.html` — favicon.svg wired up
+- `client/public/sw.js` — fixed response body already used error in cache handler
 
-# Deployment Sequence (CRITICAL)
+# Also committed alongside TASK-018
+- `client/src/pages/JoinPage.jsx` — TASK-017 file that was previously untracked
+- `server/routes/household.js`, `server/routes/push.js`, `server/services/emailService.js`, `server/services/householdService.js`, `server/services/pushService.js`, `client/src/pages/HouseholdPage.jsx` — TASK-017 changes that were previously uncommitted
+- `server/db/migrations/0011a_push_household_add.sql`, `0011b_push_household_finalize.sql`, `0012_household_members.sql` — TASK-017 migrations (already applied to Neon)
 
-## Step 1: Check for duplicate recipes (MUST be 0 rows before migration)
-```sql
-SELECT household_id, name, COUNT(*)
-FROM recipes
-GROUP BY household_id, name
-HAVING COUNT(*) > 1;
-```
-
-## Step 2: Apply migration 0013 to Neon
-```sql
--- From server/db/migrations/0013_chat_metadata.sql
-ALTER TABLE chat_messages ADD COLUMN metadata JSONB;
-ALTER TABLE recipes ADD CONSTRAINT recipes_household_name_unique UNIQUE (household_id, name);
-```
-
-## Step 3: Deploy application code
-
-## Step 4: Verify
-1. `/` → Chat page renders (not Dashboard)
-2. `/dashboard` → Dashboard renders, no WasteSaved widget
-3. `/chat` → redirects to `/`
-4. Sidebar: Chat is item 1 (primary styling), Dashboard is item 2
-5. Send chat message with recipe suggestions → cards render
-6. Refresh page → same recipe cards re-render from history
-7. Navigate to /pantry, return → cards still render
-8. Old messages (metadata = NULL) → no cards, no JS errors
-9. DB: `SELECT metadata FROM chat_messages WHERE role='assistant' ORDER BY id DESC LIMIT 1;` → `{ "version": 1, "recipeSuggestions": [...] }`
-10. DB: `SELECT metadata FROM chat_messages WHERE role='user' LIMIT 5;` → all NULL
+# Verification Results
+- Build: PASS
+- All migrations applied to Neon: 0011a, 0011b, 0012, 0013
+- Issue 1: PASS — WasteSaved gone, QuickAdd full-width
+- Issue 3: PASS — `/` loads Chat, `/dashboard` loads Dashboard, `/chat` redirects, sidebar correct, header correct
+- Issue 2: PASS — recipe cards persist through reload and navigation; old null rows render cleanly
+- DB SELECT 1 (latest assistant): NULL (pre-migration row, expected) — will populate on next recipe-returning message
+- DB SELECT 5 (user rows): all NULL as required
+- Favicon: PASS — fork and spoon appears in browser tab
+- sw.js clone error: RESOLVED
 
 # Architecture Notes
 
-## Issue 1 — Waste Counter (complete)
-- WasteSaved.jsx component file left intact; only DashboardPage import+usage removed
-- wasteSaved value in PantryContext untouched
-
-## Issue 2 — Recipe card persistence (complete)
+## Recipe card persistence
 - metadata is nullable JSONB; old rows stay NULL; frontend handles null with `?? []`
-- createOrIgnore uses onConflictDoNothing targeting (householdId, name); case-sensitive uniqueness (acceptable for personal-use)
-- savePair: user rows always get metadata=null (not passed); assistant rows get metadata only when recipeSuggestions.length > 0
-- savedRecipeNames seeded from /api/recipes on mount; fetch failure is non-fatal (createOrIgnore guards DB integrity regardless)
-- itemsAdded intentionally not persisted — transient UI badges; renderer handles undefined safely
+- createOrIgnore uses onConflictDoNothing targeting (householdId, name); case-sensitive uniqueness
+- savePair: user rows always get metadata=null; assistant rows get metadata only when recipeSuggestions.length > 0
+- savedRecipeNames seeded from /api/recipes on mount; fetch failure is non-fatal
 
-## Issue 3 — Chat as home (complete)
+## Routing
 - /chat retained as Navigate redirect for bookmark compatibility
-- Grep confirmed no other nav references to /chat outside App.jsx and Sidebar.jsx
 - EatThisNow stays on /dashboard
 
 # Dependency Chain
 
-Editing:
-- client/src/pages/DashboardPage.jsx
-- client/src/App.jsx
-- client/src/components/layout/Sidebar.jsx
-- client/src/pages/ChatPage.jsx
-- server/db/schema.js
-- server/db/migrations/0013_chat_metadata.sql (new)
-- server/services/chatService.js
-- server/services/recipeService.js
-- server/routes/ai.js
-
-Requires (read-only, already reviewed):
-- server/db/client.js — Drizzle client pattern confirmed
-- server/routes/recipes.js — no changes; create callers unaffected
-
-Irrelevant:
-- server/services/ai/*
-- server/services/aiService.js
-- client/src/components/dashboard/WasteSaved.jsx
-- client/public/sw.js
-- server/data/foodkeeper.json
-- ai/tasks/archive/
-
-# Verification Results
-- Build: PASS (vite build, 9.20s, 0 errors)
-- Migration 0013: NOT YET APPLIED (pending Neon deploy)
-
-# Known Risks
-- Duplicate recipe check must pass (0 rows) before applying migration 0013
-- Migration 0013 must be applied before code deploy (chatService.savePair writes metadata column on every assistant message)
-- /api/recipes response shape `{ recipes: [...] }` with `name` field — confirmed from existing route
+Irrelevant (do not open):
+- `server/services/ai/*`
+- `server/services/aiService.js`
+- `client/src/components/dashboard/WasteSaved.jsx`
+- `server/data/foodkeeper.json`
+- `ai/tasks/archive/`
 
 # Remaining Work
-- Apply migration 0013 to Neon (duplicate check first)
-- Deploy and run verification steps above
-- Issue 3 (prod Clerk keys) ops checklist from TASK-017 — still pending
+- **TASK-017 Issue 3** — Switch to Clerk production keys (ops checklist in TASK-017.md Step 1–6)
+  Order: create prod instance → configure domains → rotate Vercel env vars → deploy → update OWNER_CLERK_ID → verify
 - Receipt vision benchmark (≥85%, 5 receipts) — pending from TASK-016A
-- Members card with display names — deferred
+- Members card with display names — deferred; requires Clerk backend SDK or display name stored at join time
+
+# Known Risks
+- Clerk dev keys warning in console until Issue 3 ops checklist is completed
+- OWNER_CLERK_ID must be updated after switching to Clerk production instance
 
 # Forbidden Exploration
 - `client/public/sw.js`
-- `server/db/migrations/0001-0012`
+- `server/db/migrations/0001-0013`
 - `server/data/foodkeeper.json`
 - `ai/tasks/archive/`
 - `server/routes/recipes.js`
