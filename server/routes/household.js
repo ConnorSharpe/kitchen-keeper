@@ -49,7 +49,7 @@ router.get('/members', async (req, res) => {
   res.json({ members });
 });
 
-// POST /api/household/invite — send join code via email
+// POST /api/household/invite — send join link via email
 const inviteSchema = z.object({
   email: z.string().email('Invalid email address'),
 });
@@ -60,12 +60,27 @@ router.post('/invite', validate(inviteSchema), async (req, res) => {
 
   await sendHouseholdInvite({
     toEmail:       req.body.email,
-    fromName:      req.user.name,
     householdName: household.name,
     joinCode:      household.joinCode,
   });
 
   res.json({ ok: true });
+});
+
+// POST /api/household/join — join an existing household via join code.
+// clerkAuth fires getOrCreate, which may create an empty household H1 for brand-new users.
+// On success, H1 is deleted and the user becomes a member of the target household.
+const joinSchema = z.object({
+  code: z.string().min(1),
+});
+
+router.post('/join', validate(joinSchema), async (req, res) => {
+  const result = await householdService.joinByCode(
+    req.user.id,
+    req.user.householdId,
+    req.body.code,
+  );
+  res.json(result);
 });
 
 export default router;

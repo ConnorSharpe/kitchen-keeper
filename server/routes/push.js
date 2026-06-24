@@ -36,19 +36,18 @@ router.post('/subscribe', clerkAuth, async (req, res) => {
   // producing a transient ownership flip. The transaction enforces the deterministic
   // ownership guarantee (Constraint 9).
   await db.transaction(async (tx) => {
-    // Step 1: remove any stale cross-user binding for this endpoint.
+    // Step 1: remove any stale cross-household binding for this endpoint.
     await tx
       .delete(pushSubscriptions)
       .where(and(
         eq(pushSubscriptions.endpoint, endpoint),
-        ne(pushSubscriptions.userId, req.user.id),
+        ne(pushSubscriptions.householdId, req.user.householdId),
       ));
 
-    // Step 2: upsert. On same-endpoint conflict (same user re-subscribing), update keys only.
-    // userId is intentionally absent from the conflict update set.
+    // Step 2: upsert. On same-endpoint conflict (same household re-subscribing), update keys only.
     await tx
       .insert(pushSubscriptions)
-      .values({ userId: req.user.id, endpoint, p256dh: keys.p256dh, auth: keys.auth, createdAt: new Date().toISOString() })
+      .values({ householdId: req.user.householdId, endpoint, p256dh: keys.p256dh, auth: keys.auth, createdAt: new Date().toISOString() })
       .onConflictDoUpdate({
         target: pushSubscriptions.endpoint,
         set: { p256dh: keys.p256dh, auth: keys.auth },
@@ -72,7 +71,7 @@ router.post('/unsubscribe', clerkAuth, async (req, res) => {
     .delete(pushSubscriptions)
     .where(and(
       eq(pushSubscriptions.endpoint, endpoint),
-      eq(pushSubscriptions.userId, req.user.id),
+      eq(pushSubscriptions.householdId, req.user.householdId),
     ));
 
   res.json({ ok: true });

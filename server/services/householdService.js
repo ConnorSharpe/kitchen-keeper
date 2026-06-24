@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { households, users } from '../db/schema.js';
+import { households, householdMembers, pantryItems, users } from '../db/schema.js';
 import { encrypt, decrypt } from '../utils/encryption.js';
 import { maskKey } from '../utils/keyEncryption.js';
 
@@ -18,9 +18,13 @@ export async function getById(householdId) {
 
 export async function getMembers(householdId) {
   return db
-    .select({ id: users.id, name: users.name, email: users.email, createdAt: users.createdAt })
-    .from(users)
-    .where(eq(users.householdId, householdId));
+    .select({
+      clerkUserId: householdMembers.clerkUserId,
+      role:        householdMembers.role,
+      joinedAt:    householdMembers.joinedAt,
+    })
+    .from(householdMembers)
+    .where(eq(householdMembers.householdId, householdId));
 }
 
 export async function getByJoinCode(code) {
@@ -31,19 +35,35 @@ export async function getByJoinCode(code) {
   return row ?? null;
 }
 
-// Lazy household creation on first authenticated Clerk request.
-// INSERT ... ON CONFLICT DO UPDATE is idempotent and returns the row — safe under concurrent requests.
-// Retries up to 3 times on join-code uniqueness collisions only.
+// Resolution order:
+// 1. householdMembers (non-owner member lookup)
+// 2. households.clerkUserId (owner lookup)
+// 3. Create new household
 export async function getOrCreate(clerkUserId) {
+  // Step 1: non-owner member
+  const [membership] = await db
+    .select({ householdId: householdMembers.householdId })
+    .from(householdMembers)
+    .where(eq(householdMembers.clerkUserId, clerkUserId));
+  if (membership) return { id: membership.householdId };
+
+  // Step 2: owner
+  const [owned] = await db
+    .select()
+    .from(households)
+    .where(eq(households.clerkUserId, clerkUserId));
+  if (owned) return owned;
+
+  // Step 3: create
+  return createHousehold(clerkUserId);
+}
+
+async function createHousehold(clerkUserId) {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const [row] = await db
         .insert(households)
         .values({ clerkUserId, name: 'My Household', joinCode: generateJoinCode() })
-        .onConflictDoUpdate({
-          target: households.clerkUserId,
-          set: { clerkUserId }, // no-op update; returns existing row via RETURNING
-        })
         .returning();
       return row;
     } catch (err) {
@@ -52,6 +72,76 @@ export async function getOrCreate(clerkUserId) {
       if (!isJoinCodeCollision || attempt === 2) throw err;
     }
   }
+}
+
+// A household is disposable if auto-created within 5 minutes and has zero pantry items.
+// Checks pantry items only — intentional trade-off for simplicity at portfolio scale.
+// Revisit before expanding household-sharing features.
+export async function isDisposableHousehold(householdId) {
+  const [row] = await db
+    .select({ createdAt: households.createdAt })
+    .from(households)
+    .where(eq(households.id, householdId));
+  if (!row) return false;
+
+  const ageMs = Date.now() - new Date(row.createdAt).getTime();
+  if (ageMs > 5 * 60 * 1000) return false;
+
+  const [{ count }] = await db
+    .select({ count: sql`COUNT(*)` })
+    .from(pantryItems)
+    .where(eq(pantryItems.householdId, householdId));
+
+  return Number(count) === 0;
+}
+
+// Atomically: delete the user's empty auto-created household and insert a householdMembers row.
+// Guards are checked before entering the transaction.
+export async function joinByCode(clerkUserId, currentHouseholdId, code) {
+  const target = await getByJoinCode(code);
+  if (!target) {
+    const err = new Error('Invalid join code');
+    err.status = 404;
+    throw err;
+  }
+
+  // Guard A: self-join
+  if (target.id === currentHouseholdId) {
+    const err = new Error('Already in this household');
+    err.status = 409;
+    throw err;
+  }
+
+  // Guard B: already a member
+  const [existing] = await db
+    .select({ id: householdMembers.id })
+    .from(householdMembers)
+    .where(eq(householdMembers.clerkUserId, clerkUserId));
+  if (existing) {
+    const err = new Error('Already a member of a household');
+    err.status = 409;
+    throw err;
+  }
+
+  // Guard C: current household has data
+  const disposable = await isDisposableHousehold(currentHouseholdId);
+  if (!disposable) {
+    const err = new Error('Your household already has data — cannot join another household');
+    err.status = 409;
+    throw err;
+  }
+
+  // Atomic: delete empty household H1, insert membership for H2
+  await db.transaction(async (tx) => {
+    await tx.delete(households).where(eq(households.id, currentHouseholdId));
+    await tx.insert(householdMembers).values({
+      householdId: target.id,
+      clerkUserId,
+      role: 'member',
+    });
+  });
+
+  return { householdId: target.id, householdName: target.name };
 }
 
 // Returns { provider: clerkUserId, decryptedKey } for resolveProvider.

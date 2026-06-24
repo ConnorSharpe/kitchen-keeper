@@ -4,7 +4,6 @@ import DietaryProfileForm from '../components/settings/DietaryProfileForm.jsx';
 
 export default function HouseholdPage() {
   const [household, setHousehold] = useState(null);
-  const [members, setMembers]     = useState([]);
   const [loading, setLoading]     = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [copied, setCopied]       = useState(false);
@@ -23,12 +22,8 @@ export default function HouseholdPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [h, m] = await Promise.all([
-        api.get('/api/household'),
-        api.get('/api/household/members'),
-      ]);
+      const h = await api.get('/api/household');
       setHousehold(h.household);
-      setMembers(m.members);
     } catch (err) {
       setLoadError(err.message || 'Failed to load household');
     } finally {
@@ -238,25 +233,6 @@ export default function HouseholdPage() {
         )}
       </section>
 
-      {/* Members list */}
-      <section className="bg-white border border-gray-200 rounded-2xl p-6">
-        <h2 className="text-base font-semibold text-gray-800 mb-4">
-          Household members <span className="text-gray-400 font-normal text-sm">({members.length})</span>
-        </h2>
-        <ul className="space-y-3">
-          {members.map((m) => (
-            <li key={m.id} className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-700 font-semibold text-sm flex-shrink-0">
-                {m.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{m.name}</p>
-                <p className="text-xs text-gray-400 truncate">{m.email}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </section>
     </div>
   );
 }

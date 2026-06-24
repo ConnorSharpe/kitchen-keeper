@@ -1,6 +1,6 @@
 import webPush from 'web-push';
 import { db } from '../db/client.js';
-import { pushSubscriptions, pantryItems, users } from '../db/schema.js';
+import { pushSubscriptions, pantryItems } from '../db/schema.js';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 
 webPush.setVapidDetails(
@@ -39,8 +39,7 @@ export async function getNotificationsForToday() {
       `.as('trigger'),
     })
     .from(pantryItems)
-    .innerJoin(users, eq(users.householdId, pantryItems.householdId))
-    .innerJoin(pushSubscriptions, eq(pushSubscriptions.userId, users.id))
+    .innerJoin(pushSubscriptions, eq(pushSubscriptions.householdId, pantryItems.householdId))
     .where(
       and(
         isNull(pantryItems.consumedAt),

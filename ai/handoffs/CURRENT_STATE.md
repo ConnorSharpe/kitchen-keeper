@@ -1,119 +1,122 @@
 # Task
-TASK-016B — Clerk Auth + Per-User OpenAI BYOK
+TASK-018 — UI Refresh: Chat as Home, Persistent Recipe Cards, Remove Waste Counter
 
 # Current Status
-TASK-016B complete and stable in production. Clerk auth live. Connor's household uses platform OpenAI key. Migration 0010 applied in Neon. Build and deploy verified.
+All three issues fully implemented. Build PASS. Migration 0013 must be applied to Neon before deploying.
 
-# Files Modified (TASK-016B — complete)
+# Files Modified (TASK-018)
 
-- `server/utils/encryption.js` — NEW: AES-256-GCM encrypt/decrypt (ENCRYPTION_KEY env var)
-- `server/middleware/clerkAuth.js` — NEW: Clerk session verification + household getOrCreate
-- `server/middleware/auth.js` — DEPRECATED: comment added; kept for rollback
-- `server/db/schema.js` — added clerkUserId + openaiApiKey columns to households
-- `server/db/migrations/0010_clerk_byok.sql` — applied in Neon
-- `server/services/householdService.js` — getOrCreate; getAiConfig/setAiApiKey/removeAiApiKey use openaiApiKey column
-- `server/services/ai/resolveProvider.js` — OWNER_CLERK_ID enforcement; NoApiKeyError
-- `server/services/aiService.js` — AnthropicProvider import/instanceof removed
-- `server/services/ai/anthropicProvider.js` — DELETED
-- `server/routes/auth.js` — DELETED (old JWT login/register routes)
-- All route files — requireAuth → clerkAuth import swap
-- `server/routes/household.js` — ai-key endpoint updated (OpenAI only)
-- `server/app.js` — clerkMiddleware; authRouter removed; error handler propagates err.code
-- `client/src/context/AuthContext.jsx` — backed by Clerk useUser/useClerk; same interface preserved
-- `client/src/api/index.js` — Bearer token via window.Clerk.session.getToken(); err.code propagated
-- `client/src/main.jsx` — ClerkProvider wrapper
-- `client/src/App.jsx` — Clerk sign-in/sign-up routes; PrivateRoute via SignedIn/SignedOut; AuthProvider restored
-- `client/src/pages/HouseholdPage.jsx` — OpenAI key input only; Anthropic option removed
-- `server/package.json` — @clerk/express added; @anthropic-ai/sdk removed
-- `client/package.json` — @clerk/clerk-react added
-- `.env.example` — CLERK_SECRET_KEY, VITE_CLERK_PUBLISHABLE_KEY, ENCRYPTION_KEY, OWNER_CLERK_ID added; JWT_SECRET removed
+- `client/src/pages/DashboardPage.jsx` — removed WasteSaved import and grid; QuickAdd full-width (Issue 1)
+- `client/src/App.jsx` — `/` → ChatPage; `/dashboard` → DashboardPage; `/chat` → Navigate redirect (Issue 3)
+- `client/src/components/layout/Sidebar.jsx` — Chat first w/ primary styling; Dashboard second at /dashboard; "Explore" removed (Issue 3)
+- `client/src/pages/ChatPage.jsx` — header "Kitchen Keeper"; history maps metadata→recipeSuggestions; mount fetches /api/recipes to seed savedRecipeNames (Issues 2+3)
+- `server/db/schema.js` — jsonb import added; metadata column added to chatMessages
+- `server/db/migrations/0013_chat_metadata.sql` — NEW: ADD COLUMN metadata JSONB; ADD CONSTRAINT recipes_household_name_unique
+- `server/services/chatService.js` — savePair accepts optional metadata arg (4th); writes to assistant row only
+- `server/services/recipeService.js` — new createOrIgnore method added; create unchanged
+- `server/routes/ai.js` — save_recipe uses createOrIgnore with undefined guard; savePair called with recipeSuggestions metadata
+
+# Deployment Sequence (CRITICAL)
+
+## Step 1: Check for duplicate recipes (MUST be 0 rows before migration)
+```sql
+SELECT household_id, name, COUNT(*)
+FROM recipes
+GROUP BY household_id, name
+HAVING COUNT(*) > 1;
+```
+
+## Step 2: Apply migration 0013 to Neon
+```sql
+-- From server/db/migrations/0013_chat_metadata.sql
+ALTER TABLE chat_messages ADD COLUMN metadata JSONB;
+ALTER TABLE recipes ADD CONSTRAINT recipes_household_name_unique UNIQUE (household_id, name);
+```
+
+## Step 3: Deploy application code
+
+## Step 4: Verify
+1. `/` → Chat page renders (not Dashboard)
+2. `/dashboard` → Dashboard renders, no WasteSaved widget
+3. `/chat` → redirects to `/`
+4. Sidebar: Chat is item 1 (primary styling), Dashboard is item 2
+5. Send chat message with recipe suggestions → cards render
+6. Refresh page → same recipe cards re-render from history
+7. Navigate to /pantry, return → cards still render
+8. Old messages (metadata = NULL) → no cards, no JS errors
+9. DB: `SELECT metadata FROM chat_messages WHERE role='assistant' ORDER BY id DESC LIMIT 1;` → `{ "version": 1, "recipeSuggestions": [...] }`
+10. DB: `SELECT metadata FROM chat_messages WHERE role='user' LIMIT 5;` → all NULL
 
 # Architecture Notes
 
-## Post-TASK-016B provider state (stable, production)
-- All LLM: OpenAI gpt-4o-mini only
-- BYOK: OpenAI only (Anthropic BYOK fully removed)
-- `resolveProvider(clerkUserId, decryptedKey)`: isOwner check via OWNER_CLERK_ID env var
-- `aiConfig.provider` field carries clerkUserId (compat with aiService.js call signature — no change needed there)
-- `NoApiKeyError` → HTTP 403 + `{ error: "...", code: "NO_API_KEY" }`
-- Client propagates `err.code` from API responses
+## Issue 1 — Waste Counter (complete)
+- WasteSaved.jsx component file left intact; only DashboardPage import+usage removed
+- wasteSaved value in PantryContext untouched
 
-## Auth architecture
-- Server: `clerkMiddleware()` global + `clerkAuth` per-route middleware
-- `clerkAuth` calls `householdService.getOrCreate(clerkUserId)` on every authenticated request
-- `getOrCreate` is idempotent: `onConflictDoUpdate` on clerkUserId + join-code collision retry loop
-- `req.user = { id: clerkUserId, householdId }` — all services unchanged
-- Client: `window.Clerk?.session?.getToken()` for Bearer token — no React hooks in api module
-- `AuthContext` backed by Clerk `useUser`/`useClerk` — existing components unchanged
+## Issue 2 — Recipe card persistence (complete)
+- metadata is nullable JSONB; old rows stay NULL; frontend handles null with `?? []`
+- createOrIgnore uses onConflictDoNothing targeting (householdId, name); case-sensitive uniqueness (acceptable for personal-use)
+- savePair: user rows always get metadata=null (not passed); assistant rows get metadata only when recipeSuggestions.length > 0
+- savedRecipeNames seeded from /api/recipes on mount; fetch failure is non-fatal (createOrIgnore guards DB integrity regardless)
+- itemsAdded intentionally not persisted — transient UI badges; renderer handles undefined safely
 
-## Env vars (production Vercel)
-- CLERK_SECRET_KEY ✓
-- VITE_CLERK_PUBLISHABLE_KEY ✓ (currently pk_test_... dev key)
-- ENCRYPTION_KEY ✓
-- OWNER_CLERK_ID = user_3FVuvJJGq9W65mQ1SrVwLaz48wS ✓
+## Issue 3 — Chat as home (complete)
+- /chat retained as Navigate redirect for bookmark compatibility
+- Grep confirmed no other nav references to /chat outside App.jsx and Sidebar.jsx
+- EatThisNow stays on /dashboard
 
-## Connor's household
-- clerk_user_id linked in Neon via manual UPDATE
-- Uses platform OPENAI_API_KEY (no BYOK key required)
+# Dependency Chain
 
-# Known Follow-On Issues (TASK-017 candidates)
+Editing:
+- client/src/pages/DashboardPage.jsx
+- client/src/App.jsx
+- client/src/components/layout/Sidebar.jsx
+- client/src/pages/ChatPage.jsx
+- server/db/schema.js
+- server/db/migrations/0013_chat_metadata.sql (new)
+- server/services/chatService.js
+- server/services/recipeService.js
+- server/routes/ai.js
 
-## 1. Push notifications broken (HIGH — affects all new Clerk users)
-- `pushSubscriptions.userId` is an integer FK referencing the `users` table
-- `req.user.id` is now a Clerk string ID (e.g. `user_xxx`)
-- `POST /api/push/subscribe` and `/unsubscribe` will fail with a FK constraint error for any user
-- Fix: migrate `pushSubscriptions` to use `householdId` (integer, already on req.user) or add a `clerk_user_id TEXT` column
-- Simplest fix: change `userId` references in `server/routes/push.js` to use `req.user.householdId` and update the schema/migration accordingly
+Requires (read-only, already reviewed):
+- server/db/client.js — Drizzle client pattern confirmed
+- server/routes/recipes.js — no changes; create callers unaffected
 
-## 2. Household members list empty for Clerk users (LOW)
-- `GET /api/household/members` queries the `users` table (old JWT system)
-- New Clerk users are never inserted into `users` — so members list shows 0
-- `server/routes/household.js` `getMembers()` and the members section of `HouseholdPage.jsx` are affected
-- Fix options: populate `users` table on Clerk sign-in, or remove/replace the members feature
-
-## 3. Production Clerk keys (MEDIUM — before public launch)
-- Currently using development instance keys (`pk_test_...`, `sk_test_...`)
-- Must switch to production instance in Clerk Dashboard before public launch
-- Requires: create production instance in Clerk → update CLERK_SECRET_KEY + VITE_CLERK_PUBLISHABLE_KEY in Vercel
-
-## 4. Invite by email broken (LOW)
-- `POST /api/household/invite` sends a join code via email
-- Join codes still work at the DB level, but new users sign up via Clerk (not a join code form)
-- The join code flow has no Clerk-aware registration path — new users who receive a join code have no way to use it
-- Fix: design a Clerk-compatible household join flow (e.g. invite link that sets a cookie/param before Clerk sign-up)
-
-# Remaining Work (outstanding from earlier tasks)
-- Receipt vision benchmark (≥85%, 5 receipts) — pending from TASK-016A
-- Behavioral regression B1–B8 for Connor's household in production
+Irrelevant:
+- server/services/ai/*
+- server/services/aiService.js
+- client/src/components/dashboard/WasteSaved.jsx
+- client/public/sw.js
+- server/data/foodkeeper.json
+- ai/tasks/archive/
 
 # Verification Results
+- Build: PASS (vite build, 9.20s, 0 errors)
+- Migration 0013: NOT YET APPLIED (pending Neon deploy)
 
-- TASK-016B build: PASS
-- TASK-016B deployment: PASS
-- Migration 0010: APPLIED in Neon
-- Connor household clerk_user_id: LINKED
-- Production smoke (Connor): PASS — signed in, AI features confirmed working
-- AnthropicProvider grep: CLEAN
-- requireAuth in active routes: CLEAN
+# Known Risks
+- Duplicate recipe check must pass (0 rows) before applying migration 0013
+- Migration 0013 must be applied before code deploy (chatService.savePair writes metadata column on every assistant message)
+- /api/recipes response shape `{ recipes: [...] }` with `name` field — confirmed from existing route
 
-# Recommended Next Action
-
-TASK-017: Fix push notifications (replace pushSubscriptions.userId integer FK with householdId).
-This is the only issue that actively breaks existing functionality for all users.
+# Remaining Work
+- Apply migration 0013 to Neon (duplicate check first)
+- Deploy and run verification steps above
+- Issue 3 (prod Clerk keys) ops checklist from TASK-017 — still pending
+- Receipt vision benchmark (≥85%, 5 receipts) — pending from TASK-016A
+- Members card with display names — deferred
 
 # Forbidden Exploration
-
 - `client/public/sw.js`
-- `server/db/migrations/0001-0009`
+- `server/db/migrations/0001-0012`
 - `server/data/foodkeeper.json`
 - `ai/tasks/archive/`
+- `server/routes/recipes.js`
 
 # Context Notes
-
 - branch: main
 - worktree: none
 - context pressure: low
-- next agent: implement TASK-017 (push notifications fix) or address follow-ons above
 
 # PowerShell Merge Block
 
