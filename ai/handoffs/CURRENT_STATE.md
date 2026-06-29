@@ -1,77 +1,135 @@
 # Task
-TASK-020 — Recipe Suggestion: Deduplication & Saved-First Priority
+TASK-021 + TASK-022 — Specs approved, ready for implementation
 
 # Current Status
-COMPLETE. Implementation verified by code review. Ready to push to main.
+Both specs completed full architect review cycles and are APPROVED FOR IMPLEMENTATION.
+No code has been written yet. TASK-020 remains the last merged implementation.
 
-# Files Modified (TASK-020)
+# Next Implementation Targets
 
-- `server/services/recipeSearchService.js` — added `sourceId` and `source` fields to `mapSpoonacular` and `mapTheMealDB`
-- `server/services/aiService.js` — added prose-suppression rule to system prompt after `suggest_recipes` tool rule
-- `server/routes/ai.js` — added `extractSuggestedRecipeKeys(history)` module-level helper; rewrote `suggest_recipes` handler as unified 11-step recommendation pipeline
+## TASK-021 — Pantry-Aware Ingredient Highlighting (spec: `ai/tasks/TASK-021-spec.md`)
+Replace binary `unmatchedIngredients` pattern on AI recipe suggestion cards with per-ingredient
+pantry status: green (have), red (missing), red + "(need to buy N unit)" (partial).
 
-# Architecture Notes
+**Files to touch:**
+- `server/routes/ai.js` — post-scoring annotation step (step 12); build `pantryMap` once, annotate DTO
+- `client/src/pages/ChatPage.jsx` — replace `unmatchedSet` rendering with status-driven rendering
 
-## Recommendation pipeline (suggest_recipes handler)
-1. Extract `shownKeys` from chat history metadata (ID-first, name fallback for pre-TASK-020 rows)
-2. Collect saved recipe candidates tagged `source: 'saved'`, `sourceId: String(r.id)`
-3. Fetch API candidates from `aiService.suggestRecipes` (source/sourceId now on mapper output)
-4. Merge into one pool
-5. Deduplicate across full pool before scoring (ID-key `source:sourceId`, name fallback)
-6. Filter previously-shown recipes via `shownKeys`
-7+8. Score via `scoreCandidates()` — saved recipes below `overlapScore >= 0.25` OR `matchedIngredients < 1` are discarded; saved recipes that pass receive a `+0.2` effective score bonus
-9. Sort via `applyStrategySort()` — existing strategy logic unchanged
-10. Take top 5
-11. Fallback: if history filter exhausted all candidates, re-run on pre-filter pool
+**Read-only dependencies:**
+- `server/utils/foodNormalization.js` — import `normalizeFood`, `stripIngredientPrefix`, `normalizeUnit`
+- `server/utils/recipeScorer.js` — do not modify, do not re-export from
 
-## Tool result split
-- `recipeSuggestions` (full objects) → metadata JSONB + `res.json()` to frontend — unchanged shape, cards render as before
-- `slimForModel` (name + shortDescription + source only) → returned to model from tool — model cannot reproduce card detail it never received
+**Key constraints:**
+- Scorer output is immutable — annotation builds new DTOs
+- `pantryMap` built once (O(1) lookup), not `find()` in a loop
+- `needToBuy` only present when `pantryStatus === 'partial'` AND delta > 0; never null/0
+- `no-speech`/`aborted` are silent; `try/catch` wraps annotation per ingredient
+- Remove `unmatchedIngredients` from response and all frontend references
 
-## source field semantics
-`source` on candidate objects means suggestion origin (`'saved'`, `'spoonacular'`, `'mealdb'`). This overwrites the DB `source` field on saved recipe rows (which tracks save method: `'agent_saved'`, `'upload'`, etc.) — the DB value is irrelevant for suggestions and not read by the frontend.
+## TASK-022 — Voice-to-Text Input on Mobile (spec: `ai/tasks/TASK-022-spec.md`)
+Add a mic button (mobile only) to the ChatPage input bar. Tapping records speech and appends
+the transcript to the textarea for user review before sending.
 
-## Dedup key format
-`${source}:${sourceId}` when both present; `name.toLowerCase().trim()` as fallback. Old history rows (pre-TASK-020, no sourceId) use name-based fallback gracefully.
+**Files to touch:**
+- `client/src/hooks/useSpeechInput.js` — new file; Web Speech API hook
+- `client/src/pages/ChatPage.jsx` — add mic button, wire hook
+
+**Key constraints:**
+- No new npm dependencies; no backend changes
+- `SpeechRecognition` instance created once in `useEffect`, stored in `useRef`
+- Handlers explicitly nulled before `abort()` on cleanup/unmount
+- `toggle()` is the single exposed action (not separate start/stop)
+- `continuous: false`, `interimResults: false`
+- iOS PWA caveat: disabled muted button + toast on tap (not inline text)
+- `not-allowed`/`audio-capture` errors → `onError` callback → toast in ChatPage
+- `no-speech`/`aborted` → silent reset only
+- No `voiceTranscript` state in ChatPage — `onResult` writes directly to `setInput`
+
+# Files Modified (TASK-020, last implementation)
+- `server/services/recipeSearchService.js`
+- `server/services/aiService.js`
+- `server/routes/ai.js`
+
+# Files Required for TASK-021
+- `server/routes/ai.js`
+- `client/src/pages/ChatPage.jsx`
+- `server/utils/foodNormalization.js` (read-only)
+- `server/utils/recipeScorer.js` (read-only)
+
+# Files Required for TASK-022
+- `client/src/hooks/useSpeechInput.js` (new)
+- `client/src/pages/ChatPage.jsx`
 
 # Dependency Chain
 
+## TASK-021
 Editing:
 - `server/routes/ai.js`
-- `server/services/aiService.js`
-- `server/services/recipeSearchService.js`
-
-Requires (read-only, unchanged):
-- `server/utils/recipeScorer.js`
-- `server/services/recipeService.js`
-- `server/services/chatService.js`
 - `client/src/pages/ChatPage.jsx`
 
-Irrelevant (do not open):
+Requires (read-only):
+- `server/utils/foodNormalization.js`
+- `server/utils/recipeScorer.js`
+- `server/services/pantryService.js` (already called in handler — no change needed)
+
+Irrelevant:
 - `server/db/migrations/`
 - `server/data/foodkeeper.json`
-- `client/src/pages/DashboardPage.jsx`
+- `client/src/components/recipes/RecipeCard.jsx`
+- `client/src/components/recipes/RecipeModal.jsx`
 - `ai/tasks/archive/`
 
+## TASK-022
+Editing:
+- `client/src/hooks/useSpeechInput.js` (new)
+- `client/src/pages/ChatPage.jsx`
+
+Irrelevant:
+- `server/` (entirely — no backend changes)
+- `client/src/components/`
+- `ai/tasks/archive/`
+
+# Architecture Notes
+
+## TASK-021 annotation contract
+```
+annotatePantryStatus(top5, pantryMap) → annotatedRecipeSuggestions
+```
+Inputs: scored top-5 recipe objects (read-only) + `Map<normalizedName, pantryItem>` built from `allItems`.
+Output: new array of API DTOs with `pantryStatus` / `needToBuy` per ingredient; `unmatchedIngredients` absent.
+
+Pantry quantity comparison rules (in order):
+1. No pantry item → `missing`
+2. `ing.quantity == null` → `have` (presence sufficient)
+3. `pantryItem.quantity == null` → `have` (untracked = available)
+4. Units mismatch after `normalizeUnit()` → `have` if `pantryItem.quantity > 0`, else `missing`
+5. `pantryItem.quantity < ing.quantity` → `partial`, `needToBuy = delta`
+6. Otherwise → `have`
+
+## TASK-022 hook contract
+```
+useSpeechInput({ lang, onResult, onError }) → { supported, iosPwaCaveat, listening, toggle }
+```
+`supported` = `isTouch && !!SpeechRecognitionAPI && !isIosPwa`
+`iosPwaCaveat` = iOS standalone PWA detected (show disabled button + toast)
+
 # Decisions Made
-- Slim tool result to model (name + shortDescription + source only); full objects to metadata/frontend
-- Saved recipes participate in unified ranking with +0.2 bonus — not blindly prepended
-- Overlap threshold for saved recipes: `overlapScore >= 0.25` AND `matchedIngredients.length >= 1`
-- ID-based dedup (`source:sourceId`) with normalized-name fallback
-- Dedup window: all 20 loaded history messages
-- Cache in `recipeSearchService` unchanged — dedup happens post-cache
-- Fallback returns highest-ranked from pre-history-filter pool, not empty list
-- `source` string field (`'saved'`/`'spoonacular'`/`'mealdb'`) instead of `isSaved` boolean
+- TASK-021 and TASK-022 can be implemented independently in either order
+- TASK-021 uses `foodNormalization.js` directly (not via recipeScorer) as the normalization source of truth
+- TASK-022 uses native Web Speech API — no library
+- RecipeModal pantry highlighting deferred (no live pantry data available there)
+- Unit conversion (oz↔cup etc.) deferred to v2
 
 # Remaining Work
-- Manual verification on device: ask "what should I eat?" twice and confirm different suggestions on second ask
-- Manual verification: confirm prose no longer duplicates recipe card content
-- **TASK-017 Issue 3** — Switch to Clerk production keys — BLOCKED (requires custom domain)
+- Implement TASK-021
+- Implement TASK-022
+- TASK-017 Issue 3 — Switch to Clerk production keys (BLOCKED: requires custom domain)
 - Members card with display names — deferred
 
 # Known Risks
-- Spoonacular/TheMealDB API pool is small for a given pantry fingerprint. After a few sessions, the fallback path will activate. This is expected and acceptable.
-- Clerk dev keys warning in console until Issue 3 ops checklist is completed
+- Safari iOS SpeechRecognition reliability varies by device/locale — test on real device
+- TASK-021 annotation uses exact name match only; scorer uses fuzzy fallback too — intentional v1 limitation (documented in spec)
+- Spoonacular/TheMealDB pool exhaustion after several sessions (TASK-020 fallback handles this)
 
 # Forbidden Exploration
 - `client/public/sw.js`
@@ -85,5 +143,4 @@ Irrelevant (do not open):
 - context pressure: low
 
 # PowerShell Merge Block
-
 N/A — working directly on main.
