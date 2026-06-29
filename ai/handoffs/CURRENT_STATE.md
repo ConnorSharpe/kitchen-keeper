@@ -1,12 +1,51 @@
 # Task
-TASK-021 + TASK-022 — COMPLETE
+TASK-023 — iOS PWA Voice Input via MediaRecorder + Whisper
 
 # Current Status
-Both tasks implemented and merged to main. TASK-021 replaces binary unmatchedIngredients pattern with per-ingredient pantry status (green/red/partial). TASK-022 adds a mobile-only mic button backed by the Web Speech API.
+Spec approved (DRAFT-3). Ready for implementation. TASK-021 + TASK-022 are complete and merged to main.
 
-# Next Implementation Targets
+# Next Implementation Target
 
-## TASK-021 — Pantry-Aware Ingredient Highlighting (spec: `ai/tasks/TASK-021-spec.md`)
+## TASK-023 — iOS PWA Voice Input via MediaRecorder + Whisper (spec: `ai/tasks/TASK-023-spec.md`)
+
+Replace the disabled mic button on iOS PWA installs with a working `MediaRecorder` + Whisper transcription flow.
+
+**New files:**
+- `client/src/hooks/useWhisperInput.js` — MediaRecorder + Whisper hook (iOS PWA path)
+- `client/src/hooks/useBrowserSpeechInput.js` — extracted SpeechRecognition hook (non-iOS path, verbatim from current useSpeechInput.js)
+- `server/routes/transcribe.js` — POST /api/ai/transcribe route
+
+**Modified files:**
+- `client/src/hooks/useSpeechInput.js` — replace with thin dispatcher over useWhisperInput + useBrowserSpeechInput
+- `server/app.js` — mount transcribe route
+
+**Key constraints:**
+- `useWhisperInput` and `useBrowserSpeechInput` both called unconditionally at top of dispatcher (Rules of Hooks)
+- 3-state phase model: `idle | recording | processing` — `toggle()` during processing is no-op
+- `setPhase('processing')` in `stopRecording()` BEFORE `recorder.stop()` — eliminates idle→processing race
+- `AbortController` on fetch; 30s timeout; cancelled on unmount; `AbortError` caught silently
+- 90s auto-stop timer calls `stopRecording()` — same path as user pressing Stop
+- Server uses `clerkAuth` middleware + `householdService.getAiConfig` + `resolveProvider` — same pattern as ai.js:581
+- `provider.client.audio.transcriptions.create()` — do not instantiate a new OpenAI client
+- MIME allowlist is a compatibility guard, not a security boundary (multer doesn't inspect bytes)
+- `toFile` imported from `'openai'` (not `'openai/uploads'`)
+- ChatPage JSX unchanged — hook public API unchanged
+
+**Read-only dependencies:**
+- `server/services/householdService.js` — `getAiConfig(householdId)`
+- `server/services/ai/resolveProvider.js`
+- `server/middleware/clerkAuth.js`
+
+**Forbidden files:**
+- `client/src/pages/ChatPage.jsx`
+- `client/src/components/`
+- `server/services/ai/resolveProvider.js`
+
+---
+
+## Previously completed targets (for reference)
+
+### TASK-021 — Pantry-Aware Ingredient Highlighting (spec: `ai/tasks/TASK-021-spec.md`)
 Replace binary `unmatchedIngredients` pattern on AI recipe suggestion cards with per-ingredient
 pantry status: green (have), red (missing), red + "(need to buy N unit)" (partial).
 
@@ -44,78 +83,23 @@ the transcript to the textarea for user review before sending.
 - `no-speech`/`aborted` → silent reset only
 - No `voiceTranscript` state in ChatPage — `onResult` writes directly to `setInput`
 
-# Files Modified
+# Files Modified (completed tasks)
 
 ## TASK-021
-- `server/routes/ai.js` — expanded foodNormalization import; added pantryMap + annotation step after topN selection; dropped unmatchedIngredients from DTO
-- `client/src/pages/ChatPage.jsx` — added formatQty; removed unmatchedSet; replaced ingredient rendering with status-driven green/red/partial
+- `server/routes/ai.js` — pantryMap annotation step; dropped unmatchedIngredients from DTO
+- `client/src/pages/ChatPage.jsx` — status-driven ingredient rendering
 
 ## TASK-022
-- `client/src/hooks/useSpeechInput.js` — new file; Web Speech API hook
-- `client/src/pages/ChatPage.jsx` — imported hook, wired onResult/onError, added mic button to input bar
-
-# Files Required for TASK-021
-- `server/routes/ai.js`
-- `client/src/pages/ChatPage.jsx`
-- `server/utils/foodNormalization.js` (read-only)
-- `server/utils/recipeScorer.js` (read-only)
-
-# Files Required for TASK-022
-- `client/src/hooks/useSpeechInput.js` (new)
-- `client/src/pages/ChatPage.jsx`
-
-# Dependency Chain
-
-## TASK-021
-Editing:
-- `server/routes/ai.js`
-- `client/src/pages/ChatPage.jsx`
-
-Requires (read-only):
-- `server/utils/foodNormalization.js`
-- `server/utils/recipeScorer.js`
-- `server/services/pantryService.js` (already called in handler — no change needed)
-
-Irrelevant:
-- `server/db/migrations/`
-- `server/data/foodkeeper.json`
-- `client/src/components/recipes/RecipeCard.jsx`
-- `client/src/components/recipes/RecipeModal.jsx`
-- `ai/tasks/archive/`
-
-## TASK-022
-Editing:
-- `client/src/hooks/useSpeechInput.js` (new)
-- `client/src/pages/ChatPage.jsx`
-
-Irrelevant:
-- `server/` (entirely — no backend changes)
-- `client/src/components/`
-- `ai/tasks/archive/`
+- `client/src/hooks/useSpeechInput.js` — Web Speech API hook (will be replaced by TASK-023 dispatcher)
+- `client/src/pages/ChatPage.jsx` — mic button wired to hook
 
 # Architecture Notes
 
-## TASK-021 annotation contract
-```
-annotatePantryStatus(top5, pantryMap) → annotatedRecipeSuggestions
-```
-Inputs: scored top-5 recipe objects (read-only) + `Map<normalizedName, pantryItem>` built from `allItems`.
-Output: new array of API DTOs with `pantryStatus` / `needToBuy` per ingredient; `unmatchedIngredients` absent.
-
-Pantry quantity comparison rules (in order):
-1. No pantry item → `missing`
-2. `ing.quantity == null` → `have` (presence sufficient)
-3. `pantryItem.quantity == null` → `have` (untracked = available)
-4. Units mismatch after `normalizeUnit()` → `have` if `pantryItem.quantity > 0`, else `missing`
-5. `pantryItem.quantity < ing.quantity` → `partial`, `needToBuy = delta`
-6. Otherwise → `have`
-
-## TASK-022 hook contract
+## TASK-022 hook contract (preserved by TASK-023)
 ```
 useSpeechInput({ lang, onResult, onError }) → { supported, iosPwaCaveat, listening, toggle }
 ```
-`supported` = `isTouch && !!SpeechRecognitionAPI && !isIosPwa`
-`iosPwaCaveat` = iOS standalone PWA detected (show disabled button + toast)
+TASK-023 replaces the implementation of `useSpeechInput.js` with a thin dispatcher but keeps this public API identical. ChatPage does not change.
 
 # Decisions Made
 - TASK-021 and TASK-022 can be implemented independently in either order
@@ -125,6 +109,7 @@ useSpeechInput({ lang, onResult, onError }) → { supported, iosPwaCaveat, liste
 - Unit conversion (oz↔cup etc.) deferred to v2
 
 # Remaining Work
+- TASK-023 — iOS PWA voice input via MediaRecorder + Whisper (spec: `ai/tasks/TASK-023-spec.md`) — READY TO IMPLEMENT
 - TASK-017 Issue 3 — Switch to Clerk production keys (BLOCKED: requires custom domain)
 - Members card with display names — deferred
 - TASK-021 v2: fuzzy annotation (foodsMatch) to align with scorer's fuzzy match
