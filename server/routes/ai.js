@@ -21,6 +21,23 @@ import { getExpiryDays, getExpiryStatus } from '../utils/expiry.js';
 const router = express.Router();
 router.use(clerkAuth);
 
+// Builds a Set of dedup keys from previously shown recipe suggestions in chat history.
+// Key format: `${source}:${sourceId}` when available, normalized name as fallback.
+// Handles old history rows that pre-date the sourceId field gracefully.
+function extractSuggestedRecipeKeys(history) {
+  const keys = new Set();
+  for (const msg of history) {
+    for (const s of msg.metadata?.recipeSuggestions ?? []) {
+      if (s.source && s.sourceId) {
+        keys.add(`${s.source}:${s.sourceId}`);
+      } else if (s.name) {
+        keys.add(s.name.toLowerCase().trim());
+      }
+    }
+  }
+  return keys;
+}
+
 // POST /api/ai/eat-this-now
 router.post('/eat-this-now', async (req, res) => {
   const requestId = randomUUID().split('-')[0];
@@ -393,18 +410,46 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
     suggest_recipes: async (args) => {
       const requestedStrategy = args.strategy ?? 'any';
 
+      // Keys for recipes already shown in this session — used to avoid repeating suggestions.
+      const shownKeys = extractSuggestedRecipeKeys(history);
+
       const dietaryProfile = await dietaryService.getProfile(householdId);
+      const dp = dietaryProfile ?? { conditions: [], allergies: [] };
 
-      const candidates = await aiService.suggestRecipes(allItems, expiringItems);
+      // Step 1: Saved recipe candidates — tag with suggestion origin.
+      // Overrides the DB `source` field (which tracks save method) with suggestion origin.
+      const savedCandidates = allRecipes.map((r) => ({
+        ...r,
+        source: 'saved',
+        sourceId: String(r.id),
+      }));
 
-      const scored = candidates.map((candidate) => {
-        const { overlapScore, matchedIngredients, unmatchedIngredients } =
-          recipeScorer.score(candidate, allItems);
-        const { allergyNote, healthNote } =
-          recipeScorer.annotateHealth(candidate, dietaryProfile ?? { conditions: [], allergies: [] });
-        return { ...candidate, overlapScore, matchedIngredients, unmatchedIngredients, allergyNote, healthNote };
+      // Step 2: API candidates — source/sourceId already added by recipeSearchService mappers.
+      const apiRaw = await aiService.suggestRecipes(allItems, expiringItems);
+
+      // Step 3+4: Merge into one pool.
+      const allCandidates = [...savedCandidates, ...apiRaw];
+
+      // Step 5: Deduplicate across the full pool before scoring (ID-first, name fallback).
+      const seenDedupeKeys = new Set();
+      const deduplicated = allCandidates.filter((c) => {
+        const key = (c.source && c.sourceId)
+          ? `${c.source}:${c.sourceId}`
+          : (c.name ?? '').toLowerCase().trim();
+        if (seenDedupeKeys.has(key)) return false;
+        seenDedupeKeys.add(key);
+        return true;
       });
 
+      // Step 6: Remove recipes already shown in this session's history.
+      const filtered = deduplicated.filter((c) => {
+        const key = (c.source && c.sourceId)
+          ? `${c.source}:${c.sourceId}`
+          : (c.name ?? '').toLowerCase().trim();
+        return !shownKeys.has(key);
+      });
+
+      // Determine effective strategy (unchanged logic — needs recent meal log).
       let effectiveStrategy = requestedStrategy;
       if (requestedStrategy === 'any') {
         const cutoff72h = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
@@ -412,30 +457,63 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
         const highCount = recent72h.filter((m) => m.purineLevel === 'high').length;
         const medCount  = recent72h.filter((m) => m.purineLevel === 'medium').length;
         const isHighPurine = highCount >= 2 || (highCount + medCount) >= 4;
-
         if (isHighPurine)                  effectiveStrategy = 'dietary_safe';
         else if (expiringItems.length > 0) effectiveStrategy = 'expiring_first';
         else                               effectiveStrategy = 'pantry_overlap';
       }
 
       const expiringNames = new Set(expiringItems.map((i) => i.name.toLowerCase()));
-      const sorted = [...scored].sort((a, b) => {
-        if (effectiveStrategy === 'expiring_first') {
-          const aExp = (a.matchedIngredients || []).some((n) => expiringNames.has(n.toLowerCase()));
-          const bExp = (b.matchedIngredients || []).some((n) => expiringNames.has(n.toLowerCase()));
-          if (aExp && !bExp) return -1;
-          if (!aExp && bExp) return 1;
-        }
-        if (effectiveStrategy === 'dietary_safe') {
-          const aScore = (a.allergyNote ? -10 : 0) + (a.healthNote ? -2 : 0) + (a.overlapScore ?? 0);
-          const bScore = (b.allergyNote ? -10 : 0) + (b.healthNote ? -2 : 0) + (b.overlapScore ?? 0);
-          return bScore - aScore;
-        }
-        return (b.overlapScore ?? 0) - (a.overlapScore ?? 0);
-      });
 
-      recipeSuggestions = sorted.slice(0, 5);
-      return { ok: true, suggestions: recipeSuggestions, strategy: effectiveStrategy };
+      // Steps 7+8: Score candidates and apply saved-source ranking bonus.
+      // Saved recipes must meet overlap >= 0.25 AND at least 1 matched ingredient to qualify.
+      // API candidates always pass through — ranked by score alone.
+      function scoreCandidates(pool) {
+        return pool.map((c) => {
+          const { overlapScore, matchedIngredients, unmatchedIngredients } = recipeScorer.score(c, allItems);
+          const { allergyNote, healthNote } = recipeScorer.annotateHealth(c, dp);
+          if (c.source === 'saved' && (overlapScore < 0.25 || matchedIngredients.length < 1)) return null;
+          const effectiveScore = overlapScore + (c.source === 'saved' ? 0.2 : 0);
+          return { ...c, overlapScore, effectiveScore, matchedIngredients, unmatchedIngredients, allergyNote, healthNote };
+        }).filter(Boolean);
+      }
+
+      // Step 9: Sort by effective strategy.
+      function applyStrategySort(pool) {
+        return [...pool].sort((a, b) => {
+          if (effectiveStrategy === 'expiring_first') {
+            const aExp = (a.matchedIngredients || []).some((n) => expiringNames.has(n.toLowerCase()));
+            const bExp = (b.matchedIngredients || []).some((n) => expiringNames.has(n.toLowerCase()));
+            if (aExp && !bExp) return -1;
+            if (!aExp && bExp) return 1;
+          }
+          if (effectiveStrategy === 'dietary_safe') {
+            const aScore = (a.allergyNote ? -10 : 0) + (a.healthNote ? -2 : 0) + (a.effectiveScore ?? 0);
+            const bScore = (b.allergyNote ? -10 : 0) + (b.healthNote ? -2 : 0) + (b.effectiveScore ?? 0);
+            return bScore - aScore;
+          }
+          return (b.effectiveScore ?? 0) - (a.effectiveScore ?? 0);
+        });
+      }
+
+      // Step 10: Take top 5.
+      let topN = applyStrategySort(scoreCandidates(filtered)).slice(0, 5);
+
+      // Step 11: Fallback — if history filter exhausted all candidates, re-run without it.
+      if (topN.length === 0) {
+        topN = applyStrategySort(scoreCandidates(deduplicated)).slice(0, 5);
+      }
+
+      // Full objects saved to metadata and returned to frontend for card rendering.
+      recipeSuggestions = topN;
+
+      // Slim objects returned to model only — model cannot reproduce card detail it never saw.
+      const slimForModel = topN.map((s) => ({
+        name: s.name,
+        shortDescription: s.description ?? '',
+        source: s.source,
+      }));
+
+      return { ok: true, suggestions: slimForModel, strategy: effectiveStrategy };
     },
 
     save_recipe: async (args) => {

@@ -428,6 +428,7 @@ export async function chat(pantrySummary, recipeSummary, history, userMessage, t
     `  immediately continue the action that required clarification.\n` +
     `  Do not switch tasks, suggest recipes, or begin a new workflow until the requested action is completed.\n` +
     `- User asks what to cook, what to make, or wants recipe ideas → suggest_recipes\n` +
+    `- After suggest_recipes returns results, do NOT list or describe the individual recipes in your text reply — the app renders recipe cards from the tool result automatically. Write one brief introductory sentence at most (e.g. "Here are some ideas based on your pantry:").\n` +
     `- User confirms they want to save a suggested recipe → save_recipe\n` +
     `- Trace condiment amounts: the server handles skip-deduction automatically.\n` +
     `The pantry summary includes item IDs. Always use the id field for update_pantry_item and remove_pantry_item.\n` +

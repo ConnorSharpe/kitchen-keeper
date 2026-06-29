@@ -1,77 +1,83 @@
 # Task
-TASK-018 — UI Refresh: Chat as Home, Persistent Recipe Cards, Remove Waste Counter
+TASK-020 — Recipe Suggestion: Deduplication & Saved-First Priority
 
 # Current Status
-COMPLETE. All issues deployed and verified in production. DB spot checks passed.
+COMPLETE. Implementation verified by code review. Ready to push to main.
 
-# Files Modified (TASK-018)
+# Files Modified (TASK-020)
 
-- `client/src/pages/DashboardPage.jsx` — removed WasteSaved import and grid; QuickAdd full-width
-- `client/src/App.jsx` — `/` → ChatPage; `/dashboard` → DashboardPage; `/chat` → Navigate redirect
-- `client/src/components/layout/Sidebar.jsx` — Chat first w/ primary styling; Dashboard second at /dashboard; "Explore" removed
-- `client/src/pages/ChatPage.jsx` — header "Kitchen Keeper"; history maps metadata→recipeSuggestions; mount fetches /api/recipes to seed savedRecipeNames
-- `server/db/schema.js` — jsonb import added; metadata column added to chatMessages
-- `server/db/migrations/0013_chat_metadata.sql` — ADD COLUMN metadata JSONB; ADD CONSTRAINT recipes_household_name_unique
-- `server/services/chatService.js` — savePair accepts optional metadata arg; writes to assistant row only
-- `server/services/recipeService.js` — new createOrIgnore method added; create unchanged
-- `server/routes/ai.js` — save_recipe uses createOrIgnore with undefined guard; savePair called with recipeSuggestions metadata
-- `client/public/favicon.svg` — NEW: fork and spoon icon
-- `client/index.html` — favicon.svg wired up
-- `client/public/sw.js` — fixed response body already used error in cache handler
-
-# Also committed alongside TASK-018
-- `client/src/pages/JoinPage.jsx` — TASK-017 file that was previously untracked
-- `server/routes/household.js`, `server/routes/push.js`, `server/services/emailService.js`, `server/services/householdService.js`, `server/services/pushService.js`, `client/src/pages/HouseholdPage.jsx` — TASK-017 changes that were previously uncommitted
-- `server/db/migrations/0011a_push_household_add.sql`, `0011b_push_household_finalize.sql`, `0012_household_members.sql` — TASK-017 migrations (already applied to Neon)
-
-# Verification Results
-- Build: PASS
-- All migrations applied to Neon: 0011a, 0011b, 0012, 0013
-- Issue 1: PASS — WasteSaved gone, QuickAdd full-width
-- Issue 3: PASS — `/` loads Chat, `/dashboard` loads Dashboard, `/chat` redirects, sidebar correct, header correct
-- Issue 2: PASS — recipe cards persist through reload and navigation; old null rows render cleanly
-- DB SELECT 1 (latest assistant): NULL (pre-migration row, expected) — will populate on next recipe-returning message
-- DB SELECT 5 (user rows): all NULL as required
-- Favicon: PASS — fork and spoon appears in browser tab
-- sw.js clone error: RESOLVED
+- `server/services/recipeSearchService.js` — added `sourceId` and `source` fields to `mapSpoonacular` and `mapTheMealDB`
+- `server/services/aiService.js` — added prose-suppression rule to system prompt after `suggest_recipes` tool rule
+- `server/routes/ai.js` — added `extractSuggestedRecipeKeys(history)` module-level helper; rewrote `suggest_recipes` handler as unified 11-step recommendation pipeline
 
 # Architecture Notes
 
-## Recipe card persistence
-- metadata is nullable JSONB; old rows stay NULL; frontend handles null with `?? []`
-- createOrIgnore uses onConflictDoNothing targeting (householdId, name); case-sensitive uniqueness
-- savePair: user rows always get metadata=null; assistant rows get metadata only when recipeSuggestions.length > 0
-- savedRecipeNames seeded from /api/recipes on mount; fetch failure is non-fatal
+## Recommendation pipeline (suggest_recipes handler)
+1. Extract `shownKeys` from chat history metadata (ID-first, name fallback for pre-TASK-020 rows)
+2. Collect saved recipe candidates tagged `source: 'saved'`, `sourceId: String(r.id)`
+3. Fetch API candidates from `aiService.suggestRecipes` (source/sourceId now on mapper output)
+4. Merge into one pool
+5. Deduplicate across full pool before scoring (ID-key `source:sourceId`, name fallback)
+6. Filter previously-shown recipes via `shownKeys`
+7+8. Score via `scoreCandidates()` — saved recipes below `overlapScore >= 0.25` OR `matchedIngredients < 1` are discarded; saved recipes that pass receive a `+0.2` effective score bonus
+9. Sort via `applyStrategySort()` — existing strategy logic unchanged
+10. Take top 5
+11. Fallback: if history filter exhausted all candidates, re-run on pre-filter pool
 
-## Routing
-- /chat retained as Navigate redirect for bookmark compatibility
-- EatThisNow stays on /dashboard
+## Tool result split
+- `recipeSuggestions` (full objects) → metadata JSONB + `res.json()` to frontend — unchanged shape, cards render as before
+- `slimForModel` (name + shortDescription + source only) → returned to model from tool — model cannot reproduce card detail it never received
+
+## source field semantics
+`source` on candidate objects means suggestion origin (`'saved'`, `'spoonacular'`, `'mealdb'`). This overwrites the DB `source` field on saved recipe rows (which tracks save method: `'agent_saved'`, `'upload'`, etc.) — the DB value is irrelevant for suggestions and not read by the frontend.
+
+## Dedup key format
+`${source}:${sourceId}` when both present; `name.toLowerCase().trim()` as fallback. Old history rows (pre-TASK-020, no sourceId) use name-based fallback gracefully.
 
 # Dependency Chain
 
-Irrelevant (do not open):
-- `server/services/ai/*`
+Editing:
+- `server/routes/ai.js`
 - `server/services/aiService.js`
-- `client/src/components/dashboard/WasteSaved.jsx`
+- `server/services/recipeSearchService.js`
+
+Requires (read-only, unchanged):
+- `server/utils/recipeScorer.js`
+- `server/services/recipeService.js`
+- `server/services/chatService.js`
+- `client/src/pages/ChatPage.jsx`
+
+Irrelevant (do not open):
+- `server/db/migrations/`
 - `server/data/foodkeeper.json`
+- `client/src/pages/DashboardPage.jsx`
 - `ai/tasks/archive/`
 
+# Decisions Made
+- Slim tool result to model (name + shortDescription + source only); full objects to metadata/frontend
+- Saved recipes participate in unified ranking with +0.2 bonus — not blindly prepended
+- Overlap threshold for saved recipes: `overlapScore >= 0.25` AND `matchedIngredients.length >= 1`
+- ID-based dedup (`source:sourceId`) with normalized-name fallback
+- Dedup window: all 20 loaded history messages
+- Cache in `recipeSearchService` unchanged — dedup happens post-cache
+- Fallback returns highest-ranked from pre-history-filter pool, not empty list
+- `source` string field (`'saved'`/`'spoonacular'`/`'mealdb'`) instead of `isSaved` boolean
+
 # Remaining Work
-- **TASK-019** — Fix clarification confirmation drops tool call — IMPLEMENTED, awaiting manual verification
-- **TASK-017 Issue 3** — Switch to Clerk production keys — BLOCKED (requires custom domain; staying on dev keys for now)
-- Receipt vision benchmark — COMPLETE (90% across 3 receipts, exceeds 85% threshold)
-- Members card with display names — deferred; requires Clerk backend SDK or display name stored at join time
+- Manual verification on device: ask "what should I eat?" twice and confirm different suggestions on second ask
+- Manual verification: confirm prose no longer duplicates recipe card content
+- **TASK-017 Issue 3** — Switch to Clerk production keys — BLOCKED (requires custom domain)
+- Members card with display names — deferred
 
 # Known Risks
+- Spoonacular/TheMealDB API pool is small for a given pantry fingerprint. After a few sessions, the fallback path will activate. This is expected and acceptable.
 - Clerk dev keys warning in console until Issue 3 ops checklist is completed
-- OWNER_CLERK_ID must be updated after switching to Clerk production instance
 
 # Forbidden Exploration
 - `client/public/sw.js`
-- `server/db/migrations/0001-0013`
+- `server/db/migrations/`
 - `server/data/foodkeeper.json`
 - `ai/tasks/archive/`
-- `server/routes/recipes.js`
 
 # Context Notes
 - branch: main

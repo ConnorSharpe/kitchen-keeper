@@ -41,6 +41,8 @@ function mapSpoonacular(recipe) {
     : null;
 
   return {
+    sourceId: String(recipe.id),
+    source: 'spoonacular',
     name: recipe.title,
     description: stripHtml(recipe.summary).slice(0, 500) || null,
     sourceUrl: recipe.sourceUrl ?? null,
@@ -76,6 +78,8 @@ function mapTheMealDB(meal) {
   const tags = [meal.strCategory, meal.strArea].filter(Boolean);
 
   return {
+    sourceId: String(meal.idMeal),
+    source: 'mealdb',
     name: meal.strMeal,
     description: null,
     sourceUrl: null,
