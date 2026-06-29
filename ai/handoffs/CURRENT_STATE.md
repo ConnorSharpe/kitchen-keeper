@@ -1,9 +1,8 @@
 # Task
-TASK-021 + TASK-022 — Specs approved, ready for implementation
+TASK-021 + TASK-022 — COMPLETE
 
 # Current Status
-Both specs completed full architect review cycles and are APPROVED FOR IMPLEMENTATION.
-No code has been written yet. TASK-020 remains the last merged implementation.
+Both tasks implemented and merged to main. TASK-021 replaces binary unmatchedIngredients pattern with per-ingredient pantry status (green/red/partial). TASK-022 adds a mobile-only mic button backed by the Web Speech API.
 
 # Next Implementation Targets
 
@@ -45,10 +44,15 @@ the transcript to the textarea for user review before sending.
 - `no-speech`/`aborted` → silent reset only
 - No `voiceTranscript` state in ChatPage — `onResult` writes directly to `setInput`
 
-# Files Modified (TASK-020, last implementation)
-- `server/services/recipeSearchService.js`
-- `server/services/aiService.js`
-- `server/routes/ai.js`
+# Files Modified
+
+## TASK-021
+- `server/routes/ai.js` — expanded foodNormalization import; added pantryMap + annotation step after topN selection; dropped unmatchedIngredients from DTO
+- `client/src/pages/ChatPage.jsx` — added formatQty; removed unmatchedSet; replaced ingredient rendering with status-driven green/red/partial
+
+## TASK-022
+- `client/src/hooks/useSpeechInput.js` — new file; Web Speech API hook
+- `client/src/pages/ChatPage.jsx` — imported hook, wired onResult/onError, added mic button to input bar
 
 # Files Required for TASK-021
 - `server/routes/ai.js`
@@ -121,10 +125,11 @@ useSpeechInput({ lang, onResult, onError }) → { supported, iosPwaCaveat, liste
 - Unit conversion (oz↔cup etc.) deferred to v2
 
 # Remaining Work
-- Implement TASK-021
-- Implement TASK-022
 - TASK-017 Issue 3 — Switch to Clerk production keys (BLOCKED: requires custom domain)
 - Members card with display names — deferred
+- TASK-021 v2: fuzzy annotation (foodsMatch) to align with scorer's fuzzy match
+- TASK-022 v2: use user-profile language preference instead of navigator.language
+- RecipeModal pantry highlighting — deferred
 
 # Known Risks
 - Safari iOS SpeechRecognition reliability varies by device/locale — test on real device

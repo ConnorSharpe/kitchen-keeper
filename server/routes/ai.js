@@ -15,7 +15,7 @@ import * as aiService from '../services/aiService.js';
 import * as mealLogService from '../services/mealLogService.js';
 import * as dietaryService from '../services/dietaryService.js';
 import * as recipeScorer from '../utils/recipeScorer.js';
-import { normalizeUnit } from '../utils/foodNormalization.js';
+import { normalizeFood, stripIngredientPrefix, normalizeUnit } from '../utils/foodNormalization.js';
 import { getPurineLevel } from '../data/purineIndex.js';
 import { getExpiryDays, getExpiryStatus } from '../utils/expiry.js';
 const router = express.Router();
@@ -503,8 +503,51 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
         topN = applyStrategySort(scoreCandidates(deduplicated)).slice(0, 5);
       }
 
+      // Build pantry lookup map once — O(1) per ingredient vs. find() in a loop.
+      const pantryMap = new Map(
+        allItems.map((item) => [normalizeFood(item.name), item])
+      );
+
+      // Annotate each ingredient with pantry status. Produces API DTOs from scorer output
+      // (scorer domain model is never mutated). unmatchedIngredients is dropped from the DTO.
+      // NOTE: annotation uses normalized exact lookup only — not foodsMatch() fuzzy fallback.
+      // A scorer fuzzy match may not reflect in the highlight color (intentional v1 constraint).
+      const annotated = topN.map((recipe) => {
+        const annotatedIngredients = (recipe.ingredients ?? []).map((ing) => {
+          let pantryStatus = 'missing';
+          let needToBuy;
+          try {
+            const key = normalizeFood(stripIngredientPrefix(ing.name));
+            const pantryItem = pantryMap.get(key);
+            if (pantryItem) {
+              if (ing.quantity == null || pantryItem.quantity == null) {
+                pantryStatus = 'have';
+              } else if (normalizeUnit(ing.unit) !== normalizeUnit(pantryItem.unit)) {
+                // Unit mismatch → binary fallback. quantity > 0 guard prevents "0 oz milk" showing green.
+                pantryStatus = pantryItem.quantity > 0 ? 'have' : 'missing';
+              } else if (pantryItem.quantity < ing.quantity) {
+                pantryStatus = 'partial';
+                needToBuy = ing.quantity - pantryItem.quantity;
+              } else {
+                pantryStatus = 'have';
+              }
+            }
+          } catch (err) {
+            console.warn('[annotatePantryStatus] ingredient annotation failed:', err?.message, ing?.name);
+          }
+          const result = { ...ing, pantryStatus };
+          if (pantryStatus === 'partial' && needToBuy != null && needToBuy > 0) {
+            result.needToBuy = needToBuy;
+          }
+          return result;
+        });
+
+        const { unmatchedIngredients: _removed, ...rest } = recipe;
+        return { ...rest, ingredients: annotatedIngredients };
+      });
+
       // Full objects saved to metadata and returned to frontend for card rendering.
-      recipeSuggestions = topN;
+      recipeSuggestions = annotated;
 
       // Slim objects returned to model only — model cannot reproduce card detail it never saw.
       const slimForModel = topN.map((s) => ({
