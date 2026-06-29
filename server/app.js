@@ -8,6 +8,7 @@ import cookieParser from 'cookie-parser';
 import { clerkMiddleware } from '@clerk/express';
 import pantryRouter    from './routes/pantry.js';
 import aiRouter        from './routes/ai.js';
+import transcribeRouter from './routes/transcribe.js';
 import recipesRouter   from './routes/recipes.js';
 import shoppingRouter  from './routes/shopping.js';
 import householdRouter from './routes/household.js';
@@ -52,6 +53,7 @@ app.use(cookieParser());
 
 app.use('/api/pantry',    pantryRouter);
 app.use('/api/ai',        aiRouter);
+app.use('/api/ai/transcribe', transcribeRouter);
 app.use('/api/recipes',   recipesRouter);
 app.use('/api/shopping',  shoppingRouter);
 app.use('/api/household', householdRouter);
