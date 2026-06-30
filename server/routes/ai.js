@@ -1,8 +1,5 @@
 import express from 'express';
 import { randomUUID } from 'crypto';
-import { put } from '@vercel/blob';
-import { v4 as uuidv4 } from 'uuid';
-import path from 'path';
 import { z } from 'zod';
 import { clerkAuth } from '../middleware/clerkAuth.js';
 import { validate } from '../middleware/validate.js';
@@ -136,14 +133,40 @@ router.post('/suggest-recipes', async (req, res) => {
 });
 
 // POST /api/ai/parse-recipe-image
-// The image is uploaded to Vercel Blob for permanent storage after AI parsing.
+// Extracts recipe data from an uploaded image using AI.
+// Returns { recipe: extractedJson } — does NOT save. The client reviews and saves separately.
+
+const TAG_ALLOWED = z.enum([
+  'breakfast','lunch','dinner','snack','dessert','drink',
+  'italian','mexican','asian','american','mediterranean','indian','french','thai','japanese','greek','chinese',
+  'vegetarian','vegan','gluten-free','dairy-free','low-carb','keto','paleo',
+  'quick','easy','slow-cooker','one-pot','meal-prep','freezer-friendly',
+]);
+
+const fractionalQuantity = z.union([
+  z.number(),
+  z.string().transform((s) => {
+    const unicodeMap = { '½':0.5,'⅓':0.333,'¼':0.25,'¾':0.75,'⅔':0.667,'⅛':0.125,'⅜':0.375,'⅝':0.625,'⅞':0.875 };
+    const trimmed = s.trim();
+    if (unicodeMap[trimmed] !== undefined) return unicodeMap[trimmed];
+    const mixed = trimmed.match(/^(\d+)\s+(\d+)\/(\d+)$/);
+    if (mixed) return Number(mixed[1]) + Number(mixed[2]) / Number(mixed[3]);
+    const simple = trimmed.match(/^(\d+)\/(\d+)$/);
+    if (simple) return Number(simple[1]) / Number(simple[2]);
+    const n = parseFloat(trimmed);
+    return isNaN(n) ? null : n;
+  }),
+  z.null(),
+  z.undefined(),
+]).transform((v) => (typeof v === 'number' && isFinite(v) ? v : null));
+
 const parsedRecipeSchema = z.object({
   name:        z.string().min(1).max(200),
   description: z.string().max(1000).nullable().optional(),
   ingredients: z.array(
     z.object({
       name:     z.string().min(1),
-      quantity: z.number().nullable().optional(),
+      quantity: fractionalQuantity,
       unit:     z.string().nullable().optional(),
     })
   ).default([]),
@@ -151,7 +174,9 @@ const parsedRecipeSchema = z.object({
   servings: z.coerce.number().int().positive().nullable().optional(),
   prepMins: z.coerce.number().int().nonnegative().nullable().optional(),
   cookMins: z.coerce.number().int().nonnegative().nullable().optional(),
-  tags:     z.array(z.string()).default([]),
+  tags:     z.array(z.string()).default([]).transform(arr =>
+    arr.map(t => t.toLowerCase().trim()).filter(t => TAG_ALLOWED.options.includes(t))
+  ),
 });
 
 router.post('/parse-recipe-image', upload.single('recipe'), async (req, res) => {
@@ -159,14 +184,28 @@ router.post('/parse-recipe-image', upload.single('recipe'), async (req, res) => 
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
+  if (!req.file.mimetype.startsWith('image/')) {
+    return res.status(415).json({ error: 'Unsupported file type. Please upload an image.' });
+  }
+
   const requestId = randomUUID().split('-')[0];
   const base64 = req.file.buffer.toString('base64');
-  const raw = await aiService.parseRecipeImage(base64, req.file.mimetype, requestId);
+
+  let raw;
+  try {
+    raw = await Promise.race([
+      aiService.parseRecipeImage(base64, req.file.mimetype, requestId),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(Object.assign(new Error('AI extraction timed out. Please try again.'), { status: 504 })), 40000)
+      ),
+    ]);
+  } catch (err) {
+    const status = err.status || 500;
+    return res.status(status).json({ error: err.message });
+  }
 
   if (!raw) {
-    const err = new Error('AI could not parse the recipe image. Please try again.');
-    err.status = 502;
-    throw err;
+    return res.status(502).json({ error: 'AI could not parse the recipe image. Please try again.' });
   }
 
   let validated;
@@ -176,16 +215,7 @@ router.post('/parse-recipe-image', upload.single('recipe'), async (req, res) => 
     return res.status(422).json({ error: 'Recipe image could not be parsed into a valid recipe.' });
   }
 
-  const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg';
-  const { url } = await put(`${uuidv4()}${ext}`, req.file.buffer, { access: 'public' });
-
-  const saved = await recipeService.create(req.user.householdId, {
-    ...validated,
-    source:   'upload',
-    imageUrl: url,
-  });
-
-  res.status(201).json({ recipe: saved });
+  res.json({ recipe: validated });
 });
 
 // GET /api/ai/chat/history

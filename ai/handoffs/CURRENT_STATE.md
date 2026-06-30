@@ -2,77 +2,67 @@
 TASK-024 — Recipe Photo Upload: Add Camera Trigger + User Review Step
 
 # Current Status
-SPEC COMPLETE. DRAFT-3 approved by architect (2 review rounds). Ready for implementation.
+IMPLEMENTATION COMPLETE. All changes landed on main. Manual device test (iOS PWA camera trigger + EXIF rotation) still pending.
 
 # Files Modified
-- `ai/tasks/TASK-024-spec.md` — NEW: implementation-ready spec (DRAFT-3)
-- `ai/handoffs/CURRENT_STATE.md` — this file
+- `client/src/components/recipes/RecipeUpload.jsx` — camera trigger, canvas resize, EXIF fallback, HEIC guard, AbortController, `onExtracted` prop
+- `client/src/components/recipes/RecipeReviewModal.jsx` — NEW: editable pre-save review form
+- `client/src/pages/RecipesPage.jsx` — wired `onExtracted` → `reviewRecipe` state → `RecipeReviewModal` → `POST /api/recipes`
+- `server/routes/ai.js` — fraction coercion Zod schema, tag whitelist, removed Vercel Blob upload, changed response to `{ recipe: extracted }`, added 40s Promise.race timeout, 415 MIME check, removed `put`/`uuidv4`/`path` imports
 
 # Files Already Reviewed
-- `client/src/components/recipes/RecipeUpload.jsx` — existing upload UI; calls `/api/ai/parse-recipe-image`; saves immediately (no review step); no camera trigger; no resize
-- `client/src/components/recipes/RecipeModal.jsx` — confirmed view-only (175 lines static JSX, requires recipe.id); cannot be reused as edit form
-- `server/routes/ai.js:138–189` — existing `POST /api/ai/parse-recipe-image`; has multer, Zod (`parsedRecipeSchema`), Vercel Blob upload, immediate save
-- `server/services/aiService.js:336` — `parseRecipeImage()` uses `gpt-4o-mini` + base64; do not modify
-- `server/utils/foodNormalization.js` — `normalizeFood`, `normalizeUnit`, `stripIngredientPrefix` available for reuse
+- `client/src/components/recipes/RecipeModal.jsx` — view-only; not modified
+- `server/services/aiService.js` — extraction logic untouched
+- `server/utils/foodNormalization.js` — not needed in v1
 
 # Architecture Notes
 
-## What already exists (do not rewrite)
-- Route: `POST /api/ai/parse-recipe-image` (ai.js:157) — keep path, auth, multer
-- Zod schema: `parsedRecipeSchema` (ai.js:140) — extend only (fraction coercion + tag whitelist)
-- AI extraction: `aiService.parseRecipeImage()` — untouched
-
-## What changes
-1. `RecipeUpload.jsx` — add `capture="environment"`, client-side canvas resize (≤1568px JPEG 85%), new review flow, AbortController, disable-during-upload guard
-2. `RecipeReviewModal.jsx` — NEW: pre-save editable form (name, description, ingredients+rows, steps+rows, servings, prepMins, cookMins, tags)
-3. `server/routes/ai.js` — patch `parsedRecipeSchema` (fraction coercion transform, tag whitelist), remove Vercel Blob upload, change response from `{ recipe: saved }` to `{ recipe: extracted }`, add server-side 40s timeout, expand HTTP error codes
-
-## Key decisions made
-- **RecipeReviewModal is a new component** (not mode="review" on RecipeModal) — justified by code inspection
-- **Vercel Blob upload removed** from parse route in v1; uploaded recipes have `imageUrl: null`; image storage is a follow-up task
-- **Single caller confirmed** — only RecipeUpload.jsx calls parse-recipe-image; response shape change is safe
-- **Fraction coercion** — unrecognized formats (e.g. "2 to 3", "about 2") → `null` consistently, never throw
-- **Timeouts** — client 45s AbortSignal, server `Promise.race` 40s timeout → 504
-
-## Flow (after this task)
+## Flow (after TASK-024)
 ```
 camera/file picker
+  ↓
+HEIC guard (reject share-sheet HEIC)
   ↓
 canvas resize (≤1568px, JPEG 85%, EXIF-corrected)
   ↓
 POST /api/ai/parse-recipe-image  →  { recipe: extractedJson }
   ↓
-RecipeReviewModal (user edits)
+RecipeReviewModal (user edits name, ingredients, steps, tags, times)
   ↓
 POST /api/recipes (source: 'upload')
   ↓
 recipe in list
 ```
 
+## Key decisions preserved
+- Vercel Blob upload removed from parse route; `imageUrl: null` on uploaded recipes (follow-up task)
+- `RecipeReviewModal` is a separate component from `RecipeModal` (justified by code inspection)
+- Single caller confirmed — response shape change is safe
+
 # Remaining Work
-- Implement TASK-024 per spec at `ai/tasks/TASK-024-spec.md`
-- Before implementing tags whitelist: run `SELECT DISTINCT tags FROM recipes` to verify whitelist covers existing production values
-- After implementation: manual device test on iOS PWA (camera trigger + EXIF rotation)
+- Manual device test on iOS PWA (camera trigger, EXIF rotation on portrait photo)
+- Verify tag whitelist covers all existing production tag values (`SELECT DISTINCT tags FROM recipes`)
 - TASK-017 Issue 3 — Switch to Clerk production keys (BLOCKED: requires custom domain)
+- Image storage for uploaded recipes (Vercel Blob at save time) — deferred follow-up to TASK-024
 - Members card with display names — deferred
 - TASK-021 v2: fuzzy annotation (foodsMatch)
 - TASK-022 v2: user-profile language preference
-- RecipeModal pantry highlighting — deferred
-- Image storage for uploaded recipes (Vercel Blob at save time) — deferred follow-up to TASK-024
 
 # Known Risks
-- `createImageBitmap` EXIF support requires Safari 15+ / iOS 15+; manual EXIF fallback required for older devices
-- HEIC from clipboard/share-sheet may bypass browser JPEG conversion — detect and reject with user message
-- `parse-recipe-image` response shape change is a breaking change to RecipeUpload.jsx — both must be updated atomically in same commit
+- `AbortSignal.any` (Chrome 124+ / Safari 17.4+) is feature-detected with fallback to controller.signal only; server 40s timeout covers the gap
+- HEIC from share-sheet is rejected with a user message; HEIC from file picker (browser-converted) passes through as JPEG — correct behavior
+- `createImageBitmap` EXIF support requires Safari 15+; manual EXIF fallback implemented for older devices
+
+# Verification Results
+- `recipeService.create` and `put`/`uuidv4`/`path` removed from parse-recipe-image route — confirmed no other uses
+- All other `recipeService` calls in ai.js (ai_suggested, agent_saved) untouched
 
 # Forbidden Exploration
-- `server/services/aiService.js` — do not modify extraction logic
-- `server/services/recipeService.js` — CRUD unchanged
-- `client/src/components/recipes/RecipeModal.jsx` — view-only, no changes
+- `server/services/aiService.js`
+- `server/services/recipeService.js`
+- `client/src/components/recipes/RecipeModal.jsx`
 - `server/db/migrations/`
 - `client/src/hooks/useSpeechInput.js`
-- `server/data/foodkeeper.json`
-- `ai/tasks/archive/`
 
 # Context Notes
 - branch: main

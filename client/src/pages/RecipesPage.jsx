@@ -5,6 +5,7 @@ import { api } from '../api/index.js';
 import RecipeCard from '../components/recipes/RecipeCard.jsx';
 import RecipeModal from '../components/recipes/RecipeModal.jsx';
 import RecipeUpload from '../components/recipes/RecipeUpload.jsx';
+import RecipeReviewModal from '../components/recipes/RecipeReviewModal.jsx';
 
 // Web suggestion card — ephemeral until saved by user
 function WebSuggestionCard({ suggestion, onSave, isSaving }) {
@@ -56,6 +57,7 @@ export default function RecipesPage() {
 
   const [openRecipe, setOpenRecipe]           = useState(null);
   const [showUpload, setShowUpload]           = useState(false);
+  const [reviewRecipe, setReviewRecipe]       = useState(null);
   const [favLoadingId, setFavLoadingId]       = useState(null);
 
   // Web suggestion state
@@ -142,8 +144,23 @@ export default function RecipesPage() {
   }
 
   function handleRecipeAdded(recipe) {
-    // Prepend to local state so it appears immediately (refresh() would also work)
     refresh();
+  }
+
+  function handleExtracted(recipe) {
+    setShowUpload(false);
+    setReviewRecipe(recipe);
+  }
+
+  async function handleReviewSave(recipe) {
+    try {
+      await api.post('/recipes', recipe);
+      setReviewRecipe(null);
+      refresh();
+      toast.success(`"${recipe.name}" saved to your recipes!`);
+    } catch (err) {
+      toast.error(err.message || 'Failed to save recipe');
+    }
   }
 
   return (
@@ -313,8 +330,16 @@ export default function RecipesPage() {
 
       {showUpload && (
         <RecipeUpload
-          onRecipeAdded={handleRecipeAdded}
+          onExtracted={handleExtracted}
           onClose={() => setShowUpload(false)}
+        />
+      )}
+
+      {reviewRecipe && (
+        <RecipeReviewModal
+          recipe={reviewRecipe}
+          onSave={handleReviewSave}
+          onClose={() => setReviewRecipe(null)}
         />
       )}
     </div>
