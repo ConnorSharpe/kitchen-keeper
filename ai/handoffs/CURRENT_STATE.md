@@ -1,62 +1,76 @@
 # Task
-TASK-023 — iOS PWA Voice Input via MediaRecorder + Whisper
+TASK-024 — Recipe Photo Upload: Add Camera Trigger + User Review Step
 
 # Current Status
-COMPLETE. All five files written. Ready for commit and manual device test on iOS PWA.
+SPEC COMPLETE. DRAFT-3 approved by architect (2 review rounds). Ready for implementation.
 
 # Files Modified
-
-## TASK-023
-- `client/src/hooks/useSpeechInput.js` — replaced with thin dispatcher over useWhisperInput + useBrowserSpeechInput
-- `client/src/hooks/useWhisperInput.js` — NEW: MediaRecorder + Whisper hook (iOS PWA path)
-- `client/src/hooks/useBrowserSpeechInput.js` — NEW: extracted SpeechRecognition hook (non-iOS path, verbatim from old useSpeechInput.js)
-- `server/routes/transcribe.js` — NEW: POST /api/ai/transcribe route
-- `server/app.js` — mounted transcribe route at /api/ai/transcribe
+- `ai/tasks/TASK-024-spec.md` — NEW: implementation-ready spec (DRAFT-3)
+- `ai/handoffs/CURRENT_STATE.md` — this file
 
 # Files Already Reviewed
-- `server/services/householdService.js` — getAiConfig pattern confirmed
-- `server/services/ai/resolveProvider.js` — provider.client pattern confirmed
-- `server/middleware/clerkAuth.js` — clerkAuth middleware confirmed
-- `server/node_modules/openai/index.js` — toFile exported from 'openai' directly (confirmed)
+- `client/src/components/recipes/RecipeUpload.jsx` — existing upload UI; calls `/api/ai/parse-recipe-image`; saves immediately (no review step); no camera trigger; no resize
+- `client/src/components/recipes/RecipeModal.jsx` — confirmed view-only (175 lines static JSX, requires recipe.id); cannot be reused as edit form
+- `server/routes/ai.js:138–189` — existing `POST /api/ai/parse-recipe-image`; has multer, Zod (`parsedRecipeSchema`), Vercel Blob upload, immediate save
+- `server/services/aiService.js:336` — `parseRecipeImage()` uses `gpt-4o-mini` + base64; do not modify
+- `server/utils/foodNormalization.js` — `normalizeFood`, `normalizeUnit`, `stripIngredientPrefix` available for reuse
 
 # Architecture Notes
 
-## Hook public API (unchanged — ChatPage untouched)
+## What already exists (do not rewrite)
+- Route: `POST /api/ai/parse-recipe-image` (ai.js:157) — keep path, auth, multer
+- Zod schema: `parsedRecipeSchema` (ai.js:140) — extend only (fraction coercion + tag whitelist)
+- AI extraction: `aiService.parseRecipeImage()` — untouched
+
+## What changes
+1. `RecipeUpload.jsx` — add `capture="environment"`, client-side canvas resize (≤1568px JPEG 85%), new review flow, AbortController, disable-during-upload guard
+2. `RecipeReviewModal.jsx` — NEW: pre-save editable form (name, description, ingredients+rows, steps+rows, servings, prepMins, cookMins, tags)
+3. `server/routes/ai.js` — patch `parsedRecipeSchema` (fraction coercion transform, tag whitelist), remove Vercel Blob upload, change response from `{ recipe: saved }` to `{ recipe: extracted }`, add server-side 40s timeout, expand HTTP error codes
+
+## Key decisions made
+- **RecipeReviewModal is a new component** (not mode="review" on RecipeModal) — justified by code inspection
+- **Vercel Blob upload removed** from parse route in v1; uploaded recipes have `imageUrl: null`; image storage is a follow-up task
+- **Single caller confirmed** — only RecipeUpload.jsx calls parse-recipe-image; response shape change is safe
+- **Fraction coercion** — unrecognized formats (e.g. "2 to 3", "about 2") → `null` consistently, never throw
+- **Timeouts** — client 45s AbortSignal, server `Promise.race` 40s timeout → 504
+
+## Flow (after this task)
 ```
-useSpeechInput({ lang, onResult, onError }) → { supported, iosPwaCaveat, listening, toggle }
+camera/file picker
+  ↓
+canvas resize (≤1568px, JPEG 85%, EXIF-corrected)
+  ↓
+POST /api/ai/parse-recipe-image  →  { recipe: extractedJson }
+  ↓
+RecipeReviewModal (user edits)
+  ↓
+POST /api/recipes (source: 'upload')
+  ↓
+recipe in list
 ```
-
-## Dispatcher pattern
-Both `useWhisperInput` and `useBrowserSpeechInput` are called unconditionally at the top of `useSpeechInput` (Rules of Hooks). `isIosPwa` is evaluated at module load time; only the return value is selected at runtime.
-
-## Phase model in useWhisperInput
-`'idle' | 'recording' | 'processing'` — toggle() during processing is no-op. `setPhase('processing')` called in `stopRecording()` BEFORE `recorder.stop()` to close the race window.
-
-## Server route
-Follows exact same pattern as ai.js:581 — clerkAuth → householdService.getAiConfig → resolveProvider → provider.client.audio.transcriptions.create(). No new OpenAI client instantiated.
-
-# Decisions Made
-- `toFile` imported from `'openai'` (confirmed present in installed package)
-- MIME allowlist is compatibility guard only; multer uses memory storage
-- `audio/mp4` preferred MIME on iOS; empty-string fallback for older iOS
-- No changes to ChatPage.jsx — hook API contract preserved
 
 # Remaining Work
-- Manual device test on iOS PWA (real device required — simulators do not expose MediaRecorder)
+- Implement TASK-024 per spec at `ai/tasks/TASK-024-spec.md`
+- Before implementing tags whitelist: run `SELECT DISTINCT tags FROM recipes` to verify whitelist covers existing production values
+- After implementation: manual device test on iOS PWA (camera trigger + EXIF rotation)
 - TASK-017 Issue 3 — Switch to Clerk production keys (BLOCKED: requires custom domain)
 - Members card with display names — deferred
 - TASK-021 v2: fuzzy annotation (foodsMatch)
 - TASK-022 v2: user-profile language preference
 - RecipeModal pantry highlighting — deferred
+- Image storage for uploaded recipes (Vercel Blob at save time) — deferred follow-up to TASK-024
 
 # Known Risks
-- iOS `audio/mp4` requires iOS 14.3+. Empty-string fallback mitigates older devices.
-- `toFile` import path verified against installed package — confirmed `'openai'` direct export
-- Family members without an OpenAI key get 403 → 'no-api-key' toast (by design)
+- `createImageBitmap` EXIF support requires Safari 15+ / iOS 15+; manual EXIF fallback required for older devices
+- HEIC from clipboard/share-sheet may bypass browser JPEG conversion — detect and reject with user message
+- `parse-recipe-image` response shape change is a breaking change to RecipeUpload.jsx — both must be updated atomically in same commit
 
 # Forbidden Exploration
-- `client/public/sw.js`
+- `server/services/aiService.js` — do not modify extraction logic
+- `server/services/recipeService.js` — CRUD unchanged
+- `client/src/components/recipes/RecipeModal.jsx` — view-only, no changes
 - `server/db/migrations/`
+- `client/src/hooks/useSpeechInput.js`
 - `server/data/foodkeeper.json`
 - `ai/tasks/archive/`
 
