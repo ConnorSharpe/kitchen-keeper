@@ -2,7 +2,7 @@
 TASK-024 — Recipe Photo Upload: Add Camera Trigger + User Review Step
 
 # Current Status
-IMPLEMENTATION COMPLETE. All changes landed on main. Manual device test (iOS PWA camera trigger + EXIF rotation) still pending.
+IMPLEMENTATION COMPLETE. Smoke tests S1–S12 run against production (kitchenkeeper.vercel.app). 9/12 pass; S2/S6/S7 pending iOS device. One bug found and fixed during testing (see below).
 
 # Files Modified
 - `client/src/components/recipes/RecipeUpload.jsx` — camera trigger, canvas resize, EXIF fallback, HEIC guard, AbortController, `onExtracted` prop
@@ -39,8 +39,26 @@ recipe in list
 - `RecipeReviewModal` is a separate component from `RecipeModal` (justified by code inspection)
 - Single caller confirmed — response shape change is safe
 
+# Smoke Test Results (2026-07-08)
+| Test | Status |
+|------|--------|
+| S1 File Picker | ✅ Pass |
+| S2 iOS PWA Camera | ⏳ Needs iPhone |
+| S3 Review Modal Editing | ✅ Pass |
+| S4 Save | ✅ Pass (bug fixed) |
+| S5 Cancel | ✅ Pass |
+| S6 HEIC Share Sheet | ⏳ Needs iOS |
+| S7 HEIC File Picker | ⏳ Needs iOS |
+| S8 Slow Network | ✅ Pass |
+| S9 Abort | ✅ Pass |
+| S10 Image Resize | ✅ Pass |
+| S11 Invalid File | ✅ Pass |
+| S12 Regression | ✅ Pass |
+
+**Bug fixed during testing:** `RecipesPage.jsx` line 157 — `api.post('/recipes', recipe)` → `api.post('/api/recipes', recipe)`. Missing `/api` prefix caused 405 on save.
+
 # Remaining Work
-- Manual device test on iOS PWA (camera trigger, EXIF rotation on portrait photo)
+- iOS device test: S2 (camera trigger + EXIF rotation), S6 (HEIC share-sheet rejection), S7 (HEIC file picker)
 - Verify tag whitelist covers all existing production tag values (`SELECT DISTINCT tags FROM recipes`)
 - TASK-017 Issue 3 — Switch to Clerk production keys (BLOCKED: requires custom domain)
 - Image storage for uploaded recipes (Vercel Blob at save time) — deferred follow-up to TASK-024
