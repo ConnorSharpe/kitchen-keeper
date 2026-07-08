@@ -154,7 +154,7 @@ export default function RecipesPage() {
 
   async function handleReviewSave(recipe) {
     try {
-      await api.post('/recipes', recipe);
+      await api.post('/api/recipes', recipe);
       setReviewRecipe(null);
       refresh();
       toast.success(`"${recipe.name}" saved to your recipes!`);
