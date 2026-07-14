@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 node_modules/
 uploads/*
 !uploads/.gitkeep
@@ -9,3 +11,6 @@ dist/
 .DS_Store
 
 .vercel
+
+.vercel
+.env*

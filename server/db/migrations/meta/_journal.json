@@ -8,6 +8,97 @@
       "when": 1745798400000,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1745798460000,
+      "tag": "0001_households",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1745798520000,
+      "tag": "0002_ready_date",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1745798580000,
+      "tag": "0003_onboarding_complete",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1745798640000,
+      "tag": "0004_push_subscriptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1745798700000,
+      "tag": "0005_meal_logs",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1745798760000,
+      "tag": "0006_household_dietary_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1745798820000,
+      "tag": "0007_household_ai_api_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1745798880000,
+      "tag": "0008_migrate_gemini_provider",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1745798940000,
+      "tag": "0010_clerk_byok",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1745799000000,
+      "tag": "0011a_push_household_add",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1745799060000,
+      "tag": "0011b_push_household_finalize",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1745799120000,
+      "tag": "0012_household_members",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1745799180000,
+      "tag": "0013_chat_metadata",
+      "breakpoints": true
     }
   ]
 }
