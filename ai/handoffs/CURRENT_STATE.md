@@ -43,12 +43,12 @@ recipe in list
 | Test | Status |
 |------|--------|
 | S1 File Picker | ✅ Pass |
-| S2 iOS PWA Camera | ⏳ Needs iPhone |
+| S2 iOS PWA Camera | ✅ Pass (2026-07-14) |
 | S3 Review Modal Editing | ✅ Pass |
 | S4 Save | ✅ Pass (bug fixed) |
 | S5 Cancel | ✅ Pass |
-| S6 HEIC Share Sheet | ⏳ Needs iOS |
-| S7 HEIC File Picker | ⏳ Needs iOS |
+| S6 HEIC Share Sheet | ⚪ N/A — iOS PWAs can't be Web Share Target |
+| S7 HEIC File Picker | ⚪ Blocked — see backlog item below |
 | S8 Slow Network | ✅ Pass |
 | S9 Abort | ✅ Pass |
 | S10 Image Resize | ✅ Pass |
@@ -58,13 +58,16 @@ recipe in list
 **Bug fixed during testing:** `RecipesPage.jsx` line 157 — `api.post('/recipes', recipe)` → `api.post('/api/recipes', recipe)`. Missing `/api` prefix caused 405 on save.
 
 # Remaining Work
-- iOS device test: S2 (camera trigger + EXIF rotation), S6 (HEIC share-sheet rejection), S7 (HEIC file picker)
-- Verify tag whitelist covers all existing production tag values (`SELECT DISTINCT tags FROM recipes`)
-- TASK-017 Issue 3 — Switch to Clerk production keys (BLOCKED: requires custom domain)
-- Image storage for uploaded recipes (Vercel Blob at save time) — deferred follow-up to TASK-024
-- Members card with display names — deferred
-- TASK-021 v2: fuzzy annotation (foodsMatch)
-- TASK-022 v2: user-profile language preference
+1. **[Backlog, needs spec]** Image storage for uploaded recipes (Vercel Blob at save time) — deferred follow-up to TASK-024. Uploaded recipes currently save with `imageUrl: null`. Needs a TASK-XXX spec drafted and run through architect review before implementation (per [[feedback_spec_workflow]]). Prioritized to front of backlog (2026-07-14) per user request.
+2. **[Backlog, needs spec]** Members card with display names — user confirmed (2026-07-14) this is wanted, not just deferred. Requires pulling in the Clerk backend SDK server-side to resolve `clerkUserId` → display name for rows returned by `householdService.getMembers()` ([TASK-017.md:432](../tasks/TASK-017.md)), then un-hiding the members `<section>` in `HouseholdPage.jsx`. Needs a TASK-XXX spec + architect review before implementation (new dependency, new external API calls).
+3. TASK-021 v2: fuzzy annotation (foodsMatch) — HOLD (2026-07-14): intentional v1 limitation, trigger condition is "users report false missing labels" ([TASK-021-spec.md:352](../tasks/TASK-021-spec.md)). User hasn't used the app seriously yet (testing only) and has not observed this. Revisit once there's real usage evidence.
+4. TASK-022 v2: user-profile language preference — HOLD (2026-07-14): user only needs English right now, browser-locale detection (`navigator.language`) is sufficient. No API change needed later — hook already accepts a `lang` option ([TASK-022-spec.md:318](../tasks/TASK-022-spec.md)).
+5. **[Backlog, unscoped]** iOS PWA has no way to upload an existing photo — `capture="environment"` on `RecipeUpload.jsx:229` forces the camera to open directly and suppresses iOS's Photo Library/Browse chooser. Current behavior (camera-direct) is acceptable for now per user decision (2026-07-14); fix is to add a second, separate "Choose from Library" input/button (no `capture` attribute) alongside the existing camera-direct one, rather than removing `capture` from the existing input. Blocks S7 (HEIC-from-file-picker) smoke test until addressed.
+6. **[Backlog, unscoped]** AI extraction accuracy: during S2 iOS testing (2026-07-14), ingredient quantities/values came back wrong and some steps were skipped from the source recipe. Review modal allowed manual correction, so not a blocker for TASK-024, but worth a follow-up task against `server/services/aiService.js` (prompt tuning / model choice) — out of scope here per forbidden-exploration boundary.
+
+## Resolved
+- ~~Verify tag whitelist covers all existing production tag values~~ — DONE (2026-07-14): production has 1 recipe total, tags = `[]`. No existing tag data to conflict with the whitelist.
+- ~~TASK-017 Issue 3 — Switch to Clerk production keys~~ — WON'T DO (2026-07-14): user decided to stay on Clerk free tier / dev instance keys indefinitely. Not pursuing a custom domain. Revisit only if the user changes their mind.
 
 # Known Risks
 - `AbortSignal.any` (Chrome 124+ / Safari 17.4+) is feature-detected with fallback to controller.signal only; server 40s timeout covers the gap

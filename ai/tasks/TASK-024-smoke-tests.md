@@ -174,12 +174,12 @@
 | Test | Status | Notes |
 |------|--------|-------|
 | S1 File Picker | ✅ Pass | |
-| S2 iOS PWA Camera | ⏳ Pending | Requires iPhone/iOS device |
+| S2 iOS PWA Camera | ✅ Pass | Camera opened directly from Home Screen PWA, photo upright, review modal appeared, corrections possible |
 | S3 Review Modal Editing | ✅ Pass | All fields editable in real time |
 | S4 Save | ✅ Pass | Bug found and fixed: missing `/api` prefix on POST |
 | S5 Cancel | ✅ Pass | No ghost recipe created |
-| S6 HEIC Share Sheet | ⏳ Pending | Requires iOS |
-| S7 HEIC File Picker | ⏳ Pending | Requires Mac/iOS |
+| S6 HEIC Share Sheet | ⚪ N/A (iOS) | iOS Safari does not support Web Share Target API for PWAs (Android Chrome only); manifest.json has no `share_target`. Kitchen Keeper never appears in iOS share sheet, so this test cannot execute on iOS. Test case premise was incorrect for this platform. |
+| S7 HEIC File Picker | ⚪ Blocked (iOS) | `capture="environment"` on the file input (RecipeUpload.jsx:229) forces iOS straight to the camera with no Photo Library/Browse option, so an existing HEIC photo can't be selected to test conversion. Same finding blocks general "upload an existing photo" on iOS PWA. Logged as backlog — see CURRENT_STATE.md. |
 | S8 Slow Network | ✅ Pass | Succeeded on Slow 3G with visible spinner |
 | S9 Abort | ✅ Pass | No review modal, no console errors |
 | S10 Image Resize | ✅ Pass | Large camera photo uploaded and extracted successfully |
