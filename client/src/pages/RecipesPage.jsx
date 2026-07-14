@@ -58,6 +58,7 @@ export default function RecipesPage() {
   const [openRecipe, setOpenRecipe]           = useState(null);
   const [showUpload, setShowUpload]           = useState(false);
   const [reviewRecipe, setReviewRecipe]       = useState(null);
+  const [reviewImage, setReviewImage]         = useState(null); // Blob | null
   const [favLoadingId, setFavLoadingId]       = useState(null);
 
   // Web suggestion state
@@ -147,20 +148,41 @@ export default function RecipesPage() {
     refresh();
   }
 
-  function handleExtracted(recipe) {
+  function handleExtracted(recipe, imageBlob) {
     setShowUpload(false);
     setReviewRecipe(recipe);
+    setReviewImage(imageBlob ?? null);
   }
 
   async function handleReviewSave(recipe) {
     try {
-      await api.post('/api/recipes', recipe);
+      let payload = recipe;
+      if (reviewImage) {
+        if (reviewImage.size > 3 * 1024 * 1024) {
+          console.warn(`[RecipesPage] Skipping oversized image (${reviewImage.size} bytes) on save`);
+          toast.error('Photo too large to save — recipe saved without it');
+        } else {
+          const imageBase64 = await blobToDataUrl(reviewImage);
+          payload = { ...recipe, imageBase64 };
+        }
+      }
+      await api.post('/api/recipes', payload);
       setReviewRecipe(null);
+      setReviewImage(null);
       refresh();
       toast.success(`"${recipe.name}" saved to your recipes!`);
     } catch (err) {
       toast.error(err.message || 'Failed to save recipe');
     }
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
   }
 
   return (
@@ -339,7 +361,7 @@ export default function RecipesPage() {
         <RecipeReviewModal
           recipe={reviewRecipe}
           onSave={handleReviewSave}
-          onClose={() => setReviewRecipe(null)}
+          onClose={() => { setReviewRecipe(null); setReviewImage(null); }}
         />
       )}
     </div>

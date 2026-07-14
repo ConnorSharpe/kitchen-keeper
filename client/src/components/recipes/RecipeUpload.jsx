@@ -153,7 +153,7 @@ export default function RecipeUpload({ onExtracted, onClose }) {
         throw new Error(data.error || `Upload failed (${res.status})`);
       }
 
-      onExtracted(data.recipe);
+      onExtracted(data.recipe, resized);
     } catch (err) {
       if (err.name === 'AbortError') return; // user closed modal
       setErrorMsg(err.message || 'Failed to parse recipe image');

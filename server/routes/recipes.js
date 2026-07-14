@@ -32,9 +32,12 @@ const createSchema = z.object({
   prepMins:    z.coerce.number().int().nonnegative().nullable().optional(),
   cookMins:    z.coerce.number().int().nonnegative().nullable().optional(),
   tags:        z.array(z.string()).default([]),
+  imageBase64: z.string()
+    .regex(/^data:image\/(jpeg|png|webp);base64,/)
+    .optional(),
 });
 
-const updateSchema = createSchema.partial();
+const updateSchema = createSchema.omit({ imageBase64: true }).partial();
 
 // GET /api/recipes
 router.get('/', async (req, res) => {
