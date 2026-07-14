@@ -1,19 +1,31 @@
 # Task
-TASK-024 — Recipe Photo Upload: Add Camera Trigger + User Review Step
+TASK-025 — Image Storage for Uploaded Recipes (Vercel Blob at Save Time)
 
 # Current Status
-IMPLEMENTATION COMPLETE. Smoke tests S1–S12 run against production (kitchenkeeper.vercel.app). 9/12 pass; S2/S6/S7 pending iOS device. One bug found and fixed during testing (see below).
+SPEC APPROVED FOR IMPLEMENTATION. Not yet implemented — this is a handoff to the next agent to build it. Full spec at [ai/tasks/TASK-025-spec.md](../tasks/TASK-025-spec.md), DRAFT-2, went through one round of architect review (9.3/10 → both required revisions applied, no open questions remain).
 
-# Files Modified
+TASK-024 (previous task — camera trigger + review step) is DONE; its smoke test results are preserved below for reference.
+
+# Files Required Next (TASK-025 — not yet implemented)
+Per [ai/tasks/TASK-025-spec.md](../tasks/TASK-025-spec.md) Allowed Files / Dependency Chain:
+- `client/src/components/recipes/RecipeUpload.jsx` — retain the resized `Blob` instead of discarding it; pass via `onExtracted(recipe, resized)`
+- `client/src/pages/RecipesPage.jsx` — hold image `Blob` in state, base64-encode at save time, include in `POST /api/recipes` payload
+- `server/routes/recipes.js` — add `imageBase64` to `createSchema`; `updateSchema` must use `.omit({ imageBase64: true })` before `.partial()` (see spec Constraint 4 — real bug if missed)
+- `server/services/recipeService.js` — `create()` becomes the sole owner of upload → insert → rollback; add private `uploadImage(dataUrl, householdId)` helper next to the existing `del` import
+
+# Files Modified (TASK-024 — done, historical)
 - `client/src/components/recipes/RecipeUpload.jsx` — camera trigger, canvas resize, EXIF fallback, HEIC guard, AbortController, `onExtracted` prop
 - `client/src/components/recipes/RecipeReviewModal.jsx` — NEW: editable pre-save review form
 - `client/src/pages/RecipesPage.jsx` — wired `onExtracted` → `reviewRecipe` state → `RecipeReviewModal` → `POST /api/recipes`
 - `server/routes/ai.js` — fraction coercion Zod schema, tag whitelist, removed Vercel Blob upload, changed response to `{ recipe: extracted }`, added 40s Promise.race timeout, 415 MIME check, removed `put`/`uuidv4`/`path` imports
 
 # Files Already Reviewed
-- `client/src/components/recipes/RecipeModal.jsx` — view-only; not modified
+- `client/src/components/recipes/RecipeModal.jsx` — view-only; already renders `recipe.imageUrl` (client/src/components/recipes/RecipeModal.jsx:41-43) — no changes needed for TASK-025
 - `server/services/aiService.js` — extraction logic untouched
 - `server/utils/foodNormalization.js` — not needed in v1
+- `server/db/schema.js:56` — `recipes.imageUrl` column already exists with a comment anticipating this exact feature; no migration needed
+- `server/services/recipeService.js:80-84` — `remove()` already deletes the Blob on recipe delete (`del(existing.imageUrl)`); TASK-025 is the first thing that will actually feed it a real URL
+- `git show 0c56b07 -- server/routes/ai.js` — pre-TASK-024 code that did this exact upload inline; reference for the `put()` call shape only, not reusable as-is (uploaded before user review, which is the problem TASK-025's design avoids)
 
 # Architecture Notes
 
@@ -39,6 +51,13 @@ recipe in list
 - `RecipeReviewModal` is a separate component from `RecipeModal` (justified by code inspection)
 - Single caller confirmed — response shape change is safe
 
+## TASK-025 design (spec approved, not yet implemented)
+- **Technique: base64-in-JSON, not multipart.** Reuses existing `api.post()` / `validate(createSchema)` pipeline; zero new client API methods or server middleware. Full rationale (incl. Vercel's 4.5MB serverless body limit) in the spec's "Decision" section.
+- **Upload timing: at save time, not at parse time.** The resized `Blob` already produced by TASK-024's `resizeImage()` is threaded through review state and only base64-encoded + uploaded when the user clicks Save. Canceling review costs nothing server-side.
+- **Ownership: `recipeService.create()` owns the full lifecycle** — decode/validate → `put()` → `db.insert()` → `del()` rollback on insert failure. The route (`recipes.js`) stays a one-line passthrough; `imageBase64` is invisible to it. (This came out of architect review round 1 — the first draft had the route orchestrating storage, which was flagged as a real encapsulation issue.)
+- **Size cap: 3MB raw**, enforced client-side (fail fast, skip image but still save recipe) and server-side (413, defense in depth).
+- Thumbnail preview in `RecipeReviewModal` was deliberately cut to a follow-up — not needed for persistence, keeps this task single-purpose.
+
 # Smoke Test Results (2026-07-08)
 | Test | Status |
 |------|--------|
@@ -58,7 +77,7 @@ recipe in list
 **Bug fixed during testing:** `RecipesPage.jsx` line 157 — `api.post('/recipes', recipe)` → `api.post('/api/recipes', recipe)`. Missing `/api` prefix caused 405 on save.
 
 # Remaining Work
-1. **[Backlog, needs spec]** Image storage for uploaded recipes (Vercel Blob at save time) — deferred follow-up to TASK-024. Uploaded recipes currently save with `imageUrl: null`. Needs a TASK-XXX spec drafted and run through architect review before implementation (per [[feedback_spec_workflow]]). Prioritized to front of backlog (2026-07-14) per user request.
+1. **[Ready to implement]** TASK-025 — Image storage for uploaded recipes (Vercel Blob at save time). Spec approved, DRAFT-2, [ai/tasks/TASK-025-spec.md](../tasks/TASK-025-spec.md). Not yet implemented. See "Files Required Next" above and "Recommended Next Action" below.
 2. **[Backlog, needs spec]** Members card with display names — user confirmed (2026-07-14) this is wanted, not just deferred. Requires pulling in the Clerk backend SDK server-side to resolve `clerkUserId` → display name for rows returned by `householdService.getMembers()` ([TASK-017.md:432](../tasks/TASK-017.md)), then un-hiding the members `<section>` in `HouseholdPage.jsx`. Needs a TASK-XXX spec + architect review before implementation (new dependency, new external API calls).
 3. TASK-021 v2: fuzzy annotation (foodsMatch) — HOLD (2026-07-14): intentional v1 limitation, trigger condition is "users report false missing labels" ([TASK-021-spec.md:352](../tasks/TASK-021-spec.md)). User hasn't used the app seriously yet (testing only) and has not observed this. Revisit once there's real usage evidence.
 4. TASK-022 v2: user-profile language preference — HOLD (2026-07-14): user only needs English right now, browser-locale detection (`navigator.language`) is sufficient. No API change needed later — hook already accepts a `lang` option ([TASK-022-spec.md:318](../tasks/TASK-022-spec.md)).
@@ -78,12 +97,23 @@ recipe in list
 - `recipeService.create` and `put`/`uuidv4`/`path` removed from parse-recipe-image route — confirmed no other uses
 - All other `recipeService` calls in ai.js (ai_suggested, agent_saved) untouched
 
-# Forbidden Exploration
+# Forbidden Exploration (TASK-025)
+- `server/routes/ai.js` — parse-recipe-image route is finished, do not touch
 - `server/services/aiService.js`
-- `server/services/recipeService.js`
-- `client/src/components/recipes/RecipeModal.jsx`
-- `server/db/migrations/`
+- `client/src/components/recipes/RecipeModal.jsx` — already handles `imageUrl`, view-only
+- `server/db/migrations/` — no schema change needed
 - `client/src/hooks/useSpeechInput.js`
+
+Note: `server/services/recipeService.js` was forbidden under TASK-024 but is now an **Allowed** file for TASK-025 (that's where most of the new logic lives).
+
+# Recommended Next Action
+Implement TASK-025 per [ai/tasks/TASK-025-spec.md](../tasks/TASK-025-spec.md) "Changes in Detail" (sections 1–4), in this order:
+1. `RecipeUpload.jsx` — pass the resized `Blob` up via `onExtracted`
+2. `RecipesPage.jsx` — hold `reviewImage` state, encode to base64 at save, clear on save/cancel
+3. `server/services/recipeService.js` — `uploadImage()` helper + rewritten `create()` with rollback
+4. `server/routes/recipes.js` — schema field + `updateSchema.omit()` fix
+
+Then work through the spec's Acceptance Criteria as a manual smoke-test pass (mirrors TASK-024's smoke-test approach — see Smoke Test Results above for the format used last time).
 
 # Context Notes
 - branch: main
