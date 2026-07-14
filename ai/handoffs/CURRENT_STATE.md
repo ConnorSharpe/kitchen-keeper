@@ -2,15 +2,14 @@
 TASK-026 — Household Members Card with Display Names
 
 # Current Status
-SPEC APPROVED FOR IMPLEMENTATION. Not yet implemented — this is a handoff to the next agent to build it. Full spec at [ai/tasks/TASK-026-spec.md](../tasks/TASK-026-spec.md), DRAFT-3, went through two rounds of architect review (8.8/10 → 9.7/10, approved, no further design revision requested).
+IMPLEMENTED AND SMOKE-TESTED (2026-07-14). Full spec at [ai/tasks/TASK-026-spec.md](../tasks/TASK-026-spec.md), DRAFT-3, went through two rounds of architect review (8.8/10 → 9.7/10, approved). Built per spec's "Changes in Detail" code samples verbatim — no deviations.
 
 TASK-025 (previous task — Vercel Blob image storage for uploaded recipes) is DONE and fully smoke-tested; its details are preserved below for reference.
 
-# Files Required Next (TASK-026 — not yet implemented)
-Per [ai/tasks/TASK-026-spec.md](../tasks/TASK-026-spec.md) Allowed Files / Dependency Chain:
-- `server/services/householdService.js` — rewrite `getMembers()` to merge the owner (`households.clerkUserId`) with `householdMembers` rows, resolve display names via one batched `clerkClient.users.getUserList()` call (deduplicated IDs, explicit `limit`, 5s `Promise.race` timeout), and degrade to fallback names ("Former owner"/"Former member") on any Clerk failure rather than throwing
-- `client/src/pages/HouseholdPage.jsx` — add a new "Household members" `<section>` card: its own fetch/loading/error state (independent of the page's other sections), list rendering with role + `joinedAt`, "(You)" via `useAuth().user.id` comparison
-- `server/routes/household.js` — **no change expected**; the existing `/members` route is already a thin passthrough, confirm during implementation it needs no edits
+# Files Modified (TASK-026 — done)
+- `server/services/householdService.js` — added `import { clerkClient } from '@clerk/express'`, `CLERK_LOOKUP_TIMEOUT_MS = 5000`, `resolveDisplayName()` and `lookupClerkUsers()` helpers; rewrote `getMembers()` to merge `households.clerkUserId` (owner) with `householdMembers` rows, dedupe IDs into one batched `clerkClient.users.getUserList()` call with explicit `limit` and 5s `Promise.race` timeout, degrading to `{}`-map fallback (→ "Former owner"/"Former member") on any Clerk failure/timeout
+- `client/src/pages/HouseholdPage.jsx` — added `useAuth()` import, `members`/`membersLoading`/`membersError` state + `loadMembers()` callback (independent fetch, own try/catch), new "Household members" `<section>` card between the join-code card and the invite-by-email card: list rendering with role + `joinedAt` (`toLocaleDateString()`), "(You)" appended via `m.clerkUserId === user?.id`, its own loading/error+retry UI
+- `server/routes/household.js` — **confirmed no change needed**; existing `/members` route is already the two-line passthrough the spec expected
 
 # Files Modified (TASK-025 — done, historical)
 - `client/src/components/recipes/RecipeUpload.jsx` — `onExtracted(data.recipe, resized)` now passes the resized Blob up (1-line change)
@@ -60,7 +59,7 @@ recipe in list, imageUrl populated
 - `recipeService.create()` owns the full upload → insert → rollback lifecycle; route stays a one-line passthrough
 - Single caller confirmed — response shape changes were safe
 
-## TASK-026 design (spec approved, not yet implemented)
+## TASK-026 design (implemented, matches spec exactly)
 - **Clerk is an enrichment dependency, not a source of truth.** The member list (`clerkUserId`, `role`, `joinedAt`) originates entirely from Postgres; Clerk is only consulted to attach a human-readable `displayName`. If Clerk is unreachable, the endpoint still returns 200 with all rows present, using fallback names ("Former owner"/"Former member") — it never fails the whole request over a missing name. This was the central architectural fix from review round 1 (DRAFT-1 let a Clerk failure fail the entire endpoint).
 - **One batched Clerk call per request, not N.** `clerkClient.users.getUserList({ userId: [...], limit: ids.length })` — deduplicated IDs, explicit `limit` (Clerk paginates by default), 5s `Promise.race` timeout mirroring the existing timeout idiom already used in `server/routes/ai.js:196-200`.
 - **Ownership: `householdService.getMembers()` owns the full merge + resolve lifecycle** — DB query (owner + members) → dedupe → batched Clerk lookup (degrading gracefully on failure) → per-row `displayName` resolution. The route (`household.js`) stays a two-line passthrough, matching the thin-route/fat-service precedent set by TASK-025's `recipeService.create()`.
@@ -86,16 +85,30 @@ recipe in list, imageUrl populated
 
 **Bug fixed during testing:** `RecipesPage.jsx` line 157 — `api.post('/recipes', recipe)` → `api.post('/api/recipes', recipe)`. Missing `/api` prefix caused 405 on save.
 
-TASK-026 has not been smoke-tested yet — it's not implemented. See spec's Acceptance Criteria for the manual verification scenarios to run once built (owner-only, null owner, deleted Clerk account, Clerk timeout/outage, duplicate IDs, genuine endpoint failure).
+# TASK-026 Smoke Test Results (2026-07-14, live against production Neon DB via local dev)
+| Scenario | Status |
+|---|---|
+| Owner-only household renders card with real Clerk display name | ✅ Pass — `GET /api/household/members` → `{ members: [{ clerkUserId, role: 'owner', joinedAt, displayName: 'Connor Sharpe' }] }` |
+| "(You)" marker on current user's row | ✅ Pass — verified via `HouseholdPage.jsx` rendered DOM text: "Connor Sharpe (You)" |
+| Card renders independently within the page (join code, invite, dietary profile, AI key sections unaffected) | ✅ Pass — full page text confirmed all sections present |
+| Clerk lookup timeout → graceful degradation, endpoint still 200 | ✅ Pass — temporarily set `CLERK_LOOKUP_TIMEOUT_MS = 1`, restarted server, confirmed `displayName: 'Former owner'` returned with 200, `console.warn` logged `"Clerk user lookup failed, falling back for 1 household member(s): Clerk user lookup timed out"`; constant reverted to 5000 and re-verified normal resolution afterward |
+| Only one Clerk API call per request | ✅ Pass by construction (single `getUserList()` call site in `lookupClerkUsers()`); not separately instrumented/counted |
+| Response shape matches documented contract | ✅ Pass — `{ clerkUserId, role, joinedAt, displayName }` exactly |
+| Duplicate `clerkUserId` (owner == member row) | ⚪ Not tested — would require a manual row insert against production Neon; skipped as too invasive for this session. Handled correctly by construction (`[...new Set(...)]` dedup before the batched call). |
+| Null-owner household | ⚪ Not tested — this account's household has a non-null owner. Handled correctly by construction (`ownerRow` is `null` when `household.clerkUserId` is falsy). |
+| Deleted Clerk account (distinct from timeout) | ⚪ Not tested — same fallback code path as the timeout case, already exercised above. |
+| Genuine endpoint failure (broken DB query) → client error card + retry | ⚪ Not tested this session |
+
+`node --check` passed on `householdService.js`; `esbuild` JSX bundle check passed on `HouseholdPage.jsx`.
 
 # Remaining Work
-1. **[Ready to implement]** TASK-026 — Household members card with display names. Spec approved, DRAFT-3, [ai/tasks/TASK-026-spec.md](../tasks/TASK-026-spec.md). Not yet implemented. See "Files Required Next" above and "Recommended Next Action" below.
-2. TASK-021 v2: fuzzy annotation (foodsMatch) — HOLD (2026-07-14): intentional v1 limitation, trigger condition is "users report false missing labels" ([TASK-021-spec.md:352](../tasks/TASK-021-spec.md)). User hasn't used the app seriously yet (testing only) and has not observed this. Revisit once there's real usage evidence.
-3. TASK-022 v2: user-profile language preference — HOLD (2026-07-14): user only needs English right now, browser-locale detection (`navigator.language`) is sufficient. No API change needed later — hook already accepts a `lang` option ([TASK-022-spec.md:318](../tasks/TASK-022-spec.md)).
-4. **[Backlog, unscoped]** iOS PWA has no way to upload an existing photo — `capture="environment"` on `RecipeUpload.jsx:229` forces the camera to open directly and suppresses iOS's Photo Library/Browse chooser. Current behavior (camera-direct) is acceptable for now per user decision (2026-07-14); fix is to add a second, separate "Choose from Library" input/button (no `capture` attribute) alongside the existing camera-direct one, rather than removing `capture` from the existing input. Blocks S7 (HEIC-from-file-picker) smoke test until addressed.
-5. **[Backlog, unscoped]** AI extraction accuracy: during S2 iOS testing (2026-07-14), ingredient quantities/values came back wrong and some steps were skipped from the source recipe. Review modal allowed manual correction, so not a blocker for TASK-024, but worth a follow-up task against `server/services/aiService.js` (prompt tuning / model choice) — out of scope here per forbidden-exploration boundary.
-6. **[Backlog, unscoped]** Migration history reconciliation is a workaround, not a real fix — see "Local Dev Environment Fixes" below. The 12 migration files (0001-0013) still lack `--> statement-breakpoint` markers and still aren't meant to run via the automated `migrate()` path (several contain manual-only warnings). A future task could properly regenerate these via `drizzle-kit` if the team wants automated migrations to actually work end-to-end, rather than the current "hand-apply in Neon SQL Editor + bookkeeping backfill" pattern.
-7. **[Backlog, noted during TASK-026 spec review, not scoped]** No Clerk webhook sync — if a user deletes their Clerk account, their `householdMembers`/`households` row is never cleaned up (renders as "Former member"/"Former owner" per TASK-026's design instead of being removed). Would need a `user.deleted` webhook to actively fix; deferred as real new surface area, revisit only if the user cares about it later.
+1. TASK-021 v2: fuzzy annotation (foodsMatch) — HOLD (2026-07-14): intentional v1 limitation, trigger condition is "users report false missing labels" ([TASK-021-spec.md:352](../tasks/TASK-021-spec.md)). User hasn't used the app seriously yet (testing only) and has not observed this. Revisit once there's real usage evidence.
+2. TASK-022 v2: user-profile language preference — HOLD (2026-07-14): user only needs English right now, browser-locale detection (`navigator.language`) is sufficient. No API change needed later — hook already accepts a `lang` option ([TASK-022-spec.md:318](../tasks/TASK-022-spec.md)).
+3. **[Backlog, unscoped]** iOS PWA has no way to upload an existing photo — `capture="environment"` on `RecipeUpload.jsx:229` forces the camera to open directly and suppresses iOS's Photo Library/Browse chooser. Current behavior (camera-direct) is acceptable for now per user decision (2026-07-14); fix is to add a second, separate "Choose from Library" input/button (no `capture` attribute) alongside the existing camera-direct one, rather than removing `capture` from the existing input. Blocks S7 (HEIC-from-file-picker) smoke test until addressed.
+4. **[Backlog, unscoped]** AI extraction accuracy: during S2 iOS testing (2026-07-14), ingredient quantities/values came back wrong and some steps were skipped from the source recipe. Review modal allowed manual correction, so not a blocker for TASK-024, but worth a follow-up task against `server/services/aiService.js` (prompt tuning / model choice) — out of scope here per forbidden-exploration boundary.
+5. **[Backlog, unscoped]** Migration history reconciliation is a workaround, not a real fix — see "Local Dev Environment Fixes" below. The 12 migration files (0001-0013) still lack `--> statement-breakpoint` markers and still aren't meant to run via the automated `migrate()` path (several contain manual-only warnings). A future task could properly regenerate these via `drizzle-kit` if the team wants automated migrations to actually work end-to-end, rather than the current "hand-apply in Neon SQL Editor + bookkeeping backfill" pattern.
+6. **[Backlog, noted during TASK-026, not scoped]** No Clerk webhook sync — if a user deletes their Clerk account, their `householdMembers`/`households` row is never cleaned up (renders as "Former member"/"Former owner" instead of being removed). Would need a `user.deleted` webhook to actively fix; deferred as real new surface area, revisit only if the user cares about it later.
+7. **[Backlog, unscoped]** TASK-026's remaining Acceptance Criteria weren't exercised in this session: duplicate `clerkUserId` between owner and a member row (requires a manual DB insert against production Neon — skipped as too invasive without separate explicit permission), null-owner household, and "only one Clerk call per household size" under a real multi-member household (this account currently has only itself as a member). Code review confirms all three are handled correctly by construction (`Set` dedup before the batched call, `ownerRow` is conditionally built only when `household.clerkUserId` is truthy), but none were live-verified.
 
 ## Resolved
 - ~~Verify tag whitelist covers all existing production tag values~~ — DONE (2026-07-14): production has 1 recipe total, tags = `[]`. No existing tag data to conflict with the whitelist.
@@ -114,14 +127,15 @@ Getting `npm run dev` to actually boot locally against production data surfaced 
 - HEIC from share-sheet is rejected with a user message; HEIC from file picker (browser-converted) passes through as JPEG — correct behavior (TASK-024, historical)
 - `createImageBitmap` EXIF support requires Safari 15+; manual EXIF fallback implemented for older devices (TASK-024, historical)
 - See Remaining Work #6 — migration journal reconciliation is a bookkeeping workaround, not a proper fix
-- TASK-026 (not yet implemented): deleted-Clerk-account and Clerk-outage cases will render identically ("Former member"/"Former owner") — accepted tradeoff, see spec Known Risks #5. Also no DB/Clerk consistency guarantee (Remaining Work #7 above) and a 5s Clerk lookup timeout that's a starting guess, not a tuned value (spec Known Risks #4).
+- TASK-026 (implemented): deleted-Clerk-account and Clerk-outage cases render identically ("Former member"/"Former owner") — accepted tradeoff, confirmed working as designed (see smoke test above). Also no DB/Clerk consistency guarantee (Remaining Work #6 above) and a 5s Clerk lookup timeout that's a starting guess, not a tuned value — not yet exercised against real Clerk latency in production use.
+- TASK-026: duplicate-`clerkUserId`, null-owner, and genuine-endpoint-failure Acceptance Criteria scenarios are unverified (see Remaining Work #7) — believed correct by code construction but not live-tested.
 
 # Verification Results
 - TASK-025 (historical): `node --check` passed on `server/routes/recipes.js` and `server/services/recipeService.js`; `esbuild` bundle of `client/src/pages/RecipesPage.jsx` (JSX) completed with no errors
 - TASK-025 (historical): **Full live smoke test run against production Neon DB + real public Vercel Blob store** — all acceptance criteria confirmed (create with image → real loadable Blob URL, malformed input → 400 not 500, no-image save still works, PATCH without imageBase64 still works, oversized image → 413, delete removes Blob, concurrent saves → distinct URLs). Full detail in git history (this file was condensed when TASK-026 became active).
-- TASK-026: **not yet implemented, not yet verified.** See spec's Acceptance Criteria for the manual scenarios to run once built.
+- TASK-026: `node --check` passed on `server/services/householdService.js`; `esbuild` JSX bundle check passed on `client/src/pages/HouseholdPage.jsx`. **Live smoke test against production Neon DB** — see "TASK-026 Smoke Test Results" table above for the full scenario breakdown (core paths pass; 4 edge-case scenarios deferred, not blocking).
 
-# Forbidden Exploration (TASK-026)
+# Forbidden Exploration (TASK-026, still applies — no files outside Allowed Files were touched)
 - `server/middleware/clerkAuth.js` — auth flow is unrelated; `getAuth()` and the new `clerkClient.users.getUserList()` usage are confirmed non-conflicting, don't touch the auth flow itself
 - `server/db/schema.js` / `server/db/migrations/` — no schema change needed; both `clerkUserId` columns already exist
 - `client/src/context/AuthContext.jsx` — read `useAuth().user.id` only, don't modify
@@ -129,12 +143,9 @@ Getting `npm run dev` to actually boot locally against production data surfaced 
 - `server/routes/ai.js`, `server/services/aiService.js`, `client/src/components/recipes/*` — unrelated, TASK-024/025 territory
 
 # Recommended Next Action
-Implement TASK-026 per [ai/tasks/TASK-026-spec.md](../tasks/TASK-026-spec.md) "Changes in Detail" (sections 1–3), in this order:
-1. `server/services/householdService.js` — add `resolveDisplayName()` and `lookupClerkUsers()` helpers, rewrite `getMembers()` to merge owner + members, dedupe IDs, batch-resolve via Clerk with timeout/fallback, return the documented `{ clerkUserId, role, joinedAt, displayName }` shape
-2. Confirm `server/routes/household.js`'s existing `/members` route needs no edits (should be a no-op check)
-3. `client/src/pages/HouseholdPage.jsx` — add the members `<section>` card: independent fetch/loading/error state, list rendering, "(You)" comparison via `useAuth()`
-
-Then work through the spec's Acceptance Criteria as a manual smoke-test pass against local dev, specifically forcing the two scenarios that won't come up naturally: a Clerk lookup timeout/failure (temporarily lower `CLERK_LOOKUP_TIMEOUT_MS` or point `CLERK_SECRET_KEY` at an invalid value) and a duplicate `clerkUserId` between owner and a member row (manual DB insert in local dev only).
+TASK-026 is implemented and core-path smoke-tested. Nothing blocking. Optional next steps, in priority order:
+1. If the user wants full Acceptance Criteria coverage: exercise the duplicate-`clerkUserId` and null-owner scenarios against a **local-only** test DB (not production Neon — get explicit permission before mutating production rows for this).
+2. Otherwise, move to the next backlog item — see "Remaining Work" above (all currently HOLD or unscoped, no active task).
 
 # Context Notes
 - branch: main

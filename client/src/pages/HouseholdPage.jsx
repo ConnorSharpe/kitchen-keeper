@@ -1,12 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../api/index.js';
+import { useAuth } from '../context/AuthContext.jsx';
 import DietaryProfileForm from '../components/settings/DietaryProfileForm.jsx';
 
 export default function HouseholdPage() {
+  const { user } = useAuth();
   const [household, setHousehold] = useState(null);
   const [loading, setLoading]     = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [copied, setCopied]       = useState(false);
+
+  const [members, setMembers]               = useState([]);
+  const [membersLoading, setMembersLoading]  = useState(true);
+  const [membersError, setMembersError]      = useState(null);
 
   const [inviteEmail, setInviteEmail]   = useState('');
   const [inviting, setInviting]         = useState(false);
@@ -32,6 +38,21 @@ export default function HouseholdPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadMembers = useCallback(async () => {
+    setMembersLoading(true);
+    setMembersError(null);
+    try {
+      const { members } = await api.get('/api/household/members');
+      setMembers(members);
+    } catch (err) {
+      setMembersError(err.message || 'Failed to load household members');
+    } finally {
+      setMembersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadMembers(); }, [loadMembers]);
 
   async function copyCode() {
     await navigator.clipboard.writeText(household.joinCode);
@@ -126,6 +147,32 @@ export default function HouseholdPage() {
         <p className="mt-3 text-xs text-orange-600">
           Anyone who registers with this code will share your pantry, recipes, and shopping lists.
         </p>
+      </section>
+
+      {/* Members */}
+      <section className="bg-white border border-gray-200 rounded-2xl p-6">
+        <h2 className="text-base font-semibold text-gray-800 mb-4">Household members</h2>
+        {membersLoading && <p className="text-sm text-gray-400">Loading…</p>}
+        {membersError && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-red-600">{membersError}</p>
+            <button onClick={loadMembers} className="text-sm text-orange-600 hover:underline">Retry</button>
+          </div>
+        )}
+        {!membersLoading && !membersError && (
+          <ul className="space-y-2">
+            {members.map((m) => (
+              <li key={m.clerkUserId} className="flex items-center justify-between text-sm">
+                <span className="text-gray-800">
+                  {m.displayName}{m.clerkUserId === user?.id && ' (You)'}
+                </span>
+                <span className="text-xs text-gray-400">
+                  {m.role === 'owner' ? 'Owner' : 'Member'} · joined {new Date(m.joinedAt).toLocaleDateString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       {/* Invite by email */}
