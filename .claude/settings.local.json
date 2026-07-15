@@ -156,7 +156,17 @@
       "Bash(git -C /c/Users/conno/source/repos/kitchen-keeper push)",
       "Bash(git -C /c/Users/conno/source/repos/kitchen-keeper status --porcelain)",
       "Bash(git -C /c/Users/conno/source/repos/kitchen-keeper add .claude/settings.local.json)",
-      "Bash(git -C /c/Users/conno/source/repos/kitchen-keeper commit -m \"chore: update local Claude permission allowlist\")"
+      "Bash(git -C /c/Users/conno/source/repos/kitchen-keeper commit -m \"chore: update local Claude permission allowlist\")",
+      "Bash(node --check \"C:/Users/conno/source/repos/kitchen-keeper/server/services/aiService.js\")",
+      "Bash(node -e \"require\\('@babel/core'\\)\")",
+      "Bash(npx --yes eslint client/src/components/recipes/RecipeReviewModal.jsx)",
+      "Bash(npx vite *)",
+      "Bash(ls vite.config*)",
+      "Bash(cat vite.config.js)",
+      "Bash(cat vite.config.mjs)",
+      "Bash(ls server/.env)",
+      "Bash(ls .env)",
+      "Bash(find / -iname \"kk-test-recipe*\" 2>/dev/null | head -20)"
     ]
   }
 }
