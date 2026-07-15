@@ -1,4 +1,4 @@
-import { eq, and, isNull, isNotNull, lte, sql } from 'drizzle-orm';
+import { eq, and, isNull, isNotNull, lte, gte, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { pantryItems } from '../db/schema.js';
 import { getExpiryStatus } from '../utils/expiry.js';
@@ -180,6 +180,65 @@ export async function toggleFreeze(householdId, id) {
 
   const [item] = await db.select().from(pantryItems).where(eq(pantryItems.id, id));
   return { status: 'ok', item };
+}
+
+// TASK-032: split a row's quantity across two storage locations.
+//
+// Race-safety: this driver (drizzle-orm/neon-http) has no transaction support at all — confirmed
+// in server/node_modules/drizzle-orm/neon-http/session.js, NeonHttpSession.transaction() throws
+// unconditionally ("No transactions support in neon-http driver"). That's a stronger limitation
+// than the spec's architect review assumed (it took shoppingService.buildFromRecipes()'s
+// db.transaction() usage as a working precedent to copy — that call is almost certainly broken
+// too, and is the likely real cause of this repo's long-standing unexplained
+// `POST /api/shopping/build` 500). So instead of "atomic UPDATE + insert, wrapped in a
+// transaction," the atomic conditional UPDATE below is the *entire* race-safety mechanism: its
+// `quantity >= splitQuantity` WHERE guard is a single indivisible Postgres statement, so two
+// concurrent splits on the same row can never both succeed against more quantity than exists.
+// The follow-up insert/in-place-conversion statement is not itself race-prone — by the time it
+// runs, the decrement has already durably claimed the split-off quantity, so no concurrent
+// request can interfere with it. The only residual risk (disclosed, not fixed here) is a process
+// crash between the two statements, which this driver has no way to close without moving off
+// neon-http entirely — out of this task's scope.
+export async function splitItem(householdId, id, { splitQuantity, storageLocation }) {
+  const [decremented] = await db.update(pantryItems)
+    .set({ quantity: sql`${pantryItems.quantity} - ${splitQuantity}`, updatedAt: new Date().toISOString() })
+    .where(and(
+      eq(pantryItems.id, id),
+      eq(pantryItems.householdId, householdId),
+      gte(pantryItems.quantity, splitQuantity),
+    ))
+    .returning();
+
+  if (!decremented) {
+    const [existing] = await db.select().from(pantryItems)
+      .where(and(eq(pantryItems.id, id), eq(pantryItems.householdId, householdId)));
+    return { status: existing ? 'invalid_quantity' : 'not_found' };
+  }
+
+  const purchaseDate = decremented.purchaseDate ?? decremented.createdAt;
+  const expiryDate = computeExpiryForStorage({
+    name:            decremented.name,
+    category:        decremented.category,
+    storageLocation,
+    purchaseDate,
+    existingExpiry:  null,
+    source:          'ai_estimate',
+  });
+
+  if (decremented.quantity === 0) {
+    await db.update(pantryItems)
+      .set({ storageLocation, expiryDate, updatedAt: new Date().toISOString() })
+      .where(eq(pantryItems.id, id));
+    const [original] = await db.select().from(pantryItems).where(eq(pantryItems.id, id));
+    return { status: 'ok', original, created: null };
+  }
+
+  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...clonable } = decremented;
+  const [created] = await db.insert(pantryItems)
+    .values({ ...clonable, householdId, quantity: splitQuantity, storageLocation, expiryDate })
+    .returning();
+
+  return { status: 'ok', original: decremented, created };
 }
 
 // Inserts items independently — best-effort, non-atomic. One failure does not roll back others.

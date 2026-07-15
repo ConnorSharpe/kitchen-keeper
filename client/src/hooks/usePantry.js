@@ -55,5 +55,15 @@ export function usePantry() {
     return data.item;
   };
 
-  return { items, loading, addItem, updateItem, removeItem, markUsed, toggleFreeze, refresh: fetchItems };
+  const splitItem = async (id, body) => {
+    const data = await api.post(`/api/pantry/${id}/split`, body);
+    setItems((prev) => {
+      const next = prev.map((i) => (i.id === id ? data.original : i));
+      return data.created ? [data.created, ...next] : next;
+    });
+    refreshContext(); // new/changed expiry dates
+    return data;
+  };
+
+  return { items, loading, addItem, updateItem, removeItem, markUsed, toggleFreeze, splitItem, refresh: fetchItems };
 }

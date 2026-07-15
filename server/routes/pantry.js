@@ -23,6 +23,13 @@ const createSchema = z.object({
 
 const updateSchema = createSchema.partial();
 
+// splitQuantity is deliberately not z.coerce'd — TASK-032 Constraint 5 requires rejecting
+// NaN/Infinity/non-numeric input explicitly rather than relying on implicit JS coercion.
+const splitSchema = z.object({
+  splitQuantity:   z.number().finite().positive(),
+  storageLocation: z.enum(['pantry', 'refrigerator', 'freezer']),
+});
+
 // source is 'manual' iff the request body explicitly supplied expiryDate — TASK-031 Decision 1's
 // presence-check rule, reusing the same omitted-vs-explicit mechanism TASK-027 established.
 function expirySource(body) {
@@ -84,6 +91,18 @@ router.patch('/:id/freeze', async (req, res) => {
   const result = await pantryService.toggleFreeze(req.user.householdId, Number(req.params.id));
   if (ownershipError(result, res)) return;
   res.json({ item: result.item });
+});
+
+// POST /api/pantry/:id/split
+// 404 covers both "doesn't exist" and "belongs to another household" (not distinguished, per
+// TASK-032's API spec); 400 covers "exists and owned, but splitQuantity exceeds quantity".
+router.post('/:id/split', validate(splitSchema), async (req, res) => {
+  const result = await pantryService.splitItem(req.user.householdId, Number(req.params.id), req.body);
+  if (result.status === 'not_found') return res.status(404).json({ error: 'Item not found' });
+  if (result.status === 'invalid_quantity') {
+    return res.status(400).json({ error: 'Split quantity exceeds available quantity' });
+  }
+  res.json({ original: result.original, created: result.created });
 });
 
 // DELETE /api/pantry/:id

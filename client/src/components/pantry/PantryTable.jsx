@@ -26,7 +26,7 @@ function ExpiryBadge({ expiryDate, status }) {
   );
 }
 
-export default function PantryTable({ items, onEdit, onMarkUsed, onToggleFreeze, onDelete }) {
+export default function PantryTable({ items, onEdit, onMarkUsed, onToggleFreeze, onSplit, onDelete }) {
   if (items.length === 0) {
     return (
       <div className="text-center py-16 text-gray-400">
@@ -96,6 +96,11 @@ export default function PantryTable({ items, onEdit, onMarkUsed, onToggleFreeze,
                       onClick={() => onToggleFreeze(item.id)}
                       title={isFrozen ? 'Unfreeze' : 'Freeze'}
                       label={isFrozen ? '🌡 Thaw' : '❄ Freeze'}
+                    />
+                    <ActionButton
+                      onClick={() => onSplit(item)}
+                      title="Split quantity across storage locations"
+                      label="Split"
                     />
                     <ActionButton
                       onClick={() => onDelete(item.id)}

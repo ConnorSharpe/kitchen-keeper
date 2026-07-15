@@ -4,6 +4,7 @@ import { usePantry } from '../hooks/usePantry.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import PantryTable from '../components/pantry/PantryTable.jsx';
 import AddItemModal from '../components/pantry/AddItemModal.jsx';
+import SplitItemModal from '../components/pantry/SplitItemModal.jsx';
 import ReceiptUpload from '../components/pantry/ReceiptUpload.jsx';
 import StaplesChecklist from '../components/onboarding/StaplesChecklist.jsx';
 import { fetchProductByBarcode } from '../utils/openFoodFacts.js';
@@ -12,7 +13,7 @@ import PushNotificationBanner from '../components/push/PushNotificationBanner.js
 const BarcodeScanner = lazy(() => import('../components/pantry/BarcodeScanner.jsx'));
 
 export default function PantryPage() {
-  const { items, loading: pantryLoading, addItem, updateItem, removeItem, markUsed, toggleFreeze, refresh } = usePantry();
+  const { items, loading: pantryLoading, addItem, updateItem, removeItem, markUsed, toggleFreeze, splitItem, refresh } = usePantry();
   const { user, loading: authLoading } = useAuth();
 
   // Plain boolean. useEffect resets it on user identity change (System Invariant #11).
@@ -27,6 +28,7 @@ export default function PantryPage() {
   // showOnboarding: render gate = server eligibility + session-scoped UI suppression.
   const showOnboarding = isEligible && !onboardingDismissed;
   const [modalItem, setModalItem] = useState(undefined); // undefined = closed, null = add, item = edit
+  const [splitModalItem, setSplitModalItem] = useState(null); // null = closed, item = open
   const [showReceiptUpload, setShowReceiptUpload] = useState(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [barcodePrefill, setBarcodePrefill] = useState(null);
@@ -92,6 +94,11 @@ export default function PantryPage() {
     } catch (err) {
       toast.error(err.message || 'Failed to update freeze status');
     }
+  };
+
+  const handleSplit = async (id, body) => {
+    const data = await splitItem(id, body);
+    toast.success(data.created ? 'Item split across storage locations' : 'Storage location updated');
   };
 
   const handleDelete = async (id) => {
@@ -192,7 +199,16 @@ export default function PantryPage() {
           onEdit={(item) => setModalItem(item)}
           onMarkUsed={handleMarkUsed}
           onToggleFreeze={handleToggleFreeze}
+          onSplit={(item) => setSplitModalItem(item)}
           onDelete={handleDelete}
+        />
+      )}
+
+      {splitModalItem && (
+        <SplitItemModal
+          item={splitModalItem}
+          onClose={() => setSplitModalItem(null)}
+          onSplit={handleSplit}
         />
       )}
 
