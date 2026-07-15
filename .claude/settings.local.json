@@ -145,7 +145,18 @@
       "Bash(wmic process *)",
       "Bash(powershell -Command \"Get-CimInstance Win32_Process -Filter \\\\\"name='node.exe' or name='cmd.exe'\\\\\" | Select-Object ProcessId,ParentProcessId,CommandLine | Format-Table -Wrap -AutoSize\")",
       "Bash(powershell -Command \"Get-CimInstance Win32_Process -Filter \\\\\"ProcessId=47736\\\\\" | Select-Object ProcessId,ParentProcessId,Name,CommandLine | Format-List\")",
-      "Bash(curl -s -o /dev/null -w \"STATUS:%{http_code}\\\\n\" http://localhost:3001/api/shopping)"
+      "Bash(curl -s -o /dev/null -w \"STATUS:%{http_code}\\\\n\" http://localhost:3001/api/shopping)",
+      "Bash(node --check server/services/aiService.js)",
+      "Bash(git -C /c/Users/conno/source/repos/kitchen-keeper diff server/services/aiService.js)",
+      "Bash(git -C /c/Users/conno/source/repos/kitchen-keeper status)",
+      "Bash(git -C /c/Users/conno/source/repos/kitchen-keeper diff --stat)",
+      "Bash(git -C /c/Users/conno/source/repos/kitchen-keeper diff .claude/settings.local.json)",
+      "Bash(git -C /c/Users/conno/source/repos/kitchen-keeper add server/services/aiService.js ai/handoffs/CURRENT_STATE.md)",
+      "Bash(git -C /c/Users/conno/source/repos/kitchen-keeper commit -m ' *)",
+      "Bash(git -C /c/Users/conno/source/repos/kitchen-keeper push)",
+      "Bash(git -C /c/Users/conno/source/repos/kitchen-keeper status --porcelain)",
+      "Bash(git -C /c/Users/conno/source/repos/kitchen-keeper add .claude/settings.local.json)",
+      "Bash(git -C /c/Users/conno/source/repos/kitchen-keeper commit -m \"chore: update local Claude permission allowlist\")"
     ]
   }
 }
