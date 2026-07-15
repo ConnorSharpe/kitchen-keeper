@@ -1,60 +1,63 @@
 # Task
-TASK-029.5 — Receipt Name-Expansion Prompt Reposition. **Spec is written and architect-approved (DRAFT-2, round 1, 9.7/10) — ready for implementation, not yet implemented.** This is the immediate next action. Background: TASK-030 (Recipe Image Extraction + Insert-Step) was implemented and live smoke-tested last session — clean pass, considered done. TASK-029 (Receipt Name Normalization, two sessions ago) was smoke-tested in the same pass and found MIXED (classification works, name expansion doesn't) — TASK-029.5 is the follow-up spec addressing that gap.
+TASK-029.5 — Receipt Name-Expansion Prompt Reposition. **Implemented and live smoke-tested this session — PASS, 3/3 scored criteria, gate exceeded. Considered done.** Background: TASK-030 (Recipe Image Extraction + Insert-Step) was implemented and live smoke-tested previously — clean pass, considered done. TASK-029 (Receipt Name Normalization) was smoke-tested and found MIXED (classification works, name expansion doesn't) — TASK-029.5 was the follow-up fixing that gap by repositioning the naming-rules block.
 
 # Current Status
 
-**TASK-029.5 — not yet implemented, spec is ready.** `ai/tasks/TASK-029.5-spec.md` is DRAFT-2, approved for implementation after one architect-review round (9.7/10). Scope: relocate the existing TASK-029 naming-rules bullet block in `parseReceipt()`'s prompt (`server/services/aiService.js`) from its current mid-prompt position (right after the JSON-schema description) to immediately before the final `"Return ONLY a raw JSON array..."` line — i.e. right after the classification block, which already occupies that position and already works. **Zero wording changes** to any bullet, no model change, no schema change — this is a pure cut-and-paste reposition, testing a "lost in the middle" position-bias hypothesis in isolation before reaching for heavier fixes (few-shot examples, or a two-pass chained architecture — both explicitly deferred in the spec's Decision section). Read `ai/tasks/TASK-029.5-spec.md` in full before starting — it has the exact target position, the quantitative success gate (≥2/3 on 3 scored criteria, see below), and how to interpret a partial result. After implementing, re-run this repo's Local Smoke Testing Protocol (synthetic receipt, same method as last session) against the spec's Acceptance Criteria, then update this file.
+**TASK-029.5 — implemented and live smoke-tested, PASS.** Relocated the existing TASK-029 naming-rules bullet block in `parseReceipt()`'s prompt (`server/services/aiService.js`) from its prior mid-prompt position (right after the JSON-schema description) to immediately before the final `"Return ONLY a raw JSON array..."` line — now right after the classification block. Pure cut-and-paste, zero wording changes to any bullet, no model change, no schema change, per spec. Live smoke test (same synthetic-receipt method as TASK-029's baseline) re-run against the spec's Acceptance Criteria this session: **all 3 scored criteria passed** (baseline was 0/3), both regression checks held. This confirms the "lost in the middle" position-bias hypothesis was the primary cause — no need to escalate to few-shot examples or the two-pass architecture (both remain explicitly out of scope, not needed).
+
+**Important caveat surfaced this session, relevant to future work**: the backend dev server on port 3001 is a long-running process from another session, started via plain `nohup node server/index.js` — **not nodemon**, so it does not hot-reload on file edits despite `server/package.json`'s `dev` script using `nodemon index.js`. An initial smoke-test attempt against that shared process produced results identical to the stale pre-fix baseline (0/3, silently wrong — the code change was real but not live). This was caught by checking the process's actual command line (`Get-CimInstance Win32_Process`) rather than assuming nodemon reload, per this repo's Local Smoke Testing Protocol §4 ("don't guess from symptoms alone"). Worked around by starting a second, independent backend instance via `preview_start` (autoPort assigned port 53869, since 3001 was taken) and temporarily repointing `client/vite.config.js`'s dev proxy target from `localhost:3001` to `localhost:53869` for the duration of the test — client dev server was restarted (vite config changes require a full restart, not HMR) to pick up the new proxy target. Both the temporary proxy edit and the temporary backend instance were fully reverted/stopped after the test; `git diff --stat` confirmed only `server/services/aiService.js` remained changed. **Flag for next session**: if the shared port-3001 process is still running `nohup`-style (not nodemon) in a future session, any smoke test of server-side prompt/logic changes against it will silently test stale code — check the process command line first, don't assume reload.
 
 TASK-030 (previous session, for background) is **implemented and live smoke-tested — clean pass, considered done**. Both halves of that spec:
 1. `parseRecipeImage()` (`server/services/aiService.js`) — all three levers applied in the spec's priority order: (a) `detail: 'high'` added to the `image_url` content block (previously unset, defaulting to `'auto'`); (b) prompt rewritten from a bare "extract the recipe" instruction to a structured transcription prompt (identify sections → transcribe ingredients/instructions independently in printed order → no inference/merging/normalizing → preserve illegible text as-is → column-aware top-to-bottom reading order → exact quantity transcription including fractions); (c) model swapped `gpt-4o-mini` → `gpt-4o`, scoped to this function only. Also added: a single internal retry (via a `PARSE_FAILED` sentinel passed to `safeParseJSON`, distinguishing genuine parse failure from a legitimate JSON `null` response) gated on an 18s elapsed-time budget so it can't blow past `ai.js`'s existing 40s outer timeout; and an extended structured log line (`detail=high retried=<bool> parse_failed=<bool>`) per spec Constraint 8. `max_tokens: 3000` left unchanged (Constraint 4 asked to verify headroom, not presume it's insufficient — not empirically verified against a worst-case recipe this session, see Known Risks). Ingredient `quantity` JSON-schema hint in the prompt widened from `number|null` to `number|string|null` per Constraint 3, matching `ai.js`'s pre-existing `fractionalQuantity` Zod union (confirmed by reading `ai.js:146-161` — already accepts numbers, unicode fractions, and mixed-number strings; no schema change made or needed).
 2. `RecipeReviewModal.jsx` — added `insertStepAfter(index)`, which splices a new `{ text: '', _key: crypto.randomUUID() }` into the `steps` array at `index + 1`. A small "+ insert step" button renders between each pair of existing step rows (not after the last one, since "+ Add step" already covers appending). Existing `addStep()`/`removeStep()`/`updateStep()` and their `Date.now()`-keyed behavior are untouched, per Constraint 6. Save payload shape (`handleSave()`) is unchanged, per Constraint 7.
 
 # Files Modified
-- `server/services/aiService.js` — `parseRecipeImage()` only: model, `detail` param, prompt, retry logic, log line. No other function touched.
-- `client/src/components/recipes/RecipeReviewModal.jsx` — steps section only: added `insertStepAfter()` and its button. Ingredients section and everything else untouched.
-- `.claude/launch.json` — incidental, not part of the spec: added `autoPort: true` to both configs and pinned the client dev server to port 5183 (was 5173) with `--strictPort`, to fix a port-collision issue discovered while verifying this session (a concurrently running dev server from another session silently caused Vite to fall back to a port the preview harness couldn't reach). Low-risk, reversible, dev-tooling-only.
+- `server/services/aiService.js` — `parseReceipt()` only, this session: relocated the 7-bullet naming-rules block (TASK-029.5). No wording changes, no other function touched.
+- `server/services/aiService.js` — `parseRecipeImage()` (prior session): model, `detail` param, prompt, retry logic, log line. Untouched this session.
+- `client/src/components/recipes/RecipeReviewModal.jsx` (prior session): steps section only, `insertStepAfter()` and its button. Untouched this session.
+- `.claude/launch.json` (prior session): `autoPort: true`, client pinned to port 5183 with `--strictPort`. Untouched this session.
+- `client/vite.config.js` — **temporary only, fully reverted this session**: proxy target briefly repointed from `localhost:3001` to `localhost:53869` to test against a fresh backend instance (see Current Status caveat). Confirmed reverted via `git diff --stat` before ending session.
 
 # Files Required Next
-- For live verification of TASK-030: a real recipe image (ideally the one that originally produced wrong quantities/dropped steps, or a comparably dense one) run through `POST /api/ai/parse-recipe-image`, then through `RecipeReviewModal.jsx`'s new insert-step control. See Known Risks — this was not run this session; it spends OpenAI credits on a `gpt-4o` + `detail: 'high'` call, which is more expensive than the `gpt-4o-mini` calls used elsewhere, so deferring to the user's own test or an explicit go-ahead rather than spending credits unprompted.
-- TASK-029's own live smoke test (receipt name expansion) is also still outstanding — carried forward unchanged from last session, not addressed this session (out of TASK-030's scope).
-- For TASK-031: not yet read this session — next task per CURRENT_STATE ordering, but **requires explicit user approval before running its migration**.
+- For live verification of TASK-030 (recipe image extraction): still outstanding, carried forward unchanged — a real recipe image run through the real endpoint. Not part of this session's scope.
+- For TASK-031: not yet read — next task per CURRENT_STATE ordering, but **requires explicit user approval before running its migration**.
 
 # Files Already Reviewed
-- `server/services/aiService.js` (`parseRecipeImage()` and surrounding context, `safeParseJSON`, `wrapAIError`).
-- `server/routes/ai.js` (`parsedRecipeSchema`, `fractionalQuantity`, the 40s `Promise.race` timeout wrapper around `parseRecipeImage()`) — read-only, per spec's Forbidden Files.
-- `client/src/components/recipes/RecipeReviewModal.jsx` (full file).
-- `ai/tasks/TASK-030-spec.md` (full spec, this session).
+- `server/services/aiService.js` (`parseReceipt()`, `parseRecipeImage()`, `safeParseJSON`, `wrapAIError`).
+- `server/routes/ai.js` (read-only, per spec's Forbidden Files) — prior session.
+- `client/src/components/recipes/RecipeReviewModal.jsx` (full file) — prior session.
+- `ai/tasks/TASK-029.5-spec.md` (full spec, this session).
 
 # Dependency Chain
 
 Editing:
-- (none — TASK-030 code changes complete, pending live verification)
+- (none — TASK-029.5 code change complete and verified)
 
 Requires:
 - n/a
 
 Irrelevant:
-- `server/routes/ai.js`, `client/src/components/recipes/RecipeUpload.jsx`, ingredients section of `RecipeReviewModal.jsx`, `server/services/recipeService.js` — untouched, as forbidden/irrelevant per TASK-030 spec.
+- `server/routes/ai.js`, `client/src/components/pantry/ReceiptUpload.jsx`, `parseRecipeImage()` — untouched, as forbidden/irrelevant per TASK-029.5 spec.
 
 # Architecture Notes
-- Retry logic lives entirely inside `parseRecipeImage()` (a `callOnce()` closure called up to twice), not in `ai.js` — keeps the route handler untouched per Forbidden Files, matches spec Constraint 5.
-- Parse-failure detection uses a local `Symbol('parse_failed')` sentinel passed as `safeParseJSON`'s fallback, specifically to distinguish "JSON.parse threw" from "model legitimately returned the JSON literal `null`" — the pre-existing `parseRecipeImage()` couldn't tell these apart (both produced `null`), which would have made "retry only on parse failure" ambiguous.
-- Retry is gated on elapsed time since function start (`Date.now() - startedAt < 18000`), a plain one-shot check, not a second timeout mechanism — per Constraint 5's timeout-budget requirement.
-- Insert-step control always visible between rows (not hover-only), matching the spec's own suggested "persistent small +" design — deliberately chosen over hover-reveal for mobile-friendliness (no hover state on touch).
-- **Still open, carried from earlier sessions, untouched by TASK-030**: `POST /api/shopping/build` returns 500 Internal Server Error when building a list from at least one real recipe (`Caribbean Style Curry Cod`) in this household. Still unscoped, still blocks the normal "build list from recipes" flow.
-- **Still open, carried from TASK-029**: live smoke test of receipt name-expansion prompt not yet run.
+- Naming-rules block now sits immediately after the classification block and immediately before the final `"Return ONLY a raw JSON array..."` line in `parseReceipt()`'s prompt — same relative order as `parseRecipeImage()`'s "critical instructions near the end" pattern isn't formally shared code, but is now a consistent convention across both AI prompts in this file.
+- Retry logic in `parseRecipeImage()` (prior session): lives entirely inside the function via a `callOnce()` closure, gated on elapsed time (`Date.now() - startedAt < 18000`). Untouched this session.
+- Insert-step control in `RecipeReviewModal.jsx` (prior session): always visible between rows. Untouched this session.
+- **New finding this session**: the shared backend dev process on port 3001 runs via plain `nohup node server/index.js`, not nodemon — it will not pick up server-side code edits automatically despite `npm run dev` being nodemon-based. See Current Status caveat for the workaround used (independent backend instance + temporary proxy repoint, both reverted).
+- **Still open, carried from earlier sessions**: `POST /api/shopping/build` returns 500 Internal Server Error when building a list from at least one real recipe (`Caribbean Style Curry Cod`) in this household. Still unscoped.
 
 # Decisions Made
-- None new — implementation followed TASK-030-spec.md verbatim (all three levers in the spec's priority order, insert-before design, `crypto.randomUUID()` for new keys, sentinel-based parse-failure detection to support the retry gate); no deviations.
+- TASK-029.5 implementation followed `TASK-029.5-spec.md` verbatim — pure cut-and-paste reposition, zero wording changes, no deviations.
+- When the shared port-3001 backend process was found not to hot-reload, chose to stand up an independent backend instance (via `preview_start`, autoPort → 53869) rather than touching or restarting the process owned by another session — kept the untested workaround fully reversible (temporary `vite.config.js` proxy edit, reverted immediately after the test; temporary backend stopped after use).
 
 # Remaining Work
-1. **Implement TASK-029.5** — spec approved, ready to go, no dependencies, no migration. Relocate the naming-rules block in `parseReceipt()`'s prompt per the spec's exact target position. Small diff (single template-literal reorder in one function).
-2. **Live smoke test TASK-029.5** against its Acceptance Criteria (quantitative gate: ≥2/3 of meat-expansion/produce-expansion/sentence-case pass, both regression checks must hold) using this repo's Local Smoke Testing Protocol. Record which of the two Decision-section follow-ups (few-shot examples vs. two-pass architecture) the result points toward if the gate isn't met.
-3. **Carried forward, still unscoped**: investigate the `POST /api/shopping/build` 500 error (real recipe → internal server error).
-4. Implement TASK-031 — **requires explicit user approval before running its migration**; must precede 032/033.
-5. Implement TASK-032 — requires 031 done first.
-6. Implement TASK-033 — requires 032 done first; **requires explicit user approval before running its migration**.
-7. TASK-030's own remaining untested edge cases (lower priority, that task is otherwise considered done): a genuinely handwritten recipe card, a true two-column body layout, a forced-malformed-response retry trigger, and `detail: 'high'` verified via true wire-level network inspection rather than source read.
+1. **TASK-029.5 — done.** Naming-rules reposition implemented and live smoke-tested this session: 3/3 scored criteria passed (baseline 0/3), both regression checks held. No follow-up (few-shot / two-pass) needed — see Verification Results below for full detail.
+2. **Carried forward, still unscoped**: investigate the `POST /api/shopping/build` 500 error (real recipe → internal server error).
+3. Implement TASK-031 — **requires explicit user approval before running its migration**; must precede 032/033.
+4. Implement TASK-032 — requires 031 done first.
+5. Implement TASK-033 — requires 032 done first; **requires explicit user approval before running its migration**.
+6. TASK-030's own remaining untested edge cases (lower priority, that task is otherwise considered done): a genuinely handwritten recipe card, a true two-column body layout, a forced-malformed-response retry trigger, and `detail: 'high'` verified via true wire-level network inspection rather than source read.
+7. For live verification of TASK-030 (recipe image extraction, real photo rather than synthetic): still outstanding, deferred to avoid unprompted OpenAI spend on `gpt-4o` + `detail: 'high'`.
 
 ## Backlog (carried forward, unchanged)
 - iOS PWA has no way to upload an existing photo (camera-only) — unscoped, fix identified (add a second file input without `capture`).
@@ -65,14 +68,13 @@ Irrelevant:
 - TASK-022 v2 (language preference) — HOLD, English-only is sufficient for now.
 
 # Known Risks
-- TASK-030 code changes are unverified against a live model response — non-deterministic prompt/model/detail-param change with no eval harness, so "implemented" is not the same as "confirmed effective" until real recipe images (across the varied layouts in Acceptance Criteria) are run through it.
-- `max_tokens: 3000` headroom was not empirically re-verified against a genuinely long/dense recipe this session (Constraint 4 asked for verification, not a presumption) — left unchanged from the prior value; worth checking against an 8+ step recipe during the live smoke test.
+- TASK-030 code changes are still unverified against a live model response using a real (non-synthetic) recipe photo — carried forward, unchanged this session.
 - Cost per recipe-image upload increases (per spec's own Known Risks): `gpt-4o` instead of `gpt-4o-mini`, plus `detail: 'high'` instead of `'auto'`. Not expected to matter at this app's usage volume, but real.
-- The internal retry only helps the malformed-JSON/timeout failure mode — it does not and cannot fix the originally reported bug class (valid JSON with wrong quantities or silently dropped steps). That's what the insert-step control and the prompt/detail/model changes are for; the retry is a narrower, separate mitigation.
-- TASK-029's receipt-name-expansion prompt (previous session) is *also* still unverified against a live model response — two consecutive sessions now have unverified prompt/vision changes stacked up, worth a combined smoke-testing pass rather than deferring indefinitely.
 - The `/api/shopping/build` 500 error remains a real, currently-reproducible bug blocking recipe-based list building for at least one household.
 - Two pending production migrations (TASK-031, TASK-033) — still need explicit user sign-off at implementation time.
 - No automated test suite anywhere in this repo.
+- **Dev-environment gotcha for future sessions**: the shared port-3001 backend process runs via plain `nohup`, not nodemon, despite the `dev` script implying hot-reload. Any future session testing server-side changes against that shared process should verify via `Get-CimInstance Win32_Process` (or equivalent) that it's actually the nodemon-wrapped process before trusting results, or stand up an independent instance as this session did.
+- TASK-029.5's smoke test was one run of one synthetic receipt, same limitation noted in every prior task's spec (no before/after statistical benchmark) — a strong single-run result (3/3, up from 0/3), not a large-sample guarantee.
 
 # Verification Results
 - `node --check server/services/aiService.js` — PASS (syntax only).
@@ -112,8 +114,27 @@ Synthetic receipt: "FRESH MART", 7 line items — an abbreviated meat (`CHKN THI
 - **Working theory, not confirmed**: `parseReceipt()` still uses `gpt-4o-mini` (TASK-029 didn't change the model, unlike TASK-030). It's plausible the naming-rules block gets deprioritized by a weaker model on a long compound instruction, especially for synthetic/unfamiliar abbreviations — but that doesn't explain the `BANANAS` case-formatting miss, which needed zero real-world knowledge. This looks like a genuine, reportable gap in TASK-029's effectiveness, not just cautious under-expansion.
 - **This was not re-tested with variations** (e.g., only the prompt's own worked examples, or a second synthetic receipt) to rule out one-off model stochasticity — one run is a signal, not a confirmed pattern.
 
+## TASK-029.5 (receipt naming-rules reposition) — PASS, this session (2026-07-14)
+Same synthetic "FRESH MART" 7-line receipt as the TASK-029 baseline above, re-run after relocating the naming-rules block to immediately after the classification block. **Tested against an independent backend instance (port 53869) after discovering the shared port-3001 process doesn't hot-reload — see Current Status caveat.**
+
+Scored criteria (gate: ≥2/3, baseline was 0/3):
+- [x] **PASS** — `CHKN THIGH BNLS` → `Chicken thigh boneless` (abbreviated meat, correctly expanded)
+- [x] **PASS** — `ORG BANANA` → `Organic banana` (abbreviated produce, correctly expanded)
+- [x] **PASS** — `BANANAS` → `Bananas` (pure sentence-casing, the strongest diagnostic criterion — now correct)
+
+**3/3 — gate exceeded.** Position bias was confirmed as the (at least primary) cause; no escalation to few-shot examples or the two-pass architecture needed.
+
+Non-scored criterion (recorded, not counted):
+- `GV 2% MLK GAL` → `GV 2% milk gallon` — "MLK"/"GAL" expanded, "GV" (unfamiliar store-brand abbreviation) correctly left unguessed. Matches the spec's "either expands confidently or is left unchanged" acceptable-outcome rule — a confident partial expansion with the ambiguous brand token appropriately preserved.
+
+Regression checks (must not fail):
+- [x] **PASS** — `SKU 44192` left unexpanded, no hallucination.
+- [x] **PASS** — Classification unaffected by the one-position shift: 5 items found (7 minus 2 non-food), same as baseline.
+
+Cleanup: canceled the pending "Add 5 items" action before any write (cancel-before-commit — no data was ever written, nothing to delete). Pantry item count confirmed unchanged (8 items) after cancel. Temporary `vite.config.js` proxy edit and temporary backend instance (port 53869) both reverted/stopped; `git diff --stat` confirmed only the intended `aiService.js` change remained.
+
 # Recommended Next Action
-Implement TASK-029.5 (spec approved, ready — see `ai/tasks/TASK-029.5-spec.md`), then live smoke-test it the same way TASK-030 was tested last session, then update this file with the result. If the quantitative gate is met, TASK-029/029.5 together can be considered done and the naming-expansion gap closed. If not met, the spec's own Decision section already specifies the next step (few-shot examples first, two-pass architecture only if that also fails) — don't skip ahead to the heavier option without trying the cheaper one, and don't silently proceed to TASK-031 without recording the outcome here either way.
+TASK-029.5 is done — gate exceeded (3/3), no follow-up needed. Next candidates, in order: (1) investigate the carried-forward `POST /api/shopping/build` 500 error (unscoped, currently blocking a real household's workflow — likely worth a quick triage before starting a new task), or (2) begin TASK-031 (requires explicit user approval before running its migration; read the spec first, do not run the migration without that approval).
 
 # Forbidden Exploration
 Each `ai/tasks/TASK-0XX-spec.md` has its own Allowed/Forbidden Files section — read the specific spec for whichever task is being implemented next.
@@ -124,9 +145,9 @@ Each `ai/tasks/TASK-0XX-spec.md` has its own Allowed/Forbidden Files section —
 - context pressure: low
 
 # PowerShell Merge Block
-N/A — worked directly on main, no worktree used this session. This session was spec-writing only (no source code changes) — TASK-030's code changes from last session were committed separately if not already done; this commit covers only the new spec and handoff update:
+N/A — worked directly on main, no worktree used this session.
 
 ```powershell
-git add ai/tasks/TASK-029.5-spec.md ai/handoffs/CURRENT_STATE.md
-git commit -m "TASK-029.5: add architect-approved spec for receipt naming-rules prompt reposition"
+git add server/services/aiService.js ai/handoffs/CURRENT_STATE.md
+git commit -m "TASK-029.5: reposition receipt naming-rules prompt block; live-verified 3/3"
 ```
