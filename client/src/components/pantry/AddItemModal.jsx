@@ -29,6 +29,7 @@ function buildInitialState(item, prefill) {
       readyDate:       '',
       expiryDate:      '',
       storageLocation: getDefaultStorageLocation(category),
+      servingsPerPurchaseUnit: '',
       notes:           '',
     };
   }
@@ -41,6 +42,7 @@ function buildInitialState(item, prefill) {
     readyDate:       fromISO(item.readyDate),
     expiryDate:      fromISO(item.expiryDate),
     storageLocation: item.storageLocation ?? getDefaultStorageLocation(item.category),
+    servingsPerPurchaseUnit: item.servingsPerPurchaseUnit != null ? String(item.servingsPerPurchaseUnit) : '',
     notes:           item.notes ?? '',
   };
 }
@@ -81,6 +83,7 @@ export default function AddItemModal({ item, prefill, onClose, onSave }) {
         purchaseDate:    form.purchaseDate ? toISO(form.purchaseDate) : null,
         readyDate:       form.readyDate    ? toISO(form.readyDate)    : null,
         storageLocation: form.storageLocation,
+        servingsPerPurchaseUnit: form.servingsPerPurchaseUnit ? Number(form.servingsPerPurchaseUnit) : null,
         notes:           form.notes.trim() || null,
       };
       // Only include expiryDate if the user actually typed it (create), or changed it from what was
@@ -200,6 +203,22 @@ export default function AddItemModal({ item, prefill, onClose, onSave }) {
               />
             </Field>
           </div>
+
+          <Field
+            label="Servings per unit (optional)"
+            error={fieldErrors.servingsPerPurchaseUnit?.[0]}
+          >
+            <input
+              type="number"
+              value={form.servingsPerPurchaseUnit}
+              onChange={set('servingsPerPurchaseUnit')}
+              min="0.1"
+              max="1000"
+              step="any"
+              placeholder="e.g. 2 servings per pouch"
+              className={inputCls}
+            />
+          </Field>
 
           <Field label="Ready date — when this item will be usable (optional)" error={fieldErrors.readyDate?.[0]}>
             <input

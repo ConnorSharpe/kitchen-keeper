@@ -18,6 +18,7 @@ const createSchema = z.object({
   expiryDate:      dateField,
   readyDate:       dateField,
   storageLocation: z.enum(['pantry', 'refrigerator', 'freezer']).nullable().optional(),
+  servingsPerPurchaseUnit: z.coerce.number().min(0.1).max(1000).nullable().optional(),
   notes:           z.string().max(500).nullable().optional(),
 });
 
@@ -25,10 +26,16 @@ const updateSchema = createSchema.partial();
 
 // splitQuantity is deliberately not z.coerce'd — TASK-032 Constraint 5 requires rejecting
 // NaN/Infinity/non-numeric input explicitly rather than relying on implicit JS coercion.
+// splitServings (TASK-033) follows the same rule for the same reason. Exactly one of the two
+// must be present — enforced via an explicit .refine(), not an implicit truthy check (Constraint 6).
 const splitSchema = z.object({
-  splitQuantity:   z.number().finite().positive(),
+  splitQuantity:   z.number().finite().positive().optional(),
+  splitServings:   z.number().finite().positive().optional(),
   storageLocation: z.enum(['pantry', 'refrigerator', 'freezer']),
-});
+}).refine(
+  (body) => (body.splitQuantity != null) !== (body.splitServings != null),
+  { message: 'Provide exactly one of splitQuantity or splitServings' },
+);
 
 // source is 'manual' iff the request body explicitly supplied expiryDate — TASK-031 Decision 1's
 // presence-check rule, reusing the same omitted-vs-explicit mechanism TASK-027 established.
@@ -101,6 +108,9 @@ router.post('/:id/split', validate(splitSchema), async (req, res) => {
   if (result.status === 'not_found') return res.status(404).json({ error: 'Item not found' });
   if (result.status === 'invalid_quantity') {
     return res.status(400).json({ error: 'Split quantity exceeds available quantity' });
+  }
+  if (result.status === 'no_servings_configured') {
+    return res.status(400).json({ error: 'This item has no servings-per-unit value set' });
   }
   res.json({ original: result.original, created: result.created });
 });

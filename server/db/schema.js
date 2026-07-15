@@ -41,6 +41,7 @@ export const pantryItems = pgTable('pantry_items', {
   freezeNotes:        text('freeze_notes'),
   storageLocation:          text('storage_location'),           // 'pantry' | 'refrigerator' | 'freezer' | null
   preFreezeStorageLocation: text('pre_freeze_storage_location'), // snapshotted on freeze, restored+cleared on thaw
+  servingsPerPurchaseUnit: real('servings_per_purchase_unit'), // null unless user sets it manually; bounded 0.1-1000 at API layer (TASK-033)
   notes:              text('notes'),
   consumedAt:         text('consumed_at'),
   wasExpiring:        boolean('was_expiring'),

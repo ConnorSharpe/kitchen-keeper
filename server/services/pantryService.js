@@ -199,13 +199,35 @@ export async function toggleFreeze(householdId, id) {
 // request can interfere with it. The only residual risk (disclosed, not fixed here) is a process
 // crash between the two statements, which this driver has no way to close without moving off
 // neon-http entirely — out of this task's scope.
-export async function splitItem(householdId, id, { splitQuantity, storageLocation }) {
+// TASK-033: converts a servings-based split request into a unit quantity ahead of the split logic
+// below, rounded to 6 decimal places to absorb ordinary floating-point noise (e.g. 0.1 + 0.2
+// artifacts) without meaningfully constraining legitimate precision for any realistic purchase
+// unit. Extracted as a named helper (rather than inlined in splitItem) purely for future reuse —
+// e.g. consume-by-servings or recipe-servings math, should either ever need this same conversion.
+export function computeSplitQuantityFromServings(splitServings, servingsPerPurchaseUnit) {
+  return Math.round((splitServings / servingsPerPurchaseUnit) * 1e6) / 1e6;
+}
+
+export async function splitItem(householdId, id, { splitQuantity, splitServings, storageLocation }) {
+  let quantity = splitQuantity;
+
+  // splitServings requires a lookup first (to convert against the item's own
+  // servingsPerPurchaseUnit) — this read is not itself part of the race-safety mechanism, only
+  // the atomic conditional UPDATE below is (see the module-level comment above).
+  if (splitServings != null) {
+    const [item] = await db.select().from(pantryItems)
+      .where(and(eq(pantryItems.id, id), eq(pantryItems.householdId, householdId)));
+    if (!item) return { status: 'not_found' };
+    if (item.servingsPerPurchaseUnit == null) return { status: 'no_servings_configured' };
+    quantity = computeSplitQuantityFromServings(splitServings, item.servingsPerPurchaseUnit);
+  }
+
   const [decremented] = await db.update(pantryItems)
-    .set({ quantity: sql`${pantryItems.quantity} - ${splitQuantity}`, updatedAt: new Date().toISOString() })
+    .set({ quantity: sql`${pantryItems.quantity} - ${quantity}`, updatedAt: new Date().toISOString() })
     .where(and(
       eq(pantryItems.id, id),
       eq(pantryItems.householdId, householdId),
-      gte(pantryItems.quantity, splitQuantity),
+      gte(pantryItems.quantity, quantity),
     ))
     .returning();
 
@@ -235,7 +257,7 @@ export async function splitItem(householdId, id, { splitQuantity, storageLocatio
 
   const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...clonable } = decremented;
   const [created] = await db.insert(pantryItems)
-    .values({ ...clonable, householdId, quantity: splitQuantity, storageLocation, expiryDate })
+    .values({ ...clonable, householdId, quantity, storageLocation, expiryDate })
     .returning();
 
   return { status: 'ok', original: decremented, created };

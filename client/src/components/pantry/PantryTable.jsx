@@ -72,7 +72,14 @@ export default function PantryTable({ items, onEdit, onMarkUsed, onToggleFreeze,
                   )}
                 </td>
                 <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{item.category}</td>
-                <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{item.quantity}</td>
+                <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                  {item.quantity}
+                  {item.servingsPerPurchaseUnit != null && (
+                    <span className="block text-xs text-gray-400">
+                      {item.servingsPerPurchaseUnit} servings/{item.unit}
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{item.unit}</td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   <StorageBadge storageLocation={item.storageLocation} />
