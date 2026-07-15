@@ -135,7 +135,17 @@
       "Bash(npx esbuild *)",
       "Bash(powershell -NoProfile -Command \"Get-Process -Id 10068 -ErrorAction SilentlyContinue | Stop-Process -Force; Get-Process -Id 49528 -ErrorAction SilentlyContinue | Stop-Process -Force\")",
       "Bash(git check-ignore *)",
-      "Bash(gh repo *)"
+      "Bash(gh repo *)",
+      "Bash(node -e \"const d=require\\('./server/data/foodkeeper.json'\\); console.log\\(JSON.stringify\\(d.filter\\(e=>/chicken/.test\\(e.name\\)\\).slice\\(0,5\\), null, 2\\)\\); console.log\\('total entries:', d.length\\);\")",
+      "PowerShell(git add ai/handoffs/CURRENT_STATE.md ai/tasks/TASK-027-spec.md ai/tasks/TASK-028-spec.md ai/tasks/TASK-029-spec.md ai/tasks/TASK-030-spec.md ai/tasks/TASK-031-spec.md ai/tasks/TASK-032-spec.md ai/tasks/TASK-033-spec.md)",
+      "Bash(curl -s http://localhost:3001/api/shopping/build -X POST -H \"Content-Type: application/json\" -d '{}' -w \"\\\\nSTATUS:%{http_code}\\\\n\")",
+      "Bash(node \"C:\\\\Users\\\\conno\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-conno-source-repos-kitchen-keeper\\\\69430fe7-7379-4540-992f-3f21b5ccd715\\\\scratchpad\\\\seed-list.mjs\")",
+      "Bash(node seed-list-temp.mjs)",
+      "Bash(powershell -Command \"Get-CimInstance Win32_Process -Filter \\\\\"name='node.exe'\\\\\" | Select-Object ProcessId,CommandLine | Format-List\")",
+      "Bash(wmic process *)",
+      "Bash(powershell -Command \"Get-CimInstance Win32_Process -Filter \\\\\"name='node.exe' or name='cmd.exe'\\\\\" | Select-Object ProcessId,ParentProcessId,CommandLine | Format-Table -Wrap -AutoSize\")",
+      "Bash(powershell -Command \"Get-CimInstance Win32_Process -Filter \\\\\"ProcessId=47736\\\\\" | Select-Object ProcessId,ParentProcessId,Name,CommandLine | Format-List\")",
+      "Bash(curl -s -o /dev/null -w \"STATUS:%{http_code}\\\\n\" http://localhost:3001/api/shopping)"
     ]
   }
 }
