@@ -56,6 +56,48 @@ export async function toggleItem(householdId, listId, itemId) {
   return { status: 'ok', item: updated };
 }
 
+// Ownership verified via join through shoppingLists — a guessed item ID returns 404.
+// Editing is the manual resolution the mismatch warning exists to prompt, so it
+// unconditionally clears hasUnitMismatch (see TASK-027 spec, Decision: Edit Clears hasUnitMismatch).
+export async function updateItem(householdId, listId, itemId, data) {
+  const [list] = await db
+    .select()
+    .from(shoppingLists)
+    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.householdId, householdId)));
+  if (!list) return { status: 'not_found' };
+
+  const [item] = await db
+    .select()
+    .from(shoppingListItems)
+    .where(and(eq(shoppingListItems.id, itemId), eq(shoppingListItems.listId, listId)));
+  if (!item) return { status: 'not_found' };
+
+  await db.update(shoppingListItems)
+    .set({ ...data, hasUnitMismatch: false })
+    .where(eq(shoppingListItems.id, itemId));
+
+  const [updated] = await db.select().from(shoppingListItems).where(eq(shoppingListItems.id, itemId));
+  return { status: 'ok', item: updated };
+}
+
+// Ownership verified via join through shoppingLists — a guessed item ID returns 404.
+export async function deleteItem(householdId, listId, itemId) {
+  const [list] = await db
+    .select()
+    .from(shoppingLists)
+    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.householdId, householdId)));
+  if (!list) return { status: 'not_found' };
+
+  const [item] = await db
+    .select()
+    .from(shoppingListItems)
+    .where(and(eq(shoppingListItems.id, itemId), eq(shoppingListItems.listId, listId)));
+  if (!item) return { status: 'not_found' };
+
+  await db.delete(shoppingListItems).where(eq(shoppingListItems.id, itemId));
+  return { status: 'ok' };
+}
+
 // CASCADE on shoppingLists → shoppingListItems handles item cleanup.
 export async function deleteList(householdId, listId) {
   const [list] = await db

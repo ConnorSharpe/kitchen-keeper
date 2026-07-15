@@ -13,6 +13,13 @@ export default function ShoppingList({ listId }) {
   const [addUnit, setAddUnit]   = useState('');
   const [adding, setAdding]     = useState(false);
 
+  // Inline edit form state — single editingId controls which row (if any) shows the form
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName]   = useState('');
+  const [editQty, setEditQty]     = useState('');
+  const [editUnit, setEditUnit]   = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const fetchItems = useCallback(async () => {
     setLoading(true);
     try {
@@ -63,6 +70,47 @@ export default function ShoppingList({ listId }) {
     }
   }
 
+  function handleEditStart(item) {
+    setEditingId(item.id);
+    setEditName(item.ingredientName);
+    setEditQty(item.quantity != null ? String(item.quantity) : '');
+    setEditUnit(item.unit ?? '');
+  }
+
+  function handleEditCancel() {
+    setEditingId(null);
+  }
+
+  async function handleEditSave(e) {
+    e.preventDefault();
+    if (!editName.trim()) return;
+    setSavingEdit(true);
+    try {
+      const body = {
+        ingredientName: editName.trim(),
+        quantity: editQty ? Number(editQty) : null,
+        unit: editUnit.trim() || null,
+      };
+      const data = await api.patch(`/api/shopping/${listId}/items/${editingId}`, body);
+      setItems((prev) => prev.map((i) => (i.id === editingId ? data.item : i)));
+      setEditingId(null);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function handleDelete(itemId) {
+    try {
+      await api.delete(`/api/shopping/${listId}/items/${itemId}`);
+      setItems((prev) => prev.filter((i) => i.id !== itemId));
+      setEditingId((cur) => (cur === itemId ? null : cur));
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }
+
   const checked   = items.filter((i) => i.isChecked);
   const unchecked = items.filter((i) => !i.isChecked);
 
@@ -76,6 +124,24 @@ export default function ShoppingList({ listId }) {
     );
   }
 
+  const rowProps = (item) => ({
+    item,
+    toggling: toggling === item.id,
+    editing: editingId === item.id,
+    savingEdit,
+    editName,
+    editQty,
+    editUnit,
+    onToggle: () => handleToggle(item.id),
+    onEditStart: () => handleEditStart(item),
+    onEditCancel: handleEditCancel,
+    onEditSave: handleEditSave,
+    onEditNameChange: setEditName,
+    onEditQtyChange: setEditQty,
+    onEditUnitChange: setEditUnit,
+    onDelete: () => handleDelete(item.id),
+  });
+
   return (
     <div className="flex flex-col gap-4">
       {items.length === 0 ? (
@@ -86,12 +152,7 @@ export default function ShoppingList({ listId }) {
         <ul className="space-y-1">
           {/* Unchecked items first */}
           {unchecked.map((item) => (
-            <ItemRow
-              key={item.id}
-              item={item}
-              toggling={toggling === item.id}
-              onToggle={() => handleToggle(item.id)}
-            />
+            <ItemRow key={item.id} {...rowProps(item)} />
           ))}
 
           {/* Divider when both buckets have items */}
@@ -101,12 +162,7 @@ export default function ShoppingList({ listId }) {
 
           {/* Checked items dimmed at bottom */}
           {checked.map((item) => (
-            <ItemRow
-              key={item.id}
-              item={item}
-              toggling={toggling === item.id}
-              onToggle={() => handleToggle(item.id)}
-            />
+            <ItemRow key={item.id} {...rowProps(item)} />
           ))}
         </ul>
       )}
@@ -166,8 +222,93 @@ export default function ShoppingList({ listId }) {
   );
 }
 
-function ItemRow({ item, toggling, onToggle }) {
+function ItemRow({
+  item,
+  toggling,
+  editing,
+  savingEdit,
+  editName,
+  editQty,
+  editUnit,
+  onToggle,
+  onEditStart,
+  onEditCancel,
+  onEditSave,
+  onEditNameChange,
+  onEditQtyChange,
+  onEditUnitChange,
+  onDelete,
+}) {
   const checked = item.isChecked;
+
+  if (editing) {
+    return (
+      <li className="rounded-lg px-3 py-2 bg-gray-50">
+        <form
+          onSubmit={onEditSave}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') onEditCancel();
+          }}
+          className="flex flex-wrap gap-2 items-end"
+        >
+          <div className="flex-1 min-w-[140px]">
+            <label className="block text-xs text-gray-500 mb-1">Item</label>
+            <input
+              type="text"
+              value={editName}
+              onChange={(e) => onEditNameChange(e.target.value)}
+              autoFocus
+              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+            />
+          </div>
+          <div className="w-20">
+            <label className="block text-xs text-gray-500 mb-1">Qty</label>
+            <input
+              type="number"
+              value={editQty}
+              onChange={(e) => onEditQtyChange(e.target.value)}
+              min="0"
+              step="any"
+              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+            />
+          </div>
+          <div className="w-24">
+            <label className="block text-xs text-gray-500 mb-1">Unit</label>
+            <input
+              type="text"
+              value={editUnit}
+              onChange={(e) => onEditUnitChange(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={savingEdit || !editName.trim()}
+            className="py-1.5 px-3 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 disabled:opacity-50"
+          >
+            {savingEdit ? '…' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={onEditCancel}
+            disabled={savingEdit}
+            className="py-1.5 px-3 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-100 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            aria-label="Delete item"
+            className="py-1.5 px-2 text-gray-400 hover:text-red-500 text-sm"
+          >
+            🗑️
+          </button>
+        </form>
+      </li>
+    );
+  }
+
   return (
     <li
       className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
@@ -206,6 +347,21 @@ function ItemRow({ item, toggling, onToggle }) {
           ⚠️
         </span>
       )}
+
+      <button
+        onClick={onEditStart}
+        aria-label="Edit item"
+        className="text-gray-400 hover:text-orange-500 text-sm flex-shrink-0"
+      >
+        ✏️
+      </button>
+      <button
+        onClick={onDelete}
+        aria-label="Delete item"
+        className="text-gray-400 hover:text-red-500 text-sm flex-shrink-0"
+      >
+        🗑️
+      </button>
     </li>
   );
 }

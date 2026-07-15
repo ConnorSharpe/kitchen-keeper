@@ -18,6 +18,8 @@ const manualItemSchema = z.object({
   unit:           z.string().max(50).nullable().optional(),
 });
 
+const itemPatchSchema = manualItemSchema.partial();
+
 // GET /api/shopping
 router.get('/', async (req, res) => {
   const lists = await shoppingService.getAll(req.user.householdId);
@@ -57,6 +59,24 @@ router.post('/:id/items', validate(manualItemSchema), async (req, res) => {
   const result = await shoppingService.addManualItem(req.user.householdId, listId, req.body);
   if (result.status === 'not_found') return res.status(404).json({ error: 'Not found' });
   res.status(201).json({ item: result.item });
+});
+
+// PATCH /api/shopping/:id/items/:itemId
+router.patch('/:id/items/:itemId', validate(itemPatchSchema), async (req, res) => {
+  const listId = Number(req.params.id);
+  const itemId = Number(req.params.itemId);
+  const result = await shoppingService.updateItem(req.user.householdId, listId, itemId, req.body);
+  if (result.status === 'not_found') return res.status(404).json({ error: 'Not found' });
+  res.json({ item: result.item });
+});
+
+// DELETE /api/shopping/:id/items/:itemId
+router.delete('/:id/items/:itemId', async (req, res) => {
+  const listId = Number(req.params.id);
+  const itemId = Number(req.params.itemId);
+  const result = await shoppingService.deleteItem(req.user.householdId, listId, itemId);
+  if (result.status === 'not_found') return res.status(404).json({ error: 'Not found' });
+  res.status(204).end();
 });
 
 // DELETE /api/shopping/:id
