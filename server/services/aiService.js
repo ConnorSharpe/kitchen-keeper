@@ -347,38 +347,74 @@ export async function parseReceipt(imageBase64, mimeType, requestId = 'n/a') {
  */
 export async function parseRecipeImage(imageBase64, mimeType, requestId = 'n/a') {
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const startedAt = Date.now();
+  const model = 'gpt-4o';
+  const RETRY_BUDGET_MS = 18000; // stay under ai.js's 40s outer timeout so a retry can still complete
 
-  let response;
+  const requestOptions = {
+    model,
+    messages: [{
+      role: 'user',
+      content: [
+        {
+          type: 'image_url',
+          image_url: { url: `data:${mimeType};base64,${imageBase64}`, detail: 'high' },
+        },
+        {
+          type: 'text',
+          text:
+            'You are transcribing a recipe from an image, not summarizing it. ' +
+            '1) First identify the recipe\'s sections: title, ingredients, instructions, and any sidebars/notes/tip boxes. ' +
+            'Ignore sidebars/notes/tip boxes unless they are clearly part of the numbered instructions. ' +
+            '2) Transcribe the ingredients and instructions sections independently, each in their printed order. ' +
+            '3) Never infer, summarize, merge adjacent instructions, or normalize wording — transcribe what is printed. ' +
+            '4) If part of the image is genuinely illegible, preserve the visible text as-is rather than guessing at the missing portion. ' +
+            '5) For multi-column layouts, read top-to-bottom within a column before moving to the next column — ' +
+            'do not read left-to-right across columns, which interleaves unrelated steps. ' +
+            'Transcribe quantities exactly as printed, including fractions (plain numbers, "1 1/2", or unicode fractions like "½" are all fine) — do not estimate or round. ' +
+            'Return JSON: { "name": string, "description": string, ' +
+            '"ingredients": [{"name": string, "quantity": number|string|null, "unit": string|null}], ' +
+            '"steps": [string], "servings": number|null, "prepMins": number|null, ' +
+            '"cookMins": number|null, "tags": [string] }. ' +
+            'Return ONLY a raw JSON object. No markdown, no explanation.',
+        },
+      ],
+    }],
+    max_tokens: 3000,
+  };
+
+  async function callOnce() {
+    const response = await openai.chat.completions.create(requestOptions);
+    return response.choices[0].message.content ?? 'null';
+  }
+
+  let text;
   try {
-    response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
-          {
-            type: 'text',
-            text:
-              'Extract the recipe from this image. ' +
-              'Return JSON: { "name": string, "description": string, ' +
-              '"ingredients": [{"name": string, "quantity": number|null, "unit": string|null}], ' +
-              '"steps": [string], "servings": number|null, "prepMins": number|null, ' +
-              '"cookMins": number|null, "tags": [string] }. ' +
-              'Return ONLY a raw JSON object. No markdown, no explanation.',
-          },
-        ],
-      }],
-      max_tokens: 3000,
-    });
+    text = await callOnce();
   } catch (err) {
     throw wrapAIError(new AIProviderError('OpenAI vision API error', err));
   }
 
-  const text = response.choices[0].message.content ?? 'null';
+  const PARSE_FAILED = Symbol('parse_failed');
+  let result = safeParseJSON(text, PARSE_FAILED);
+  let retried = false;
+
+  if (result === PARSE_FAILED && Date.now() - startedAt < RETRY_BUDGET_MS) {
+    retried = true;
+    try {
+      text = await callOnce();
+    } catch (err) {
+      throw wrapAIError(new AIProviderError('OpenAI vision API error', err));
+    }
+    result = safeParseJSON(text, PARSE_FAILED);
+  }
+
+  const parseFailed = result === PARSE_FAILED;
   console.log(
-    `[kitchen-keeper] request_id=${requestId} function=parseRecipeImage model=gpt-4o-mini`
+    `[kitchen-keeper] request_id=${requestId} function=parseRecipeImage model=${model}` +
+    ` detail=high retried=${retried} parse_failed=${parseFailed}`
   );
-  return safeParseJSON(text, null);
+  return parseFailed ? null : result;
 }
 
 /**

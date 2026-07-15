@@ -40,6 +40,13 @@ export default function RecipeReviewModal({ recipe, onSave, onClose }) {
   function addStep() {
     setSteps(prev => [...prev, { text: '', _key: Date.now() }]);
   }
+  function insertStepAfter(index) {
+    setSteps(prev => {
+      const next = [...prev];
+      next.splice(index + 1, 0, { text: '', _key: crypto.randomUUID() });
+      return next;
+    });
+  }
   function removeStep(key) {
     setSteps(prev => prev.filter(s => s._key !== key));
   }
@@ -203,22 +210,36 @@ export default function RecipeReviewModal({ recipe, onSave, onClose }) {
             <label className="block text-xs font-medium text-gray-700 mb-2">Steps</label>
             <div className="space-y-2">
               {steps.map((s, idx) => (
-                <div key={s._key} className="flex gap-2 items-start">
-                  <span className="text-xs text-gray-400 mt-2.5 w-5 flex-shrink-0">{idx + 1}.</span>
-                  <textarea
-                    value={s.text}
-                    onChange={e => updateStep(s._key, e.target.value)}
-                    rows={2}
-                    placeholder={`Step ${idx + 1}`}
-                    className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
-                  />
-                  <button
-                    onClick={() => removeStep(s._key)}
-                    className="text-gray-400 hover:text-red-500 text-lg leading-none mt-1.5 flex-shrink-0"
-                    aria-label="Remove step"
-                  >
-                    ×
-                  </button>
+                <div key={s._key}>
+                  <div className="flex gap-2 items-start">
+                    <span className="text-xs text-gray-400 mt-2.5 w-5 flex-shrink-0">{idx + 1}.</span>
+                    <textarea
+                      value={s.text}
+                      onChange={e => updateStep(s._key, e.target.value)}
+                      rows={2}
+                      placeholder={`Step ${idx + 1}`}
+                      className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
+                    />
+                    <button
+                      onClick={() => removeStep(s._key)}
+                      className="text-gray-400 hover:text-red-500 text-lg leading-none mt-1.5 flex-shrink-0"
+                      aria-label="Remove step"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  {idx < steps.length - 1 && (
+                    <div className="flex justify-center">
+                      <button
+                        onClick={() => insertStepAfter(idx)}
+                        className="text-gray-300 hover:text-orange-500 text-xs leading-none px-2 py-1"
+                        aria-label={`Insert step after step ${idx + 1}`}
+                        title="Insert step here"
+                      >
+                        + insert step
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
