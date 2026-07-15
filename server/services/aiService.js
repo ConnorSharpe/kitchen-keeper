@@ -294,6 +294,14 @@ export async function parseReceipt(imageBase64, mimeType, requestId = 'n/a') {
               '{ "name": string, "category": one of [Produce|Dairy|Meat|Seafood|Bakery|Frozen|Pantry|Beverages|Condiments|Other], ' +
               '"quantity": number, "unit": string, "estimatedExpiryDays": integer|null, ' +
               '"classification": one of [produce|dairy|meat|packaged|beverage|non_food|uncertain] }. ' +
+              'For the "name" field:\n' +
+              '- Expand common grocery abbreviations to their full, specific meaning (e.g. "BNLS/SL BRST" -> "Boneless skinless chicken breast", "ORG AVO" -> "Organic avocados", "GRND TRKY" -> "Ground turkey", "WHL MLK" -> "Whole milk", "SHRD CHDR" -> "Shredded cheddar cheese").\n' +
+              '- Keep the same specificity as the original line (do not generalize to a broader category, e.g. do not shorten "chicken breast" to "chicken").\n' +
+              '- Use sentence case (e.g. "Organic avocados", not "ORGANIC AVOCADOS" or "Organic Avocados").\n' +
+              '- Preserve brand names when clearly and unambiguously present; do not guess an unfamiliar brand abbreviation.\n' +
+              '- Do not add marketing, freshness, or quality adjectives not present on the receipt (e.g. do not turn "MILK" into "Fresh Milk").\n' +
+              '- Do not infer package size or quantity descriptors not present on the receipt (e.g. do not turn "MILK" into "1 Gallon Milk").\n' +
+              '- If an abbreviation cannot be confidently expanded, return the original printed text unchanged.\n' +
               'estimatedExpiryDays is days from today. null if non-perishable or unknown. ' +
               'classification: classify each item. Use "non_food" whenever the item is not intended for human consumption or pantry/kitchen storage, even when purchased at a grocery or warehouse-club store alongside groceries — warehouse-club and grocery-store receipts often mix arbitrary general merchandise in among food purchases, so do not assume a line is food just because of where it was purchased. ' +
               'Pet food and pet treats are "non_food": they are edible, but "edible" does not mean "human food" — the test is whether the item belongs in a human pantry, not whether it is technically food for something. ' +
