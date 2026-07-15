@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { getDefaultStorageLocation, STORAGE_LOCATIONS, STORAGE_LOCATION_LABELS } from '../../utils/pantryDefaults.js';
 
 const CATEGORIES = [
   'Produce', 'Dairy', 'Meat', 'Seafood', 'Bakery',
@@ -18,26 +19,29 @@ function fromISO(isoStr) {
 
 function buildInitialState(item, prefill) {
   if (!item) {
+    const category = prefill?.category ?? 'Other';
     return {
-      name:         prefill?.name     ?? '',
-      category:     prefill?.category ?? 'Other',
-      quantity:     '1',
-      unit:         'item',
-      purchaseDate: '',
-      readyDate:    '',
-      expiryDate:   '',
-      notes:        '',
+      name:            prefill?.name ?? '',
+      category,
+      quantity:        '1',
+      unit:            'item',
+      purchaseDate:    '',
+      readyDate:       '',
+      expiryDate:      '',
+      storageLocation: getDefaultStorageLocation(category),
+      notes:           '',
     };
   }
   return {
-    name:         item.name,
-    category:     item.category,
-    quantity:     String(item.quantity),
-    unit:         item.unit,
-    purchaseDate: fromISO(item.purchaseDate),
-    readyDate:    fromISO(item.readyDate),
-    expiryDate:   fromISO(item.expiryDate),
-    notes:        item.notes ?? '',
+    name:            item.name,
+    category:        item.category,
+    quantity:        String(item.quantity),
+    unit:            item.unit,
+    purchaseDate:    fromISO(item.purchaseDate),
+    readyDate:       fromISO(item.readyDate),
+    expiryDate:      fromISO(item.expiryDate),
+    storageLocation: item.storageLocation ?? getDefaultStorageLocation(item.category),
+    notes:           item.notes ?? '',
   };
 }
 
@@ -48,6 +52,8 @@ export default function AddItemModal({ item, prefill, onClose, onSave }) {
   const [fieldErrors, setFieldErrors] = useState({});
   const firstInputRef = useRef(null);
   const isEdit = Boolean(item);
+  // Captured once at mount — lets handleSubmit tell "field re-sent unchanged" from "user retyped it".
+  const initialExpiryDate = useRef(isEdit ? fromISO(item.expiryDate) : null).current;
 
   // Focus the first field on open
   useEffect(() => { firstInputRef.current?.focus(); }, []);
@@ -68,15 +74,22 @@ export default function AddItemModal({ item, prefill, onClose, onSave }) {
     setSaving(true);
     try {
       const body = {
-        name:         form.name.trim(),
-        category:     form.category,
-        quantity:     Number(form.quantity),
-        unit:         form.unit.trim() || 'item',
-        purchaseDate: form.purchaseDate ? toISO(form.purchaseDate) : null,
-        readyDate:    form.readyDate    ? toISO(form.readyDate)    : null,
-        expiryDate:   form.expiryDate   ? toISO(form.expiryDate)   : null,
-        notes:        form.notes.trim() || null,
+        name:            form.name.trim(),
+        category:        form.category,
+        quantity:        Number(form.quantity),
+        unit:            form.unit.trim() || 'item',
+        purchaseDate:    form.purchaseDate ? toISO(form.purchaseDate) : null,
+        readyDate:       form.readyDate    ? toISO(form.readyDate)    : null,
+        storageLocation: form.storageLocation,
+        notes:           form.notes.trim() || null,
       };
+      // Only include expiryDate if the user actually typed it (create), or changed it from what was
+      // loaded (edit) — an edit that leaves it untouched must not read as a fresh manual entry, or a
+      // storageLocation-only edit would wrongly protect the stale value from FoodKeeper recompute
+      // (TASK-031 Decision 1/4's manual-vs-ai_estimate presence check).
+      if (!isEdit || form.expiryDate !== initialExpiryDate) {
+        body.expiryDate = form.expiryDate ? toISO(form.expiryDate) : null;
+      }
       await onSave(body);
       onClose();
     } catch (err) {
@@ -147,16 +160,26 @@ export default function AddItemModal({ item, prefill, onClose, onSave }) {
             </Field>
           </div>
 
-          <Field label="Unit" error={fieldErrors.unit?.[0]}>
-            <input
-              type="text"
-              value={form.unit}
-              onChange={set('unit')}
-              maxLength={50}
-              placeholder="item, g, kg, L…"
-              className={inputCls}
-            />
-          </Field>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Unit" error={fieldErrors.unit?.[0]}>
+              <input
+                type="text"
+                value={form.unit}
+                onChange={set('unit')}
+                maxLength={50}
+                placeholder="item, g, kg, L…"
+                className={inputCls}
+              />
+            </Field>
+
+            <Field label="Storage" error={fieldErrors.storageLocation?.[0]}>
+              <select value={form.storageLocation} onChange={set('storageLocation')} className={inputCls}>
+                {STORAGE_LOCATIONS.map((loc) => (
+                  <option key={loc} value={loc}>{STORAGE_LOCATION_LABELS[loc]}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <Field label="Purchase date" error={fieldErrors.purchaseDate?.[0]}>

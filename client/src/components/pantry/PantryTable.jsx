@@ -1,4 +1,17 @@
 import { getExpiryStatus, getExpiryRowClass, getExpiryBadgeClass, getExpiryLabel, getRipeningState, getRipeningDays } from '../../utils/expiry.js';
+import { STORAGE_LOCATION_LABELS } from '../../utils/pantryDefaults.js';
+
+const STORAGE_LOCATION_ICONS = { pantry: '🥫', refrigerator: '🧊', freezer: '❄' };
+
+function StorageBadge({ storageLocation }) {
+  if (!storageLocation) return <span className="text-gray-400 text-xs">—</span>;
+  return (
+    <span className="inline-flex items-center gap-1 text-xs text-gray-600">
+      <span aria-hidden="true">{STORAGE_LOCATION_ICONS[storageLocation]}</span>
+      {STORAGE_LOCATION_LABELS[storageLocation] ?? storageLocation}
+    </span>
+  );
+}
 
 function ExpiryBadge({ expiryDate, status }) {
   if (!expiryDate) return <span className="text-gray-400 text-xs">—</span>;
@@ -28,7 +41,7 @@ export default function PantryTable({ items, onEdit, onMarkUsed, onToggleFreeze,
       <table className="min-w-full divide-y divide-gray-200 text-sm">
         <thead className="bg-gray-50">
           <tr>
-            {['Name', 'Category', 'Qty', 'Unit', 'Expires', 'Status', ''].map((h) => (
+            {['Name', 'Category', 'Qty', 'Unit', 'Storage', 'Expires', 'Status', ''].map((h) => (
               <th
                 key={h}
                 className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap"
@@ -46,12 +59,13 @@ export default function PantryTable({ items, onEdit, onMarkUsed, onToggleFreeze,
                             : ripeState === 'ripening' ? 'ripening'
                             : expiryStatus;
             const rowCls = ripeState === 'frozen' ? '' : getExpiryRowClass(rowStatus);
-            const badgeStatus = item.isFrozen ? 'ok' : expiryStatus;
+            const isFrozen = item.storageLocation === 'freezer';
+            const badgeStatus = isFrozen ? 'ok' : expiryStatus;
             return (
               <tr key={item.id} className={`${rowCls} transition-colors`}>
                 <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
                   {item.name}
-                  {item.isFrozen && (
+                  {isFrozen && (
                     <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-xs bg-blue-100 text-blue-700 font-medium">
                       ❄ Frozen
                     </span>
@@ -60,6 +74,9 @@ export default function PantryTable({ items, onEdit, onMarkUsed, onToggleFreeze,
                 <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{item.category}</td>
                 <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{item.quantity}</td>
                 <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{item.unit}</td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <StorageBadge storageLocation={item.storageLocation} />
+                </td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   <ExpiryBadge expiryDate={item.expiryDate} status={badgeStatus} />
                 </td>
@@ -77,8 +94,8 @@ export default function PantryTable({ items, onEdit, onMarkUsed, onToggleFreeze,
                     />
                     <ActionButton
                       onClick={() => onToggleFreeze(item.id)}
-                      title={item.isFrozen ? 'Unfreeze' : 'Freeze'}
-                      label={item.isFrozen ? '🌡 Thaw' : '❄ Freeze'}
+                      title={isFrozen ? 'Unfreeze' : 'Freeze'}
+                      label={isFrozen ? '🌡 Thaw' : '❄ Freeze'}
                     />
                     <ActionButton
                       onClick={() => onDelete(item.id)}

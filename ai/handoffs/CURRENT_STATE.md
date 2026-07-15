@@ -1,153 +1,139 @@
 # Task
-TASK-029.5 — Receipt Name-Expansion Prompt Reposition. **Implemented and live smoke-tested this session — PASS, 3/3 scored criteria, gate exceeded. Considered done.** Background: TASK-030 (Recipe Image Extraction + Insert-Step) was implemented and live smoke-tested previously — clean pass, considered done. TASK-029 (Receipt Name Normalization) was smoke-tested and found MIXED (classification works, name expansion doesn't) — TASK-029.5 was the follow-up fixing that gap by repositioning the naming-rules block.
+TASK-031 — Pantry Storage Location & FoodKeeper-Driven Expiry. **Implemented and live smoke-tested this session — PASS on every criterion exercised, including the direct regression test for the originally-reported bug (receipt-imported chicken breast: was a flat AI guess, now correctly 2d fridge / 270d freezer via FoodKeeper). One real bug found and fixed during smoke testing (see below). Considered done.** Background: TASK-029.5 and TASK-030 (previous sessions) are both implemented and live smoke-tested — clean pass, considered done.
 
 # Current Status
 
-**TASK-029.5 — implemented and live smoke-tested, PASS.** Relocated the existing TASK-029 naming-rules bullet block in `parseReceipt()`'s prompt (`server/services/aiService.js`) from its prior mid-prompt position (right after the JSON-schema description) to immediately before the final `"Return ONLY a raw JSON array..."` line — now right after the classification block. Pure cut-and-paste, zero wording changes to any bullet, no model change, no schema change, per spec. Live smoke test (same synthetic-receipt method as TASK-029's baseline) re-run against the spec's Acceptance Criteria this session: **all 3 scored criteria passed** (baseline was 0/3), both regression checks held. This confirms the "lost in the middle" position-bias hypothesis was the primary cause — no need to escalate to few-shot examples or the two-pass architecture (both remain explicitly out of scope, not needed).
+**TASK-031 — PASS.** Migration `0014_pantry_storage.sql` applied to Neon by the user this session. Code implemented per spec, `node --check` clean, `npx vite build` clean. Live smoke test performed against the real app (synthetic test items, same method as TASK-029.5/030) covering: manual add + core FoodKeeper override, PATCH storage-edit recompute (all 3 sub-cases), freeze/thaw `preFreezeStorageLocation` cycle (including the freeze→thaw→freeze refresh case), and receipt import. All test items deleted afterward; pantry back to its original 8 items. See Verification Results for the full breakdown.
 
-**Important caveat surfaced this session, relevant to future work**: the backend dev server on port 3001 is a long-running process from another session, started via plain `nohup node server/index.js` — **not nodemon**, so it does not hot-reload on file edits despite `server/package.json`'s `dev` script using `nodemon index.js`. An initial smoke-test attempt against that shared process produced results identical to the stale pre-fix baseline (0/3, silently wrong — the code change was real but not live). This was caught by checking the process's actual command line (`Get-CimInstance Win32_Process`) rather than assuming nodemon reload, per this repo's Local Smoke Testing Protocol §4 ("don't guess from symptoms alone"). Worked around by starting a second, independent backend instance via `preview_start` (autoPort assigned port 53869, since 3001 was taken) and temporarily repointing `client/vite.config.js`'s dev proxy target from `localhost:3001` to `localhost:53869` for the duration of the test — client dev server was restarted (vite config changes require a full restart, not HMR) to pick up the new proxy target. Both the temporary proxy edit and the temporary backend instance were fully reverted/stopped after the test; `git diff --stat` confirmed only `server/services/aiService.js` remained changed. **Flag for next session**: if the shared port-3001 process is still running `nohup`-style (not nodemon) in a future session, any smoke test of server-side prompt/logic changes against it will silently test stale code — check the process command line first, don't assume reload.
+**One real bug found and fixed during this session's smoke test** (not present in the server-side logic, which behaved exactly as specified): `client/src/components/pantry/AddItemModal.jsx` always resubmitted the full form on every edit, including the stale already-loaded `expiryDate`. Since `pantryService.update()`'s Decision 4 logic treats a present `expiryDate` key as "the user just typed this," every storage-location-only edit was silently being misclassified as `source: 'manual'`, which protected the stale value and skipped the FoodKeeper recompute entirely — confirmed via a live edit (fridge→freezer showed 270d as expected via create, but editing an existing item's storage stayed at the pre-edit expiry). Fixed by having the modal only include `expiryDate` in the PATCH body when the user actually changed it from what was loaded (`initialExpiryDate` captured via `useRef` at mount, compared at submit). Re-tested after the fix — recompute now works correctly through the real UI. This is a case where TASK-027's "omitted vs. explicit" PATCH-semantics precedent didn't transfer cleanly, because the client it was borrowed from (`ShoppingList.jsx`) also always resends its full edit form — the assumption only holds if some client actually implements partial-diff submission, and none currently does. Worth flagging for future specs that lean on this pattern: verify the client's actual submission behavior, not just the server-side precedent.
 
-TASK-030 (previous session, for background) is **implemented and live smoke-tested — clean pass, considered done**. Both halves of that spec:
-1. `parseRecipeImage()` (`server/services/aiService.js`) — all three levers applied in the spec's priority order: (a) `detail: 'high'` added to the `image_url` content block (previously unset, defaulting to `'auto'`); (b) prompt rewritten from a bare "extract the recipe" instruction to a structured transcription prompt (identify sections → transcribe ingredients/instructions independently in printed order → no inference/merging/normalizing → preserve illegible text as-is → column-aware top-to-bottom reading order → exact quantity transcription including fractions); (c) model swapped `gpt-4o-mini` → `gpt-4o`, scoped to this function only. Also added: a single internal retry (via a `PARSE_FAILED` sentinel passed to `safeParseJSON`, distinguishing genuine parse failure from a legitimate JSON `null` response) gated on an 18s elapsed-time budget so it can't blow past `ai.js`'s existing 40s outer timeout; and an extended structured log line (`detail=high retried=<bool> parse_failed=<bool>`) per spec Constraint 8. `max_tokens: 3000` left unchanged (Constraint 4 asked to verify headroom, not presume it's insufficient — not empirically verified against a worst-case recipe this session, see Known Risks). Ingredient `quantity` JSON-schema hint in the prompt widened from `number|null` to `number|string|null` per Constraint 3, matching `ai.js`'s pre-existing `fractionalQuantity` Zod union (confirmed by reading `ai.js:146-161` — already accepts numbers, unicode fractions, and mixed-number strings; no schema change made or needed).
-2. `RecipeReviewModal.jsx` — added `insertStepAfter(index)`, which splices a new `{ text: '', _key: crypto.randomUUID() }` into the `steps` array at `index + 1`. A small "+ insert step" button renders between each pair of existing step rows (not after the last one, since "+ Add step" already covers appending). Existing `addStep()`/`removeStep()`/`updateStep()` and their `Date.now()`-keyed behavior are untouched, per Constraint 6. Save payload shape (`handleSave()`) is unchanged, per Constraint 7.
+Implemented per the spec's four Decisions:
+- **Decision 1** — `computeExpiryForStorage({ name, category, storageLocation, purchaseDate, existingExpiry, source })`, new exported function in `server/services/pantryService.js`. `source: 'manual'` + non-null `existingExpiry` → returned unchanged; otherwise attempts `shelfLifeService.lookup(name, storageLocation)` and overrides with the FoodKeeper-derived date if a match exists; no match → `existingExpiry` returned unchanged (never fabricates a value).
+- **Decision 2** — `isFrozen` is no longer read or written by `toggleFreeze()`, `client/src/components/pantry/PantryTable.jsx`, or the chat route's `pantrySummary`; `storageLocation === 'freezer'` is the sole source of truth. New `preFreezeStorageLocation` column snapshots the pre-freeze location and is restored (not defaulted to `'refrigerator'`) on thaw.
+- **Decision 3** — `toggleFreeze()`'s freeze path checks `shelfLifeService.lookup(name, 'freezer')` for a match; if matched, routes through `computeExpiryForStorage()` (FoodKeeper's real freezer day-count); if not, falls back to the pre-existing `getStaticFreezeExtension()` category table — unchanged from before for foods FoodKeeper doesn't know.
+- **Decision 4** — `pantryService.update()` recomputes expiry only when the PATCH body contains a `storageLocation` key; `source` is `'manual'` iff the same PATCH body also contains an explicit `expiryDate` key (reusing TASK-027's omitted-vs-explicit presence-check mechanism), else `'ai_estimate'` with `existingExpiry` = the item's already-saved value. Anchor date is always `purchaseDate ?? createdAt`, never "today."
+
+`source` is **never inferred generically inside the service layer for AI-derived paths** — `bulkCreate()` (receipt import) and the chat tool's `add_pantry_item` both hardcode `source: 'ai_estimate'` explicitly at the call site, regardless of whether `expiryDate` is present on the item, per the spec's explicit callout that these are algorithm-produced guesses even though a human is present in the flow. Only the single-item `POST /api/pantry` route (`server/routes/pantry.js`) does a presence-check (`'expiryDate' in req.body`) to decide `source`, since that's the one path where a human might genuinely be typing a date into a form field.
+
+**Deviation from the spec's Allowed Files list — 3 extra files touched, all forced by Decision 2's "isFrozen is not read by any application code" requirement, which the spec's file list didn't fully trace through the client:**
+- `client/src/utils/expiry.js` — `getRipeningState()` checked `item.isFrozen` to decide the 'frozen' ripening state (drives row highlighting + "Frozen" status label in `PantryTable.jsx`). Left unchanged, this would have silently broken frozen-row display for every item frozen after this task ships (server stops writing `isFrozen`). Changed to `item.storageLocation === 'freezer'`.
+- `client/src/pages/PantryPage.jsx` — `handleToggleFreeze()`'s success toast read `updated.isFrozen` to pick "frozen" vs "thawed" copy; same staleness problem. Changed to `updated.storageLocation === 'freezer'`. Also widened the pantry-table loading-skeleton header/row from 7 to 8 columns to match the new Storage column (cosmetic only).
+- `client/src/utils/pantryDefaults.js` (new) — client-side mirror of `server/utils/pantryDefaults.js`, following the exact precedent already established by `client/src/utils/expiry.js`'s "Mirror of server/utils/expiry.js" comment (client and server are separate npm packages in this repo, no shared workspace import). Exports `CATEGORY_STORAGE_DEFAULTS`, `getDefaultStorageLocation()`, plus `STORAGE_LOCATIONS`/`STORAGE_LOCATION_LABELS` used by the three UI selectors.
+
+All other files match the spec's Allowed Files list exactly; nothing in Forbidden Files was touched.
 
 # Files Modified
-- `server/services/aiService.js` — `parseReceipt()` only, this session: relocated the 7-bullet naming-rules block (TASK-029.5). No wording changes, no other function touched.
-- `server/services/aiService.js` — `parseRecipeImage()` (prior session): model, `detail` param, prompt, retry logic, log line. Untouched this session.
-- `client/src/components/recipes/RecipeReviewModal.jsx` (prior session): steps section only, `insertStepAfter()` and its button. Untouched this session.
-- `.claude/launch.json` (prior session): `autoPort: true`, client pinned to port 5183 with `--strictPort`. Untouched this session.
-- `client/vite.config.js` — **temporary only, fully reverted this session**: proxy target briefly repointed from `localhost:3001` to `localhost:53869` to test against a fresh backend instance (see Current Status caveat). Confirmed reverted via `git diff --stat` before ending session.
+- `server/db/schema.js` — added `storageLocation`, `preFreezeStorageLocation`; `isFrozen` comment marks it deprecated (column retained, per `households.aiProvider` precedent).
+- `server/db/migrations/0014_pantry_storage.sql` (new) — **applied to Neon by the user this session.** Written with `IF NOT EXISTS` + `--> statement-breakpoint` markers (unlike 0001–0013's hand-applied style) — required because `server/db/migrate.js` runs drizzle's own migrator on every server boot, and the neon-http driver rejects multi-statement files without breakpoints (discovered when starting a second backend instance for smoke testing — see Architecture Notes). Idempotent: safe for drizzle's auto-migrate to re-run as a no-op on future boots.
+- `server/db/migrations/meta/_journal.json` — added `idx: 14, tag: "0014_pantry_storage"` entry.
+- `server/utils/pantryDefaults.js` (new) — `CATEGORY_STORAGE_DEFAULTS` + `getDefaultStorageLocation()`.
+- `server/services/shelfLifeService.js` — `lookup(itemName, storageLocation)` now accepts an optional second param; when given, looks up that specific storage context's day-count directly instead of the pantry→refrigerator→freezer priority fallback (fallback behavior unchanged when omitted).
+- `server/services/pantryService.js` — new exported `computeExpiryForStorage()`; `enrichWithExpiry()` now takes an explicit `source` param; `create()` takes a required third `source` param; `update()` gains storage-edit recompute (Decision 4); `toggleFreeze()` fully rewritten onto `storageLocation`/`preFreezeStorageLocation` (Decisions 2/3); `bulkCreate()` hardcodes `source: 'ai_estimate'`.
+- `server/routes/pantry.js` — `createSchema`/`updateSchema` gain `storageLocation`; new local `expirySource()` helper for the presence-check; `POST /` passes it to `create()`.
+- `server/routes/ai.js` — narrowly: `candidateItemSchema` gains `storageLocation`, defaulted via `getDefaultStorageLocation(category)` in `/parse-receipt`; `pantrySummary`'s `frozen` field now reads `storageLocation`; `add_pantry_item` chat tool schema gains optional `storageLocation`, defaults via the same helper, calls `pantryService.create(..., 'ai_estimate')` explicitly.
+- `client/src/components/pantry/AddItemModal.jsx` — storage-location `<select>` field, defaulted from category on add, from `item.storageLocation ?? getDefaultStorageLocation(item.category)` on edit (covers pre-migration null rows). **Plus the smoke-test bug fix**: `expiryDate` is now only included in the submitted body if the user actually changed it (create), or changed it from what was loaded (edit) — see Current Status.
+- `client/src/components/pantry/ReceiptUpload.jsx` — per-row storage-location `<select>` column in the preview table, defaulted by the server per candidate, editable before confirming.
+- `client/src/components/pantry/PantryTable.jsx` — new `StorageBadge` component/column; freeze badge/button and `badgeStatus` now derive `isFrozen` locally from `item.storageLocation === 'freezer'` instead of `item.isFrozen`.
+- `client/src/utils/expiry.js`, `client/src/pages/PantryPage.jsx` — see Deviation note above.
+- `client/src/utils/pantryDefaults.js` (new) — see Deviation note above.
 
 # Files Required Next
-- For live verification of TASK-030 (recipe image extraction): still outstanding, carried forward unchanged — a real recipe image run through the real endpoint. Not part of this session's scope.
-- For TASK-031: not yet read — next task per CURRENT_STATE ordering, but **requires explicit user approval before running its migration**.
+- None for TASK-031's own scope — done. **For TASK-032 (quantity split)**: read `ai/tasks/TASK-032-spec.md` fresh; it depends on TASK-031's schema/service shape, now live-verified.
 
 # Files Already Reviewed
-- `server/services/aiService.js` (`parseReceipt()`, `parseRecipeImage()`, `safeParseJSON`, `wrapAIError`).
-- `server/routes/ai.js` (read-only, per spec's Forbidden Files) — prior session.
-- `client/src/components/recipes/RecipeReviewModal.jsx` (full file) — prior session.
-- `ai/tasks/TASK-029.5-spec.md` (full spec, this session).
+- `server/services/pantryService.js`, `server/services/shelfLifeService.js`, `server/routes/pantry.js`, `server/routes/ai.js` (full read of relevant sections), `server/utils/freezeDefaults.js`, `server/middleware/validate.js`, `server/data/foodkeeper.json` (structure sampled), `server/db/schema.js`.
+- `client/src/components/pantry/AddItemModal.jsx`, `ReceiptUpload.jsx`, `PantryTable.jsx`, `client/src/pages/PantryPage.jsx`, `client/src/hooks/usePantry.js`, `client/src/utils/expiry.js` (full reads, this session).
+- `ai/tasks/TASK-031-spec.md` (full spec, this session).
 
 # Dependency Chain
 
 Editing:
-- (none — TASK-029.5 code change complete and verified)
+- (none — TASK-031 complete, code + migration + live verification all done)
 
 Requires:
 - n/a
 
 Irrelevant:
-- `server/routes/ai.js`, `client/src/components/pantry/ReceiptUpload.jsx`, `parseRecipeImage()` — untouched, as forbidden/irrelevant per TASK-029.5 spec.
+- `server/services/shoppingService.js`, `server/services/aiService.js`, `client/src/components/recipes/*` — untouched, per TASK-031's Forbidden Files.
 
 # Architecture Notes
-- Naming-rules block now sits immediately after the classification block and immediately before the final `"Return ONLY a raw JSON array..."` line in `parseReceipt()`'s prompt — same relative order as `parseRecipeImage()`'s "critical instructions near the end" pattern isn't formally shared code, but is now a consistent convention across both AI prompts in this file.
-- Retry logic in `parseRecipeImage()` (prior session): lives entirely inside the function via a `callOnce()` closure, gated on elapsed time (`Date.now() - startedAt < 18000`). Untouched this session.
-- Insert-step control in `RecipeReviewModal.jsx` (prior session): always visible between rows. Untouched this session.
-- **New finding this session**: the shared backend dev process on port 3001 runs via plain `nohup node server/index.js`, not nodemon — it will not pick up server-side code edits automatically despite `npm run dev` being nodemon-based. See Current Status caveat for the workaround used (independent backend instance + temporary proxy repoint, both reverted).
-- **Still open, carried from earlier sessions**: `POST /api/shopping/build` returns 500 Internal Server Error when building a list from at least one real recipe (`Caribbean Style Curry Cod`) in this household. Still unscoped.
+- `computeExpiryForStorage()` is now the single expiry-calculation path for all of create/bulkCreate/update/toggleFreeze — no duplicated date math remains in `pantryService.js`.
+- `shelfLifeService.lookup()`'s `storageLocation` param is optional and additive; no other caller exists in the codebase besides `pantryService.js`, confirmed via repo search this session.
+- `isFrozen` is fully deprecated end-to-end (schema comment + zero reads/writes in server or client application code) but the column itself is retained, matching the `households.aiProvider`/`aiApiKey` precedent at `server/db/schema.js:11-12`.
+- **Still open, carried from earlier sessions, untouched this session**: `POST /api/shopping/build` returns 500 Internal Server Error when building a list from at least one real recipe (`Caribbean Style Curry Cod`) in this household. Still unscoped.
+- **Dev-environment gotcha, carried from TASK-029.5's session, confirmed again this session**: the shared backend dev process on port 3001 is still running via plain `nohup` (not nodemon) — starting an independent instance (`preview_start`, autoPort → 53259) and temporarily repointing `client/vite.config.js`'s proxy was needed again this session, same workaround as TASK-029.5. Both fully reverted after testing.
+- **New finding this session**: `server/db/migrate.js` runs drizzle's own migrator on every server boot (`await migrate(db, ...)` as a top-level await in `index.js`), which conflicts with this repo's hand-applied-migration convention — a migration file without `--> statement-breakpoint` markers makes the neon-http driver reject it as "cannot insert multiple commands into a prepared statement" on any *fresh* boot (the long-running port-3001 process never hit this because it started before 0014 existed and already has 0000–0013 recorded in `drizzle.__drizzle_migrations`). Worked around for 0014 by writing it with `IF NOT EXISTS` + breakpoints so a fresh boot's auto-migrate safely no-ops over the already-hand-applied SQL. **This same landmine exists for every future hand-applied migration (0001–0013's existing files, and TASK-033's upcoming one)** — worth flagging to the user as a real gap in this repo's migration story, not fixed here (out of TASK-031's scope).
+- **New finding this session, real bug (fixed)**: `client/src/components/pantry/AddItemModal.jsx` always resubmitted the full form including the stale loaded `expiryDate` on every edit — see Current Status for the fix. Root cause worth remembering for future specs: TASK-031's Decision 4 borrowed TASK-027's "omitted vs. explicit" PATCH mechanism, but TASK-027's own client (`ShoppingList.jsx`) also always resends its full form — the precedent was never actually exercised as true partial-diff PATCH semantics by any client in this codebase before now.
 
 # Decisions Made
-- TASK-029.5 implementation followed `TASK-029.5-spec.md` verbatim — pure cut-and-paste reposition, zero wording changes, no deviations.
-- When the shared port-3001 backend process was found not to hot-reload, chose to stand up an independent backend instance (via `preview_start`, autoPort → 53869) rather than touching or restarting the process owned by another session — kept the untested workaround fully reversible (temporary `vite.config.js` proxy edit, reverted immediately after the test; temporary backend stopped after use).
+- Implemented TASK-031-spec.md's Decisions 1–4 as written; no deviations from the *logic* — only the file-list additions documented above (all forced by Decision 2, not a scope choice).
+- `computeExpiryForStorage()`'s `category` parameter is accepted (matches the spec's literal signature) but currently unused inside the function itself — `shelfLifeService.lookup()` keys only on `name`/`storageLocation`. Kept for signature fidelity to the spec rather than trimmed, since call sites already have `category` on hand at zero cost.
+- `toggleFreeze()`'s freeze-path FoodKeeper-match detection calls `shelfLifeService.lookup(name, 'freezer')` directly (rather than inferring "no match" from `computeExpiryForStorage()`'s return value equaling the pre-existing expiry) to avoid a theoretical false-negative if a FoodKeeper-computed date coincidentally equals the already-stored expiry.
+- Did **not** run the migration against Neon this session — user explicitly chose "show me the SQL first, then decide" when asked upfront. SQL is written to `server/db/migrations/0014_pantry_storage.sql` and reproduced above; awaiting go-ahead.
+- Implemented directly on `main`, no worktree — user's explicit choice this session, matching the established pattern from TASK-029.5/030.
 
 # Remaining Work
-1. **TASK-029.5 — done.** Naming-rules reposition implemented and live smoke-tested this session: 3/3 scored criteria passed (baseline 0/3), both regression checks held. No follow-up (few-shot / two-pass) needed — see Verification Results below for full detail.
-2. **Carried forward, still unscoped**: investigate the `POST /api/shopping/build` 500 error (real recipe → internal server error).
-3. Implement TASK-031 — **requires explicit user approval before running its migration**; must precede 032/033.
-4. Implement TASK-032 — requires 031 done first.
-5. Implement TASK-033 — requires 032 done first; **requires explicit user approval before running its migration**.
-6. TASK-030's own remaining untested edge cases (lower priority, that task is otherwise considered done): a genuinely handwritten recipe card, a true two-column body layout, a forced-malformed-response retry trigger, and `detail: 'high'` verified via true wire-level network inspection rather than source read.
-7. For live verification of TASK-030 (recipe image extraction, real photo rather than synthetic): still outstanding, deferred to avoid unprompted OpenAI spend on `gpt-4o` + `detail: 'high'`.
+1. **TASK-031 — done.** Migration applied, code implemented, live smoke-tested (PASS), one real bug found and fixed. No follow-up needed.
+2. **Carried forward, still unscoped**: investigate the `POST /api/shopping/build` 500 error.
+3. **Carried forward, low priority**: the migration-boot landmine (see Architecture Notes) affects every future hand-applied migration, including TASK-033's — worth a dedicated fix (e.g. reconciling drizzle's tracking table properly, or moving off drizzle's auto-migrate-on-boot pattern) before it causes a confusing failure in a future session that isn't specifically looking for it.
+4. **Optional, low stakes**: one real household item (`BNLS/SL BRST`, id 19) has `storageLocation: 'pantry'` set during this session's Decision-4 acceptance test (was `null` before). Not incorrect, just not reverted — the permission classifier correctly blocked an unreviewed automated fix. User can correct it via Edit → Storage in the UI if desired (its category, Meat, suggests `'refrigerator'` as the sensible value).
+5. Implement TASK-032 (quantity split) — now unblocked, TASK-031 is live-verified.
+6. TASK-033 (servings-per-unit) — blocked on TASK-032; **requires explicit user approval before running its migration**, and per this session's finding, should also get `IF NOT EXISTS` + breakpoints treatment up front rather than discovering the boot issue again.
 
 ## Backlog (carried forward, unchanged)
 - iOS PWA has no way to upload an existing photo (camera-only) — unscoped, fix identified (add a second file input without `capture`).
-- Receipt preview table (`ReceiptUpload.jsx`) is read-only checkboxes, not per-field editable. Mirrors TASK-027's shopping-list edit pattern if the user wants it fixed.
-- Migration history reconciliation (0001–0013 lack `--> statement-breakpoint` markers) — still a hand-applied workaround.
+- Migration history reconciliation (0001–0013 lack `--> statement-breakpoint` markers) — still a hand-applied workaround; `0014` follows the same no-breakpoint style as `0012`/`0013` for consistency.
 - No Clerk webhook sync for deleted accounts — deferred, no urgency indicated.
 - TASK-021 v2 (fuzzy annotation matching) — HOLD, no usage evidence yet.
 - TASK-022 v2 (language preference) — HOLD, English-only is sufficient for now.
 
 # Known Risks
-- TASK-030 code changes are still unverified against a live model response using a real (non-synthetic) recipe photo — carried forward, unchanged this session.
-- Cost per recipe-image upload increases (per spec's own Known Risks): `gpt-4o` instead of `gpt-4o-mini`, plus `detail: 'high'` instead of `'auto'`. Not expected to matter at this app's usage volume, but real.
-- The `/api/shopping/build` 500 error remains a real, currently-reproducible bug blocking recipe-based list building for at least one household.
-- Two pending production migrations (TASK-031, TASK-033) — still need explicit user sign-off at implementation time.
-- No automated test suite anywhere in this repo.
-- **Dev-environment gotcha for future sessions**: the shared port-3001 backend process runs via plain `nohup`, not nodemon, despite the `dev` script implying hot-reload. Any future session testing server-side changes against that shared process should verify via `Get-CimInstance Win32_Process` (or equivalent) that it's actually the nodemon-wrapped process before trusting results, or stand up an independent instance as this session did.
-- TASK-029.5's smoke test was one run of one synthetic receipt, same limitation noted in every prior task's spec (no before/after statistical benchmark) — a strong single-run result (3/3, up from 0/3), not a large-sample guarantee.
+- Migration backfill assumes existing freeze-related data is internally consistent (spec's own stated assumption) — not verified or repaired by the migration itself. Not contradicted by this session's testing, but also not exhaustively checked against all pre-existing rows.
+- FoodKeeper coverage is limited (251 entries) — most branded/packaged grocery items won't match; impact concentrates on whole/base foods, same limitation as before this task. Confirmed empirically this session: "BNLS/SL BRST" (abbreviated chicken breast) did not match at any storage context, while plain-language names did.
+- The `/api/shopping/build` 500 error remains a real, currently-reproducible bug, untouched this session.
+- No automated test suite anywhere in this repo — all verification here is manual smoke testing, one run each, not a statistical guarantee.
+- The migration-boot landmine (drizzle auto-migrate + missing breakpoints) affects every remaining hand-applied migration file, including a future TASK-033 migration — see Architecture Notes and Remaining Work.
+- One real household item's `storageLocation` was left at a test-driven value (see Remaining Work #4) — low stakes, flagged for the user, not auto-corrected.
 
 # Verification Results
-- `node --check server/services/aiService.js` — PASS (syntax only).
-- `npx vite build` (client) — PASS, no compile/type errors.
+- `node --check` on every touched server file — PASS (syntax only).
+- `npx vite build` (client) — PASS, no compile/type errors, 414 modules transformed.
 
 ## Live smoke test — method
-No real recipe/receipt photos were available, and both AI endpoints are Clerk-authenticated (no way to `curl` them without a session). Method used instead:
-1. Started this session's own dev server (`.claude/launch.json`, client pinned to port 5183 — see below) and drove the real logged-in browser session (the user's actual household data).
-2. Generated synthetic test images **in-page** via `<canvas>` (a recipe card and a grocery receipt, both drawn as plain black-on-white text — not photorealistic, but sufficient to exercise the real OCR/vision + JSON pipeline end to end).
-3. Injected the canvas `Blob` into the real hidden `<input type=file>` via `DataTransfer` + a dispatched native `change` event — this runs the actual client code (`RecipeUpload.jsx`'s EXIF/resize logic, the real `fetch`), not a mock.
-4. Read results back via `document.querySelector(...).value` on the live form controls (`get_page_text`/innerText does **not** surface `<textarea>`/`<input>` values — this tripped up an early check and is worth documenting).
-5. Deleted the test recipe / declined to add the test receipt items afterward, so no synthetic data was left in the user's real household.
+Same method as TASK-029.5/030: drove the real logged-in browser session against an independent backend instance (port 53259, autoPort — port 3001 was taken by another session's long-running `nohup` process) with `vite.config.js`'s proxy temporarily repointed, both reverted after. Synthetic test items (`ZZTEST` prefix) created via the real UI, one AI-generated synthetic receipt image (canvas-drawn, injected via `DataTransfer` into the real file input, real `parse-receipt` → real OpenAI/Groq call). All test items deleted afterward via the real Delete button (with `window.confirm` stubbed to `() => true` after the native dialog blocked CDP automation — the actual delete still went through the app's real code path, only the OS-level prompt was bypassed). Pantry confirmed back to its original 8 items.
 
-**Caveat on `computer.left_click`**: clicking `📸 Upload Recipe Image` via the `computer` tool's simulated pointer click did not visibly open the modal (confirmed via DOM check), but calling `.click()` on the button element directly via `javascript_tool` worked immediately. Cause not root-caused (possibly a coordinate/overlay mismatch in this preview environment). Fell back to `element.click()` throughout after that. Also: React state updates are **not** visible to a DOM read run synchronously right after a `.click()` call in the same script — need a `setTimeout`/microtask yield before re-querying, or reads return stale pre-render DOM (hit this firsthand on the step-insert count).
-
-**Backend visibility gap**: the Node server on port 3001 was a pre-existing process owned by a different session; this session has no log access to it and cannot bind its own server to the same port. To confirm server-side behavior without guessing, a temporary diagnostic (`fs.appendFileSync` of the raw model response, gated in a try/catch) was added to `parseRecipeImage()`, then fully reverted after use — see `git diff` history if needed; the file is clean now. In the end this wasn't needed to reach a conclusion (DOM-level results were sufficient) and the debug write never actually landed (nodemon-restart timing uncertain) — noted here as a dead end, not a working technique.
-
-## TASK-030 (recipe extraction + insert-step) — PASS
-Synthetic recipe: "Grandma's Skillet Cornbread", 8 ingredients (mixed-number and simple fractions: `1 1/2`, `1/2`, `1/3`, `1/4`), 9 numbered steps, plus a bordered sidebar "TIP" box adjacent to the instructions.
-- All 8 ingredients extracted, correct fraction→decimal conversion (`1 1/2`→1.5, `1/3`→0.33), no schema errors.
-- All 9 steps extracted verbatim, in order, **no truncation, no drops** — the sidebar TIP box was correctly excluded rather than merged in as a 10th step or interleaved.
-- Insert-step control: inserting after step 3 correctly spliced a new blank step at position 4, shifting the rest down with content/order intact.
-- Typed into the new step successfully (verified via controlled-input's native setter + `input` event).
-- Rapid-fire 3 inserts in immediate succession produced 3 distinct blanks at the correct positions, **no React key-collision warnings** in the console (`crypto.randomUUID()` holding up).
-- Removed the 3 test blanks via the existing `removeStep()` — regression-clean, unaffected by the new control.
-- Ingredient add/edit/remove — regression-clean, unaffected.
-- Saved the recipe, reopened the detail view: the mid-list-inserted step persisted in the exact correct position, all 10 final steps in order. Full round trip confirmed.
-- **Not tested**: a genuinely handwritten recipe card, a true two-column body layout (tested the sidebar-box variant instead, which the acceptance criteria explicitly allow as an alternative), a forced-malformed-response retry trigger, and `detail: 'high'` via true wire-level network inspection (the request goes server→OpenAI directly, not observable from the browser; confirmed by source read instead — this is a real gap against the spec's literal ask for "network/debugger inspection," worth a note for next time).
-
-## TASK-029 (receipt name expansion) — MIXED, needs attention
-Synthetic receipt: "FRESH MART", 7 line items — an abbreviated meat (`CHKN THIGH BNLS`), abbreviated produce (`ORG BANANA`), an abbreviated dairy item with a store-brand prefix (`GV 2% MLK GAL`), an already-clear item as a regression check (`BANANAS`), a genuinely ambiguous SKU line (`SKU 44192`), and two non-food items (`PAPER TOWELS 6PK`, `DOG FOOD 15LB`).
-- **PASS — TASK-028 classification**: correctly dropped both non-food items; "Found 5 items" (7 minus 2). Categories and expiry-day estimates on the remaining 5 all looked sensible (Meat/2d, Produce/5-8d, Dairy/11d).
-- **PASS — ambiguous-line fallback**: `SKU 44192` was correctly left as-is (category "Other", no invented product name) rather than hallucinating a guess — this is exactly the spec's "if not confident, return the original text unchanged" rule working as intended.
-- **FAIL/no-op — abbreviation expansion**: none of `CHKN THIGH BNLS`, `ORG BANANA`, `GV 2% MLK GAL` were expanded; all came back with their exact printed abbreviated text.
-- **FAIL — sentence case**: `BANANAS` (all-caps, completely unambiguous, not even an abbreviation) stayed `BANANAS` instead of becoming `Bananas`. This is the strongest signal in this test: sentence-casing isn't confidence-gated in the spec at all, so if the naming-rules block were being weighed by the model, this should have been a trivial, guaranteed hit. It wasn't.
-- Confirmed via direct source read (`aiService.js:290-310`, this session) that the naming-rules bullet list from TASK-029 **is** present in the live prompt text, correctly formatted, not truncated or overwritten — so this is not a "the code isn't deployed" issue, and not a code-presence bug in this session's work (TASK-029 predates TASK-030). Read the code, did not need to guess.
-- **Working theory, not confirmed**: `parseReceipt()` still uses `gpt-4o-mini` (TASK-029 didn't change the model, unlike TASK-030). It's plausible the naming-rules block gets deprioritized by a weaker model on a long compound instruction, especially for synthetic/unfamiliar abbreviations — but that doesn't explain the `BANANAS` case-formatting miss, which needed zero real-world knowledge. This looks like a genuine, reportable gap in TASK-029's effectiveness, not just cautious under-expansion.
-- **This was not re-tested with variations** (e.g., only the prompt's own worked examples, or a second synthetic receipt) to rule out one-off model stochasticity — one run is a signal, not a confirmed pattern.
-
-## TASK-029.5 (receipt naming-rules reposition) — PASS, this session (2026-07-14)
-Same synthetic "FRESH MART" 7-line receipt as the TASK-029 baseline above, re-run after relocating the naming-rules block to immediately after the classification block. **Tested against an independent backend instance (port 53869) after discovering the shared port-3001 process doesn't hot-reload — see Current Status caveat.**
-
-Scored criteria (gate: ≥2/3, baseline was 0/3):
-- [x] **PASS** — `CHKN THIGH BNLS` → `Chicken thigh boneless` (abbreviated meat, correctly expanded)
-- [x] **PASS** — `ORG BANANA` → `Organic banana` (abbreviated produce, correctly expanded)
-- [x] **PASS** — `BANANAS` → `Bananas` (pure sentence-casing, the strongest diagnostic criterion — now correct)
-
-**3/3 — gate exceeded.** Position bias was confirmed as the (at least primary) cause; no escalation to few-shot examples or the two-pass architecture needed.
-
-Non-scored criterion (recorded, not counted):
-- `GV 2% MLK GAL` → `GV 2% milk gallon` — "MLK"/"GAL" expanded, "GV" (unfamiliar store-brand abbreviation) correctly left unguessed. Matches the spec's "either expands confidently or is left unchanged" acceptable-outcome rule — a confident partial expansion with the ambiguous brand token appropriately preserved.
-
-Regression checks (must not fail):
-- [x] **PASS** — `SKU 44192` left unexpanded, no hallucination.
-- [x] **PASS** — Classification unaffected by the one-position shift: 5 items found (7 minus 2 non-food), same as baseline.
-
-Cleanup: canceled the pending "Add 5 items" action before any write (cancel-before-commit — no data was ever written, nothing to delete). Pantry item count confirmed unchanged (8 items) after cancel. Temporary `vite.config.js` proxy edit and temporary backend instance (port 53869) both reverted/stopped; `git diff --stat` confirmed only the intended `aiService.js` change remained.
+## Results, by acceptance criterion group
+- **Core regression test (the reported bug) — PASS.** Manual add: "chicken breast" + `storageLocation: 'refrigerator'` → 2d; same food + `'freezer'` → 270d. Receipt import: AI-guessed `expiryDate: null` for "Chicken breast 2 lb" correctly overridden by FoodKeeper to exactly 2d at the server-defaulted `'refrigerator'` location — the direct end-to-end regression test for the 135x-gap bug this task exists to fix.
+- **Manual add storage field — PASS.** Field present, defaults from category (`'Other'` → Pantry), user-overridable before save.
+- **Receipt review storage selector — PASS.** Per-candidate selector defaulted server-side via `getDefaultStorageLocation(category)` (`Meat` → Fridge), editable before confirm; confirmed via direct inspection of the `/api/ai/parse-receipt` response and the rendered `<select>`'s value.
+- **Decision 4 (PATCH storage-edit recompute) — PASS on all 3 sub-cases, after one real bug fix (see Current Status):**
+  - Storage-only edit (fridge→freezer) recomputes from `purchaseDate`: 270d → confirmed after the `AddItemModal.jsx` fix (pre-fix, this silently failed — stayed at the stale value).
+  - Storage edit + explicit new `expiryDate` in the same request: explicit value respected (set an item to `2099-01-01`, storage changed to fridge, expiry stayed at the far-future date, not recomputed to 2d).
+  - Storage edit with no FoodKeeper match at the new location: existing expiry preserved, not nulled (`BNLS/SL BRST`, no match at any tested context, expiry stayed `2d` across a storage change).
+- **Freeze/thaw (Decisions 2/3) — PASS on all sub-cases:**
+  - Freezing a FoodKeeper-matched item uses the real day-count (270d for chicken via the `Freeze` button, not the static 120d category fallback) — confirms `toggleFreeze()`'s primary/fallback logic (Decision 3).
+  - Thaw restores `preFreezeStorageLocation`, not a fixed `'refrigerator'` default: a pantry-stored item ("peanut butter") frozen then thawed correctly returned to `'pantry'`.
+  - Freeze→thaw→freeze→thaw cycle correctly refreshes the snapshot each time: moved the item to fridge post-thaw, froze again, thawed again — returned to fridge, not the stale pantry value from the first cycle.
+- **Legacy/pre-migration rows — PASS.** All 8 pre-existing pantry rows (`storageLocation = null`) continued to display and compute correctly; `AddItemModal.jsx`'s edit-mode fallback (`item.storageLocation ?? getDefaultStorageLocation(item.category)`) confirmed working when editing one.
+- **Pantry table visible storage indicator — PASS.** New Storage column with badge/icon renders for every row (`—` for null, icon + label otherwise).
+- **Chat pantry summary `frozen` field — not live-tested this session** (would require a chat message + real AI tool call; the underlying `i.storageLocation === 'freezer'` logic is a one-line, low-risk change already exercised indirectly by every freeze/thaw test above via the same `storageLocation` field). Lower-priority gap, not blocking.
+- **`add_pantry_item` chat tool's storage/FoodKeeper override — not live-tested this session** for the same reason (requires driving a real chat turn); code path is identical to the already-tested `create()` path with a hardcoded `source: 'ai_estimate'`, same as the already-tested `bulkCreate()`.
 
 # Recommended Next Action
-TASK-029.5 is done — gate exceeded (3/3), no follow-up needed. Next candidates, in order: (1) investigate the carried-forward `POST /api/shopping/build` 500 error (unscoped, currently blocking a real household's workflow — likely worth a quick triage before starting a new task), or (2) begin TASK-031 (requires explicit user approval before running its migration; read the spec first, do not run the migration without that approval).
+TASK-031 is done — live-verified, one real bug found and fixed. Next candidates, in order: (1) flag the migration-boot landmine to the user before it silently bites a future session (see Architecture Notes / Remaining Work #3), (2) begin TASK-032 (quantity split, now unblocked), or (3) investigate the carried-forward `POST /api/shopping/build` 500 error.
 
 # Forbidden Exploration
-Each `ai/tasks/TASK-0XX-spec.md` has its own Allowed/Forbidden Files section — read the specific spec for whichever task is being implemented next.
+Each `ai/tasks/TASK-0XX-spec.md` has its own Allowed/Forbidden Files section — read the specific spec for whichever task is being implemented next. For TASK-031 specifically: `server/services/shoppingService.js`, `server/services/aiService.js`, `client/src/components/recipes/*`.
 
 # Context Notes
 - branch: main
 - worktree: none
-- context pressure: low
+- context pressure: medium
 
 # PowerShell Merge Block
-N/A — worked directly on main, no worktree used this session.
+N/A — worked directly on main, no worktree used this session. Nothing has been committed yet.
 
 ```powershell
-git add server/services/aiService.js ai/handoffs/CURRENT_STATE.md
-git commit -m "TASK-029.5: reposition receipt naming-rules prompt block; live-verified 3/3"
+git add server/db/schema.js server/db/migrations/0014_pantry_storage.sql server/db/migrations/meta/_journal.json server/utils/pantryDefaults.js server/services/shelfLifeService.js server/services/pantryService.js server/routes/pantry.js server/routes/ai.js client/src/components/pantry/AddItemModal.jsx client/src/components/pantry/ReceiptUpload.jsx client/src/components/pantry/PantryTable.jsx client/src/utils/expiry.js client/src/utils/pantryDefaults.js client/src/pages/PantryPage.jsx ai/handoffs/CURRENT_STATE.md
+git commit -m "TASK-031: pantry storage location + FoodKeeper-driven expiry; live-verified"
 ```

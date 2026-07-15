@@ -10,17 +10,24 @@ router.use(clerkAuth);
 const dateField = z.string().datetime().nullable().optional();
 
 const createSchema = z.object({
-  name:         z.string().min(1, 'Name is required').max(200),
-  category:     z.string().min(1).max(50).default('Other'),
-  quantity:     z.coerce.number().positive().default(1),
-  unit:         z.string().min(1).max(50).default('item'),
-  purchaseDate: dateField,
-  expiryDate:   dateField,
-  readyDate:    dateField,
-  notes:        z.string().max(500).nullable().optional(),
+  name:            z.string().min(1, 'Name is required').max(200),
+  category:        z.string().min(1).max(50).default('Other'),
+  quantity:        z.coerce.number().positive().default(1),
+  unit:            z.string().min(1).max(50).default('item'),
+  purchaseDate:    dateField,
+  expiryDate:      dateField,
+  readyDate:       dateField,
+  storageLocation: z.enum(['pantry', 'refrigerator', 'freezer']).nullable().optional(),
+  notes:           z.string().max(500).nullable().optional(),
 });
 
 const updateSchema = createSchema.partial();
+
+// source is 'manual' iff the request body explicitly supplied expiryDate — TASK-031 Decision 1's
+// presence-check rule, reusing the same omitted-vs-explicit mechanism TASK-027 established.
+function expirySource(body) {
+  return 'expiryDate' in body ? 'manual' : 'ai_estimate';
+}
 
 function ownershipError(result, res) {
   if (result.status === 'not_found') return res.status(404).json({ error: 'Item not found' });
@@ -44,7 +51,7 @@ router.get('/waste-saved', async (req, res) => {
 
 // POST /api/pantry
 router.post('/', validate(createSchema), async (req, res) => {
-  const item = await pantryService.create(req.user.householdId, req.body);
+  const item = await pantryService.create(req.user.householdId, req.body, expirySource(req.body));
   res.status(201).json({ item });
 });
 

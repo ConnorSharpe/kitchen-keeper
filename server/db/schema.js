@@ -35,10 +35,12 @@ export const pantryItems = pgTable('pantry_items', {
   purchaseDate:       text('purchase_date'),
   expiryDate:         text('expiry_date'),
   readyDate:          text('ready_date'),
-  isFrozen:           boolean('is_frozen').notNull().default(false),
+  isFrozen:           boolean('is_frozen').notNull().default(false), // deprecated as of TASK-031 — kept for schema compat, use storageLocation === 'freezer' instead
   frozenAt:           text('frozen_at'),
   originalExpiryDate: text('original_expiry_date'),
   freezeNotes:        text('freeze_notes'),
+  storageLocation:          text('storage_location'),           // 'pantry' | 'refrigerator' | 'freezer' | null
+  preFreezeStorageLocation: text('pre_freeze_storage_location'), // snapshotted on freeze, restored+cleared on thaw
   notes:              text('notes'),
   consumedAt:         text('consumed_at'),
   wasExpiring:        boolean('was_expiring'),

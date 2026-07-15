@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { STORAGE_LOCATIONS, STORAGE_LOCATION_LABELS } from '../../utils/pantryDefaults.js';
 
 // ReceiptUpload runs through three phases:
 //   upload   — drag-drop / click-to-select file
@@ -114,6 +115,10 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
     setChecked(Object.fromEntries(candidates.map((_, i) => [i, value])));
   }
 
+  function setStorageLocation(index, storageLocation) {
+    setCandidates((prev) => prev.map((c, i) => (i === index ? { ...c, storageLocation } : c)));
+  }
+
   const selectedCount = Object.values(checked).filter(Boolean).length;
 
   return (
@@ -215,7 +220,7 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
               <table className="min-w-full divide-y divide-gray-200 text-sm">
                 <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
-                    {['', 'Name', 'Category', 'Qty', 'Unit', 'Expires'].map((h) => (
+                    {['', 'Name', 'Category', 'Qty', 'Unit', 'Storage', 'Expires'].map((h) => (
                       <th
                         key={h}
                         className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap"
@@ -252,6 +257,17 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
                       </td>
                       <td className="px-3 py-2.5 text-gray-500 whitespace-nowrap">
                         {item.unit}
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        <select
+                          value={item.storageLocation ?? 'pantry'}
+                          onChange={(e) => setStorageLocation(i, e.target.value)}
+                          className="rounded border-gray-300 text-xs py-1 pl-2 pr-6 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                        >
+                          {STORAGE_LOCATIONS.map((loc) => (
+                            <option key={loc} value={loc}>{STORAGE_LOCATION_LABELS[loc]}</option>
+                          ))}
+                        </select>
                       </td>
                       <td className="px-3 py-2.5 text-gray-500 whitespace-nowrap">
                         {item.expiryDate ? item.expiryDate.split('T')[0] : '—'}

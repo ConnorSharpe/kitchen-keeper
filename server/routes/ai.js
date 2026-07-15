@@ -15,6 +15,7 @@ import * as recipeScorer from '../utils/recipeScorer.js';
 import { normalizeFood, stripIngredientPrefix, normalizeUnit } from '../utils/foodNormalization.js';
 import { getPurineLevel } from '../data/purineIndex.js';
 import { getExpiryDays, getExpiryStatus } from '../utils/expiry.js';
+import { getDefaultStorageLocation } from '../utils/pantryDefaults.js';
 const router = express.Router();
 router.use(clerkAuth);
 
@@ -80,13 +81,14 @@ router.post('/expand-suggestion', validate(expandSchema), async (req, res) => {
 const dateField = z.string().datetime().nullable().optional();
 
 const candidateItemSchema = z.object({
-  name:         z.string().min(1).max(200),
-  category:     z.string().min(1).max(50).default('Other'),
-  quantity:     z.coerce.number().positive().default(1),
-  unit:         z.string().min(1).max(50).default('item'),
-  purchaseDate: dateField,
-  expiryDate:   dateField,
-  notes:        z.string().max(500).nullable().optional(),
+  name:            z.string().min(1).max(200),
+  category:        z.string().min(1).max(50).default('Other'),
+  quantity:        z.coerce.number().positive().default(1),
+  unit:            z.string().min(1).max(50).default('item'),
+  purchaseDate:    dateField,
+  expiryDate:      dateField,
+  storageLocation: z.enum(['pantry', 'refrigerator', 'freezer']).nullable().optional(),
+  notes:           z.string().max(500).nullable().optional(),
 });
 
 router.post('/parse-receipt', upload.single('receipt'), async (req, res) => {
@@ -101,15 +103,17 @@ router.post('/parse-receipt', upload.single('receipt'), async (req, res) => {
   const candidates = rawItems
     .map((item) => {
       try {
+        const category = item.category || 'Other';
         return candidateItemSchema.parse({
-          name:         item.name,
-          category:     item.category || 'Other',
-          quantity:     item.quantity  ?? 1,
-          unit:         item.unit      || 'item',
-          purchaseDate: new Date().toISOString(),
-          expiryDate:   item.estimatedExpiryDays != null
+          name:            item.name,
+          category,
+          quantity:        item.quantity  ?? 1,
+          unit:            item.unit      || 'item',
+          purchaseDate:    new Date().toISOString(),
+          expiryDate:      item.estimatedExpiryDays != null
             ? new Date(Date.now() + item.estimatedExpiryDays * 86_400_000).toISOString()
             : null,
+          storageLocation: getDefaultStorageLocation(category),
         });
       } catch {
         return null;
@@ -251,7 +255,7 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
     category: i.category,
     qty:      `${i.quantity} ${i.unit}`,
     status:   getExpiryStatus(i.expiryDate),
-    frozen:   i.isFrozen,
+    frozen:   i.storageLocation === 'freezer',
   }));
 
   // tags is already parsed to an array by recipeService.getAll()
@@ -268,14 +272,15 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
   const toolHandlers = {
     add_pantry_item: async (args) => {
       const addItemSchema = z.object({
-        name:          z.string().min(1).max(200),
-        quantity:      z.coerce.number().positive().default(1),
-        unit:          z.string().min(1).max(50).default('item'),
-        category:      z
+        name:            z.string().min(1).max(200),
+        quantity:        z.coerce.number().positive().default(1),
+        unit:            z.string().min(1).max(50).default('item'),
+        category:        z
           .enum(['Produce','Dairy','Meat','Seafood','Bakery','Frozen','Pantry','Beverages','Condiments','Other'])
           .default('Other'),
-        shelfLifeDays: z.coerce.number().int().nonnegative().optional(),
-        notes:         z.string().max(500).nullable().optional(),
+        shelfLifeDays:   z.coerce.number().int().nonnegative().optional(),
+        storageLocation: z.enum(['pantry', 'refrigerator', 'freezer']).nullable().optional(),
+        notes:           z.string().max(500).nullable().optional(),
       });
 
       let parsed;
@@ -295,14 +300,15 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
 
       try {
         const item = await pantryService.create(householdId, {
-          name:         parsed.name,
-          quantity:     parsed.quantity,
-          unit:         parsed.unit,
-          category:     parsed.category,
-          purchaseDate: new Date().toISOString(),
+          name:            parsed.name,
+          quantity:        parsed.quantity,
+          unit:            parsed.unit,
+          category:        parsed.category,
+          purchaseDate:    new Date().toISOString(),
           expiryDate,
-          notes:        parsed.notes ?? null,
-        });
+          storageLocation: parsed.storageLocation ?? getDefaultStorageLocation(parsed.category),
+          notes:           parsed.notes ?? null,
+        }, 'ai_estimate'); // shelfLifeDays is AI-reasoned, not human-typed — subject to FoodKeeper override
         return { ok: true, item };
       } catch {
         return { ok: false, error: 'Failed to save item to pantry.' };

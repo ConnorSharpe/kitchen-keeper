@@ -99,6 +99,13 @@
       "when": 1745799180000,
       "tag": "0013_chat_metadata",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1745799240000,
+      "tag": "0014_pantry_storage",
+      "breakpoints": true
     }
   ]
 }

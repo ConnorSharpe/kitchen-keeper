@@ -34,8 +34,9 @@ export function isRipening(readyDateStr) {
 }
 
 // Returns effective temporal state of a pantry item in priority order.
+// TASK-031: storageLocation === 'freezer' is the source of truth, not the deprecated isFrozen.
 export function getRipeningState(item) {
-  if (item.isFrozen) return 'frozen';
+  if (item.storageLocation === 'freezer') return 'frozen';
   if (isRipening(item.readyDate)) return 'ripening';
   return 'ready';
 }

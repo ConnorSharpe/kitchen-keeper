@@ -17,14 +17,20 @@ try {
   console.error('[shelfLifeService] Failed to load foodkeeper.json:', err.message);
 }
 
-function selectStorageContext(entry) {
+function selectStorageContext(entry, storageLocation) {
+  if (storageLocation) {
+    const days = entry[`${storageLocation}Days`];
+    return days > 0 ? { storageContext: storageLocation, recommendedDays: days } : null;
+  }
   if (entry.pantryDays > 0) return { storageContext: 'pantry', recommendedDays: entry.pantryDays };
   if (entry.refrigeratorDays > 0) return { storageContext: 'refrigerator', recommendedDays: entry.refrigeratorDays };
   if (entry.freezerDays > 0) return { storageContext: 'freezer', recommendedDays: entry.freezerDays };
   return null;
 }
 
-export function lookup(itemName) {
+// storageLocation ('pantry'|'refrigerator'|'freezer'), if given, looks up that specific storage
+// context's day-count instead of the pantry > refrigerator > freezer priority fallback.
+export function lookup(itemName, storageLocation) {
   try {
     if (loadError || !itemName) return null;
 
@@ -58,7 +64,7 @@ export function lookup(itemName) {
       return null;
     }
 
-    const storage = selectStorageContext(entry);
+    const storage = selectStorageContext(entry, storageLocation);
     if (!storage) return null;
 
     return {
