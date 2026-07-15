@@ -295,7 +295,9 @@ export async function parseReceipt(imageBase64, mimeType, requestId = 'n/a') {
               '"quantity": number, "unit": string, "estimatedExpiryDays": integer|null, ' +
               '"classification": one of [produce|dairy|meat|packaged|beverage|non_food|uncertain] }. ' +
               'estimatedExpiryDays is days from today. null if non-perishable or unknown. ' +
-              'classification: classify each item. Use "non_food" ONLY for items clearly and unambiguously not for human consumption (household supplies, cleaning products, hardware, garden, personal care). ' +
+              'classification: classify each item. Use "non_food" whenever the item is not intended for human consumption or pantry/kitchen storage, even when purchased at a grocery or warehouse-club store alongside groceries — warehouse-club and grocery-store receipts often mix arbitrary general merchandise in among food purchases, so do not assume a line is food just because of where it was purchased. ' +
+              'Pet food and pet treats are "non_food": they are edible, but "edible" does not mean "human food" — the test is whether the item belongs in a human pantry, not whether it is technically food for something. ' +
+              'Representative (NOT exhaustive) examples of "non_food": pet products, sporting/outdoor goods, electronics, apparel, furniture/home goods, automotive, toys, office supplies, household paper goods, cleaning supplies. ' +
               'Default to "uncertain" when unsure — a real food item incorrectly filtered is a worse error than a non-food item included. ' +
               'Return ONLY a raw JSON array. No markdown, no explanation.',
           },
@@ -313,6 +315,7 @@ export async function parseReceipt(imageBase64, mimeType, requestId = 'n/a') {
 
   const food = items.filter(i => i.classification !== 'non_food');
   const dropped = items.filter(i => i.classification === 'non_food');
+  const uncertain = items.filter(i => i.classification === 'uncertain');
 
   if (dropped.length > 0) {
     console.log(
@@ -323,7 +326,8 @@ export async function parseReceipt(imageBase64, mimeType, requestId = 'n/a') {
 
   console.log(
     `[kitchen-keeper] request_id=${requestId} function=parseReceipt` +
-    ` model=gpt-4o-mini item_count_extracted=${items.length} item_count_food=${food.length}`
+    ` model=gpt-4o-mini item_count_extracted=${items.length} item_count_food=${food.length}` +
+    ` item_count_non_food=${dropped.length} item_count_uncertain=${uncertain.length}`
   );
   return food;
 }
