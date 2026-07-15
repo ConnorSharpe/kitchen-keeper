@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { clerkAuth } from '../middleware/clerkAuth.js';
 import { validate } from '../middleware/validate.js';
 import * as recipeService from '../services/recipeService.js';
+import * as recipeBlocklistService from '../services/recipeBlocklistService.js';
 
 const router = express.Router();
 router.use(clerkAuth);
@@ -76,6 +77,33 @@ router.patch('/:id/favorite', async (req, res) => {
   if (result.status === 'not_found') return res.status(404).json({ error: 'Not found' });
   if (result.status === 'forbidden')  return res.status(403).json({ error: 'Forbidden' });
   res.json({ recipe: result.recipe });
+});
+
+// GET /api/recipes/blocklist
+router.get('/blocklist', async (req, res) => {
+  const blocklist = await recipeBlocklistService.getAll(req.user.householdId);
+  res.json({ blocklist });
+});
+
+// POST /api/recipes/blocklist
+const blocklistCreateSchema = z.object({
+  source:   z.string().min(1).max(50),
+  sourceId: z.string().min(1).max(200),
+  name:     z.string().min(1).max(200),
+});
+
+router.post('/blocklist', validate(blocklistCreateSchema), async (req, res) => {
+  const entry = await recipeBlocklistService.add(req.user.householdId, req.body);
+  res.json({ entry: entry ?? null });
+});
+
+// DELETE /api/recipes/blocklist/:id
+router.delete('/blocklist/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  const result = await recipeBlocklistService.remove(req.user.householdId, id);
+  if (result.status === 'not_found') return res.status(404).json({ error: 'Not found' });
+  if (result.status === 'forbidden')  return res.status(403).json({ error: 'Forbidden' });
+  res.status(204).end();
 });
 
 export default router;

@@ -163,6 +163,15 @@ const PANTRY_TOOLS = [
               'dietary_safe: de-prioritise recipes conflicting with dietary profile. ' +
               'any: handler chooses based on dietary load and expiry state.',
           },
+          targetIngredients: {
+            type: 'array',
+            items: { type: 'string' },
+            description:
+              'Specific ingredient(s) the user named (e.g. ["steelhead"] for "what should I make ' +
+              'with steelhead", ["chicken", "rice"] for "what can I make with chicken and rice"). ' +
+              'Populate only when the user names specific ingredient(s) in their request. ' +
+              'Leave empty/omitted for generic requests ("what should I eat").',
+          },
         },
         required: [],
       },
@@ -421,9 +430,10 @@ export async function parseRecipeImage(imageBase64, mimeType, requestId = 'n/a')
  * Recipe suggestions via Spoonacular/TheMealDB — zero LLM tokens.
  * Returns [] if no items or if all sources fail.
  * Shape: [{ name, description, sourceUrl, ingredients, prepSteps, steps, tags, prepMins, cookMins, servings }]
+ * options: { targetIngredients, rotationOffset } — see findByPantry (TASK-034 Parts A/B).
  */
-export async function suggestRecipes(allItems, expiringItems) {
-  return findByPantry(allItems, expiringItems);
+export async function suggestRecipes(allItems, expiringItems, options = {}) {
+  return findByPantry(allItems, expiringItems, options);
 }
 
 /**
@@ -476,6 +486,7 @@ export async function chat(pantrySummary, recipeSummary, history, userMessage, t
     `  immediately continue the action that required clarification.\n` +
     `  Do not switch tasks, suggest recipes, or begin a new workflow until the requested action is completed.\n` +
     `- User asks what to cook, what to make, or wants recipe ideas → suggest_recipes\n` +
+    `- If the user names specific ingredient(s) in that request (e.g. "what should I make with steelhead", "what can I make with chicken and rice"), populate suggest_recipes' targetIngredients with those exact ingredient name(s). Leave targetIngredients empty/omitted for generic requests ("what should I eat").\n` +
     `- After suggest_recipes returns results, do NOT list or describe the individual recipes in your text reply — the app renders recipe cards from the tool result automatically. Write one brief introductory sentence at most (e.g. "Here are some ideas based on your pantry:").\n` +
     `- User confirms they want to save a suggested recipe → save_recipe\n` +
     `- Trace condiment amounts: the server handles skip-deduction automatically.\n` +

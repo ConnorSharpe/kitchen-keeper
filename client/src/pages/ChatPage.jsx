@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { api } from '../api/index.js';
 import toast from 'react-hot-toast';
 import { useSpeechInput } from '../hooks/useSpeechInput.js';
+import { useRecipeBlocklist } from '../hooks/useRecipeBlocklist.js';
 
 // Round to max 2 decimal places, strip trailing zeros
 function formatQty(n) {
@@ -29,6 +30,7 @@ export default function ChatPage() {
   const [savedRecipeNames, setSavedRecipeNames] = useState(new Set());
   const bottomRef  = useRef(null);
   const textareaRef = useRef(null);
+  const { addBlock } = useRecipeBlocklist();
 
   const { supported: micSupported, iosPwaCaveat, listening, toggle: toggleMic } = useSpeechInput({
     lang: navigator.language,
@@ -112,6 +114,15 @@ export default function ChatPage() {
     send(`save ${recipeName}`);
   }
 
+  async function handleBlockSuggestion(recipe) {
+    try {
+      await addBlock({ source: recipe.source, sourceId: recipe.sourceId, name: recipe.name });
+      toast.success(`"${recipe.name}" won't be suggested again`);
+    } catch (err) {
+      toast.error(err.message || 'Failed to block recipe');
+    }
+  }
+
   function handleSubmit(e) {
     e.preventDefault();
     send(input);
@@ -172,8 +183,14 @@ export default function ChatPage() {
         )}
 
         {/* Message bubbles */}
-        {messages.map((msg) => (
+        {messages.map((msg) => {
+          // TASK-034 Part C: structural suppression — when recipe cards are present, the
+          // assistant's text bubble (and avatar) is not rendered at all. Cards only.
+          const hasRecipeCards = msg.role === 'assistant' && msg.recipeSuggestions?.length > 0;
+
+          return (
           <div key={msg.key}>
+            {!hasRecipeCards && (
             <div
               className={`flex items-end gap-2 ${
                 msg.role === 'user' ? 'justify-end' : 'justify-start'
@@ -208,6 +225,7 @@ export default function ChatPage() {
                 )}
               </div>
             </div>
+            )}
 
             {msg.role === 'assistant' && msg.itemsAdded?.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-1.5 ml-9">
@@ -251,13 +269,23 @@ export default function ChatPage() {
                             recipe.name
                           )}
                         </div>
-                        <button
-                          onClick={() => handleSaveRecipe(recipe.name)}
-                          disabled={isSaved || loading}
-                          className="flex-shrink-0 px-3 py-1 rounded-lg bg-orange-500 text-white text-xs font-medium hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          {isSaved ? 'Saved' : 'Save Recipe'}
-                        </button>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button
+                            onClick={() => handleBlockSuggestion(recipe)}
+                            className="text-sm leading-none text-gray-300 hover:text-red-500 transition-colors"
+                            aria-label="Don't suggest again"
+                            title="Don't suggest again"
+                          >
+                            🚫
+                          </button>
+                          <button
+                            onClick={() => handleSaveRecipe(recipe.name)}
+                            disabled={isSaved || loading}
+                            className="px-3 py-1 rounded-lg bg-orange-500 text-white text-xs font-medium hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            {isSaved ? 'Saved' : 'Save Recipe'}
+                          </button>
+                        </div>
                       </div>
 
                       {/* Description */}
@@ -350,7 +378,8 @@ export default function ChatPage() {
               </div>
             )}
           </div>
-        ))}
+          );
+        })}
 
         {/* Typing indicator — animated dots while awaiting assistant reply */}
         {loading && (

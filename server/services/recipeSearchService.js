@@ -179,18 +179,43 @@ async function themealdbSearch(ingredient) {
  * Returns up to 5 recipe suggestions based on pantry contents.
  * Never throws — returns [] on total failure.
  * Shape: [{ name, description, sourceUrl, ingredients, prepSteps, steps, tags, prepMins, cookMins, servings }]
+ *
+ * options.targetIngredients: user-named ingredient strings (TASK-034 Part A). Used as-is (not
+ *   resolved against pantry item names), placed first, guaranteed inclusion over pantry items.
+ * options.rotationOffset: TASK-034 Part B — rotates which non-expiring pantry items anchor the
+ *   query (and thus the 6-hour cache key) across suggestion rounds in a session. Expiring items
+ *   always keep priority regardless of rotation; targetIngredients always keep priority over both.
  */
-export async function findByPantry(allItems, expiringItems) {
+export async function findByPantry(allItems, expiringItems, options = {}) {
+  const { targetIngredients = [], rotationOffset = 0 } = options;
   try {
     if (!Array.isArray(allItems) || allItems.length === 0) return [];
 
-    // Expiring items first, max 5 ingredients
     const expiringSet = new Set(expiringItems.map((i) => i.id));
-    const sorted = [
-      ...allItems.filter((i) => expiringSet.has(i.id)),
-      ...allItems.filter((i) => !expiringSet.has(i.id)),
-    ];
-    const ingredients = sorted.slice(0, 5).map((i) => i.name);
+    const expiringNames = allItems.filter((i) => expiringSet.has(i.id)).map((i) => i.name);
+    const nonExpiringNames = allItems.filter((i) => !expiringSet.has(i.id)).map((i) => i.name);
+
+    // Guard: with zero non-expiring items the modulo divisor would be zero — skip rotation
+    // entirely rather than attempt/catch. With exactly one, modulo-1 is always 0 (correct no-op).
+    const rotatedNonExpiring = nonExpiringNames.length > 0
+      ? (() => {
+          const offset = rotationOffset % nonExpiringNames.length;
+          return [...nonExpiringNames.slice(offset), ...nonExpiringNames.slice(0, offset)];
+        })()
+      : nonExpiringNames;
+
+    const pantryOrdered = [...expiringNames, ...rotatedNonExpiring];
+
+    // targetIngredients occupy the first slots, guaranteed — not competing with pantry items.
+    const seen = new Set();
+    const combined = [];
+    for (const name of [...targetIngredients, ...pantryOrdered]) {
+      const key = name.toLowerCase().trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      combined.push(name);
+    }
+    const ingredients = combined.slice(0, 5);
 
     const cacheKey = ingredients.map((n) => normalizeFood(n)).sort().join(',');
     const cached = getCached(cacheKey);

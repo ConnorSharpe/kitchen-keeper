@@ -114,6 +114,15 @@ export const chatMessages = pgTable('chat_messages', {
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 });
 
+export const recipeBlocklist = pgTable('recipe_blocklist', {
+  id:          serial('id').primaryKey(),
+  householdId: integer('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  source:      text('source').notNull(),      // 'saved' | 'spoonacular' | 'mealdb'
+  sourceId:    text('source_id').notNull(),    // recipes.id (as string) when source='saved'; API's own id otherwise
+  name:        text('name').notNull(),         // display snapshot only — not used for matching
+  blockedAt:   text('blocked_at').notNull().$defaultFn(() => new Date().toISOString()),
+});
+
 export const mealLogs = pgTable('meal_logs', {
   id:             serial('id').primaryKey(),
   householdId:    integer('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),

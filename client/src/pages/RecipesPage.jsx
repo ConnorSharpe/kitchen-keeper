@@ -1,21 +1,35 @@
 import { useEffect, useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { useRecipes } from '../hooks/useRecipes.js';
+import { useRecipeBlocklist } from '../hooks/useRecipeBlocklist.js';
 import { api } from '../api/index.js';
 import RecipeCard from '../components/recipes/RecipeCard.jsx';
 import RecipeModal from '../components/recipes/RecipeModal.jsx';
 import RecipeUpload from '../components/recipes/RecipeUpload.jsx';
 import RecipeReviewModal from '../components/recipes/RecipeReviewModal.jsx';
+import BlockedRecipesModal from '../components/recipes/BlockedRecipesModal.jsx';
 
 // Web suggestion card — ephemeral until saved by user
-function WebSuggestionCard({ suggestion, onSave, isSaving }) {
+function WebSuggestionCard({ suggestion, onSave, isSaving, onBlock }) {
   return (
     <div className="bg-white rounded-xl border border-orange-200 shadow-sm p-4 flex flex-col gap-2">
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-sm font-semibold text-gray-900 leading-snug">{suggestion.name}</h3>
-        <span className="flex-shrink-0 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">
-          From Web
-        </span>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {onBlock && (
+            <button
+              onClick={() => onBlock(suggestion)}
+              className="text-sm leading-none text-gray-300 hover:text-red-500 transition-colors"
+              aria-label="Don't suggest again"
+              title="Don't suggest again"
+            >
+              🚫
+            </button>
+          )}
+          <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">
+            From Web
+          </span>
+        </div>
       </div>
 
       {suggestion.description && (
@@ -54,12 +68,16 @@ function WebSuggestionCard({ suggestion, onSave, isSaving }) {
 
 export default function RecipesPage() {
   const { recipes, loading, error, refresh, addRecipe, removeRecipe, toggleFavorite } = useRecipes();
+  const {
+    blocklist, loading: blocklistLoading, refresh: refreshBlocklist, addBlock, removeBlock,
+  } = useRecipeBlocklist();
 
   const [openRecipe, setOpenRecipe]           = useState(null);
   const [showUpload, setShowUpload]           = useState(false);
   const [reviewRecipe, setReviewRecipe]       = useState(null);
   const [reviewImage, setReviewImage]         = useState(null); // Blob | null
   const [favLoadingId, setFavLoadingId]       = useState(null);
+  const [showBlocklist, setShowBlocklist]     = useState(false);
 
   // Web suggestion state
   const [webSuggestions, setWebSuggestions]   = useState([]);
@@ -122,6 +140,29 @@ export default function RecipesPage() {
     } finally {
       setSavingName(null);
     }
+  }
+
+  async function handleBlockRecipe(source, sourceId, name) {
+    try {
+      await addBlock({ source, sourceId, name });
+      toast.success(`"${name}" won't be suggested again`);
+    } catch (err) {
+      toast.error(err.message || 'Failed to block recipe');
+    }
+  }
+
+  function handleBlockSaved(recipe) {
+    handleBlockRecipe('saved', String(recipe.id), recipe.name);
+  }
+
+  async function handleBlockWebSuggestion(suggestion) {
+    await handleBlockRecipe(suggestion.source, suggestion.sourceId, suggestion.name);
+    setWebSuggestions((prev) => prev.filter((s) => s.name !== suggestion.name));
+  }
+
+  function handleOpenBlocklist() {
+    setShowBlocklist(true);
+    refreshBlocklist();
   }
 
   async function handleToggleFavorite(id) {
@@ -197,6 +238,12 @@ export default function RecipesPage() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <button
+            onClick={handleOpenBlocklist}
+            className="text-sm px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            🚫 Blocked Recipes
+          </button>
+          <button
             onClick={() => setShowUpload(true)}
             className="text-sm px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
           >
@@ -244,6 +291,7 @@ export default function RecipesPage() {
                 suggestion={s}
                 onSave={handleSaveWebSuggestion}
                 isSaving={savingName === s.name}
+                onBlock={handleBlockWebSuggestion}
               />
             ))}
           </div>
@@ -335,6 +383,7 @@ export default function RecipesPage() {
               onOpen={setOpenRecipe}
               onToggleFavorite={handleToggleFavorite}
               isFavoriteLoading={favLoadingId === recipe.id}
+              onBlock={handleBlockSaved}
             />
           ))}
         </div>
@@ -362,6 +411,15 @@ export default function RecipesPage() {
           recipe={reviewRecipe}
           onSave={handleReviewSave}
           onClose={() => { setReviewRecipe(null); setReviewImage(null); }}
+        />
+      )}
+
+      {showBlocklist && (
+        <BlockedRecipesModal
+          blocklist={blocklist}
+          loading={blocklistLoading}
+          onClose={() => setShowBlocklist(false)}
+          onUnblock={removeBlock}
         />
       )}
     </div>

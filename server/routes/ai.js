@@ -12,7 +12,8 @@ import * as aiService from '../services/aiService.js';
 import * as mealLogService from '../services/mealLogService.js';
 import * as dietaryService from '../services/dietaryService.js';
 import * as recipeScorer from '../utils/recipeScorer.js';
-import { normalizeFood, stripIngredientPrefix, normalizeUnit } from '../utils/foodNormalization.js';
+import * as recipeBlocklistService from '../services/recipeBlocklistService.js';
+import { normalizeFood, foodsMatch, stripIngredientPrefix, normalizeUnit } from '../utils/foodNormalization.js';
 import { getPurineLevel } from '../data/purineIndex.js';
 import { getExpiryDays, getExpiryStatus } from '../utils/expiry.js';
 import { getDefaultStorageLocation } from '../utils/pantryDefaults.js';
@@ -35,6 +36,28 @@ function extractSuggestedRecipeKeys(history) {
   }
   return keys;
 }
+
+// TASK-034 Decision D3: `${source}:${sourceId}` key format, shared by dedup, the recency-penalty
+// lookup, and the blocklist filter — extracted once instead of re-inlined a third time.
+function deriveRecipeKey(candidate) {
+  return (candidate.source && candidate.sourceId)
+    ? `${candidate.source}:${candidate.sourceId}`
+    : (candidate.name ?? '').toLowerCase().trim();
+}
+
+// TASK-034 Decision A3.1: "contains a target ingredient" reuses foodsMatch()/normalizeFood()
+// exactly — same TASK-011 invariant as everywhere else in this pipeline (no cross-variety
+// matching: a target of "steelhead" will not match a recipe calling for "salmon").
+function candidateContainsTarget(candidate, targetIngredients) {
+  const ingredientNames = (candidate.ingredients ?? []).map((ing) => stripIngredientPrefix(ing.name));
+  return targetIngredients.some((t) => ingredientNames.some((n) => foodsMatch(t, n)));
+}
+
+// TASK-034 Decision B1: subtracted from effectiveScore for recipes already shown in this
+// session's loaded history. Chosen empirically (comparable in magnitude to the saved-source
+// ranking bonus below) — not derived from an existing convention. Tune here if suggestions
+// feel too sticky or too random.
+const RECENT_RECIPE_PENALTY = 0.5;
 
 // POST /api/ai/eat-this-now
 router.post('/eat-this-now', async (req, res) => {
@@ -132,7 +155,11 @@ router.post('/suggest-recipes', async (req, res) => {
     return days !== null && days >= 0 && days <= 7;
   });
 
-  const suggestions = await aiService.suggestRecipes(allItems, expiringItems);
+  const [rawSuggestions, blockedKeys] = await Promise.all([
+    aiService.suggestRecipes(allItems, expiringItems),
+    recipeBlocklistService.getBlockedKeys(req.user.householdId),
+  ]);
+  const suggestions = rawSuggestions.filter((s) => !blockedKeys.has(deriveRecipeKey(s)));
   res.json({ suggestions });
 });
 
@@ -445,11 +472,24 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
 
     suggest_recipes: async (args) => {
       const requestedStrategy = args.strategy ?? 'any';
+      const targetIngredients = Array.isArray(args.targetIngredients)
+        ? args.targetIngredients.filter((s) => typeof s === 'string' && s.trim().length > 0)
+        : [];
 
-      // Keys for recipes already shown in this session — used to avoid repeating suggestions.
+      // Keys for recipes already shown in this session — soft recency penalty now (Part B),
+      // no longer a hard filter.
       const shownKeys = extractSuggestedRecipeKeys(history);
 
-      const dietaryProfile = await dietaryService.getProfile(householdId);
+      // Count of PRIOR assistant messages in `history` whose metadata.recipeSuggestions is
+      // non-empty — i.e. how many suggestion rounds have already happened in this session.
+      // Deliberately NOT a count of all assistant messages: an unrelated question asked in
+      // between two recipe requests must not shift rotation.
+      const priorSuggestionRounds = history.filter((m) => m.metadata?.recipeSuggestions?.length > 0).length;
+
+      const [dietaryProfile, blockedKeys] = await Promise.all([
+        dietaryService.getProfile(householdId),
+        recipeBlocklistService.getBlockedKeys(householdId),
+      ]);
       const dp = dietaryProfile ?? { conditions: [], allergies: [] };
 
       // Step 1: Saved recipe candidates — tag with suggestion origin.
@@ -460,30 +500,29 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
         sourceId: String(r.id),
       }));
 
-      // Step 2: API candidates — source/sourceId already added by recipeSearchService mappers.
-      const apiRaw = await aiService.suggestRecipes(allItems, expiringItems);
+      // Step 2: API candidates — anchored on targetIngredients + rotation offset (Parts A/B).
+      // source/sourceId already added by recipeSearchService mappers.
+      const apiRaw = await aiService.suggestRecipes(allItems, expiringItems, {
+        targetIngredients,
+        rotationOffset: priorSuggestionRounds,
+      });
 
       // Step 3+4: Merge into one pool.
       const allCandidates = [...savedCandidates, ...apiRaw];
 
       // Step 5: Deduplicate across the full pool before scoring (ID-first, name fallback).
+      // Hard filter — unchanged from TASK-020.
       const seenDedupeKeys = new Set();
       const deduplicated = allCandidates.filter((c) => {
-        const key = (c.source && c.sourceId)
-          ? `${c.source}:${c.sourceId}`
-          : (c.name ?? '').toLowerCase().trim();
+        const key = deriveRecipeKey(c);
         if (seenDedupeKeys.has(key)) return false;
         seenDedupeKeys.add(key);
         return true;
       });
 
-      // Step 6: Remove recipes already shown in this session's history.
-      const filtered = deduplicated.filter((c) => {
-        const key = (c.source && c.sourceId)
-          ? `${c.source}:${c.sourceId}`
-          : (c.name ?? '').toLowerCase().trim();
-        return !shownKeys.has(key);
-      });
+      // Step 6 (Part D): Remove blocklisted candidates. Hard, permanent — no fallback in this
+      // pipeline ever re-admits a blocklisted candidate, even if it leaves the pool empty.
+      const notBlocked = deduplicated.filter((c) => !blockedKeys.has(deriveRecipeKey(c)));
 
       // Determine effective strategy (unchanged logic — needs recent meal log).
       let effectiveStrategy = requestedStrategy;
@@ -500,20 +539,35 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
 
       const expiringNames = new Set(expiringItems.map((i) => i.name.toLowerCase()));
 
-      // Steps 7+8: Score candidates and apply saved-source ranking bonus.
-      // Saved recipes must meet overlap >= 0.25 AND at least 1 matched ingredient to qualify.
-      // API candidates always pass through — ranked by score alone.
+      // Step 7 (Part B): Score candidates — saved-source ranking bonus, minus a soft penalty
+      // for recipes already shown this session. Saved recipes must meet overlap >= 0.25 AND
+      // at least 1 matched ingredient to qualify. API candidates always pass through.
       function scoreCandidates(pool) {
         return pool.map((c) => {
           const { overlapScore, matchedIngredients, unmatchedIngredients } = recipeScorer.score(c, allItems);
           const { allergyNote, healthNote } = recipeScorer.annotateHealth(c, dp);
           if (c.source === 'saved' && (overlapScore < 0.25 || matchedIngredients.length < 1)) return null;
-          const effectiveScore = overlapScore + (c.source === 'saved' ? 0.2 : 0);
+          const recentPenalty = shownKeys.has(deriveRecipeKey(c)) ? RECENT_RECIPE_PENALTY : 0;
+          const effectiveScore = overlapScore + (c.source === 'saved' ? 0.2 : 0) - recentPenalty;
           return { ...c, overlapScore, effectiveScore, matchedIngredients, unmatchedIngredients, allergyNote, healthNote };
         }).filter(Boolean);
       }
 
-      // Step 9: Sort by effective strategy.
+      // Step 8 (Part A): Partition into Tier 1 (contains a target ingredient) / Tier 2 — only
+      // when targetIngredients is non-empty; a partition (reorders by group), not a scoring step.
+      // Zero Tier-1 matches (Decision A4) is not an error: tier1 is simply empty and tier2 fills
+      // the result, which is exactly the same as if targetIngredients were empty.
+      function partitionByTarget(pool) {
+        if (targetIngredients.length === 0) return [pool, []];
+        const tier1 = [];
+        const tier2 = [];
+        for (const c of pool) {
+          (candidateContainsTarget(c, targetIngredients) ? tier1 : tier2).push(c);
+        }
+        return [tier1, tier2];
+      }
+
+      // Step 9: Sort by effective strategy (applied within each tier).
       function applyStrategySort(pool) {
         return [...pool].sort((a, b) => {
           if (effectiveStrategy === 'expiring_first') {
@@ -531,13 +585,10 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
         });
       }
 
-      // Step 10: Take top 5.
-      let topN = applyStrategySort(scoreCandidates(filtered)).slice(0, 5);
-
-      // Step 11: Fallback — if history filter exhausted all candidates, re-run without it.
-      if (topN.length === 0) {
-        topN = applyStrategySort(scoreCandidates(deduplicated)).slice(0, 5);
-      }
+      // Steps 8-10: score, partition into tiers, strategy-sort within each tier, take top 5
+      // (Tier 1 first in full, then Tier 2 — never interleaved).
+      const [tier1, tier2] = partitionByTarget(scoreCandidates(notBlocked));
+      const topN = [...applyStrategySort(tier1), ...applyStrategySort(tier2)].slice(0, 5);
 
       // Build pantry lookup map once — O(1) per ingredient vs. find() in a loop.
       const pantryMap = new Map(

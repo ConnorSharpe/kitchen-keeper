@@ -113,6 +113,13 @@
       "when": 1745799300000,
       "tag": "0015_pantry_servings",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1745799360000,
+      "tag": "0016_recipe_blocklist",
+      "breakpoints": true
     }
   ]
 }

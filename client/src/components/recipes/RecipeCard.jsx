@@ -5,7 +5,7 @@ const SOURCE_BADGE = {
   manual:       { label: 'Manual',      cls: 'bg-gray-100 text-gray-600' },
 };
 
-export default function RecipeCard({ recipe, onOpen, onToggleFavorite, isFavoriteLoading }) {
+export default function RecipeCard({ recipe, onOpen, onToggleFavorite, isFavoriteLoading, onBlock }) {
   const badge = SOURCE_BADGE[recipe.source] ?? SOURCE_BADGE.manual;
   const totalMins = (recipe.prepMins ?? 0) + (recipe.cookMins ?? 0);
 
@@ -33,14 +33,26 @@ export default function RecipeCard({ recipe, onOpen, onToggleFavorite, isFavorit
           <h3 className="text-sm font-semibold text-gray-900 leading-snug line-clamp-2">
             {recipe.name}
           </h3>
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggleFavorite(recipe.id); }}
-            disabled={isFavoriteLoading}
-            className="flex-shrink-0 text-lg leading-none transition-opacity disabled:opacity-40"
-            aria-label={recipe.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-          >
-            {recipe.isFavorite ? '★' : '☆'}
-          </button>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {onBlock && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onBlock(recipe); }}
+                className="text-sm leading-none text-gray-300 hover:text-red-500 transition-colors"
+                aria-label="Don't suggest again"
+                title="Don't suggest again"
+              >
+                🚫
+              </button>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleFavorite(recipe.id); }}
+              disabled={isFavoriteLoading}
+              className="text-lg leading-none transition-opacity disabled:opacity-40"
+              aria-label={recipe.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+            >
+              {recipe.isFavorite ? '★' : '☆'}
+            </button>
+          </div>
         </div>
 
         {/* Description */}
