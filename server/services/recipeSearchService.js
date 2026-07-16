@@ -11,7 +11,10 @@ const cache = new Map();
 function getCached(key) {
   const entry = cache.get(key);
   if (!entry) return null;
-  if (Date.now() - entry.ts > CACHE_TTL_MS) { cache.delete(key); return null; }
+  if (Date.now() - entry.ts > CACHE_TTL_MS) {
+    cache.delete(key);
+    return null;
+  }
   return entry.data;
 }
 
@@ -35,10 +38,12 @@ function stripHtml(str) {
 }
 
 function mapSpoonacular(recipe) {
-  const prepMins = recipe.preparationMinutes > 0 ? recipe.preparationMinutes : null;
-  const cookMins = recipe.readyInMinutes > 0
-    ? Math.max(0, recipe.readyInMinutes - (prepMins ?? 0))
-    : null;
+  const prepMins =
+    recipe.preparationMinutes > 0 ? recipe.preparationMinutes : null;
+  const cookMins =
+    recipe.readyInMinutes > 0
+      ? Math.max(0, recipe.readyInMinutes - (prepMins ?? 0))
+      : null;
 
   return {
     sourceId: String(recipe.id),
@@ -66,7 +71,11 @@ function mapTheMealDB(meal) {
     const name = meal[`strIngredient${i}`];
     const measure = meal[`strMeasure${i}`];
     if (name && name.trim()) {
-      ingredients.push({ name: name.trim(), quantity: null, unit: measure?.trim() || null });
+      ingredients.push({
+        name: name.trim(),
+        quantity: null,
+        unit: measure?.trim() || null,
+      });
     }
   }
 
@@ -104,16 +113,24 @@ async function spoonacularSearch(ingredients) {
   try {
     searchRes = await fetchWithTimeout(searchUrl);
   } catch {
-    console.warn('[kitchen-keeper] function=recipeSearchService spoonacular_search timeout/network_error');
+    console.warn(
+      '[kitchen-keeper] function=recipeSearchService spoonacular_search timeout/network_error'
+    );
     return null;
   }
 
   if (searchRes.status === 402 || searchRes.status === 429) {
-    console.warn('[kitchen-keeper] function=recipeSearchService spoonacular_quota_exceeded status=' + searchRes.status);
+    console.warn(
+      '[kitchen-keeper] function=recipeSearchService spoonacular_quota_exceeded status=' +
+        searchRes.status
+    );
     return null;
   }
   if (!searchRes.ok) {
-    console.warn('[kitchen-keeper] function=recipeSearchService spoonacular_search_error status=' + searchRes.status);
+    console.warn(
+      '[kitchen-keeper] function=recipeSearchService spoonacular_search_error status=' +
+        searchRes.status
+    );
     return null;
   }
 
@@ -147,7 +164,9 @@ async function themealdbSearch(ingredient) {
   try {
     filterRes = await fetchWithTimeout(filterUrl);
   } catch {
-    console.warn('[kitchen-keeper] function=recipeSearchService themealdb_filter timeout/network_error');
+    console.warn(
+      '[kitchen-keeper] function=recipeSearchService themealdb_filter timeout/network_error'
+    );
     return null;
   }
   if (!filterRes.ok) return null;
@@ -194,17 +213,25 @@ export async function findByPantry(allItems, expiringItems, options = {}) {
     if (!Array.isArray(allItems) || allItems.length === 0) return [];
 
     const expiringSet = new Set(expiringItems.map((i) => i.id));
-    const expiringNames = allItems.filter((i) => expiringSet.has(i.id)).map((i) => i.name);
-    const nonExpiringNames = allItems.filter((i) => !expiringSet.has(i.id)).map((i) => i.name);
+    const expiringNames = allItems
+      .filter((i) => expiringSet.has(i.id))
+      .map((i) => i.name);
+    const nonExpiringNames = allItems
+      .filter((i) => !expiringSet.has(i.id))
+      .map((i) => i.name);
 
     // Guard: with zero non-expiring items the modulo divisor would be zero — skip rotation
     // entirely rather than attempt/catch. With exactly one, modulo-1 is always 0 (correct no-op).
-    const rotatedNonExpiring = nonExpiringNames.length > 0
-      ? (() => {
-          const offset = rotationOffset % nonExpiringNames.length;
-          return [...nonExpiringNames.slice(offset), ...nonExpiringNames.slice(0, offset)];
-        })()
-      : nonExpiringNames;
+    const rotatedNonExpiring =
+      nonExpiringNames.length > 0
+        ? (() => {
+            const offset = rotationOffset % nonExpiringNames.length;
+            return [
+              ...nonExpiringNames.slice(offset),
+              ...nonExpiringNames.slice(0, offset),
+            ];
+          })()
+        : nonExpiringNames;
 
     const pantryOrdered = [...expiringNames, ...rotatedNonExpiring];
 
@@ -214,7 +241,8 @@ export async function findByPantry(allItems, expiringItems, options = {}) {
     // Spoonacular's results away from the requested ingredient. Rotation is a no-op here by
     // design — it exists to vary pantry anchors for the generic case, and there's nothing to
     // rotate when the user named ingredients explicitly.
-    const ingredientSource = targetIngredients.length > 0 ? targetIngredients : pantryOrdered;
+    const ingredientSource =
+      targetIngredients.length > 0 ? targetIngredients : pantryOrdered;
     const seen = new Set();
     const combined = [];
     for (const name of ingredientSource) {
@@ -225,10 +253,15 @@ export async function findByPantry(allItems, expiringItems, options = {}) {
     }
     const ingredients = combined.slice(0, 5);
 
-    const cacheKey = ingredients.map((n) => normalizeFood(n)).sort().join(',');
+    const cacheKey = ingredients
+      .map((n) => normalizeFood(n))
+      .sort()
+      .join(',');
     const cached = getCached(cacheKey);
     if (cached) {
-      console.log(`[kitchen-keeper] function=recipeSearchService recipe_api_source=cache result_count=${cached.length} cache_hit=true`);
+      console.log(
+        `[kitchen-keeper] function=recipeSearchService recipe_api_source=cache result_count=${cached.length} cache_hit=true`
+      );
       return cached;
     }
 
@@ -244,14 +277,19 @@ export async function findByPantry(allItems, expiringItems, options = {}) {
     }
 
     const final = results ?? [];
-    console.log(`[kitchen-keeper] function=recipeSearchService recipe_api_source=${source} result_count=${final.length} cache_hit=false`);
+    console.log(
+      `[kitchen-keeper] function=recipeSearchService recipe_api_source=${source} result_count=${final.length} cache_hit=false`
+    );
 
     // Only cache successful non-empty results
     if (final.length > 0) setCached(cacheKey, final);
 
     return final;
   } catch (err) {
-    console.error('[kitchen-keeper] function=recipeSearchService unhandled_error:', err.message);
+    console.error(
+      '[kitchen-keeper] function=recipeSearchService unhandled_error:',
+      err.message
+    );
     return [];
   }
 }

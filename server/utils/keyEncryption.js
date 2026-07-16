@@ -17,7 +17,10 @@ export function encrypt(plaintext) {
   const key = getSecret();
   const iv = randomBytes(12); // 96-bit IV recommended for GCM
   const cipher = createCipheriv(ALGORITHM, key, iv);
-  const ciphertextBuf = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const ciphertextBuf = Buffer.concat([
+    cipher.update(plaintext, 'utf8'),
+    cipher.final(),
+  ]);
   const tag = cipher.getAuthTag();
   return `v1:${iv.toString('hex')}:${tag.toString('hex')}:${ciphertextBuf.toString('hex')}`;
 }
@@ -27,7 +30,9 @@ export function decrypt(ciphertext) {
   const key = getSecret();
   const parts = ciphertext.split(':');
   if (parts.length !== 4 || parts[0] !== 'v1') {
-    throw new Error('Invalid ciphertext format — expected v1:<iv>:<tag>:<ciphertext>');
+    throw new Error(
+      'Invalid ciphertext format — expected v1:<iv>:<tag>:<ciphertext>'
+    );
   }
   const [, ivHex, tagHex, ctHex] = parts;
   const iv = Buffer.from(ivHex, 'hex');

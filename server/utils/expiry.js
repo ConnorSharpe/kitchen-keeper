@@ -15,7 +15,7 @@ export function getExpiryDays(expiryDateStr) {
 export function getExpiryStatus(expiryDateStr) {
   const days = getExpiryDays(expiryDateStr);
   if (days === null) return 'none';
-  if (days < 0)  return 'expired';
+  if (days < 0) return 'expired';
   if (days <= 2) return 'critical';
   if (days <= 7) return 'warning';
   return 'ok';

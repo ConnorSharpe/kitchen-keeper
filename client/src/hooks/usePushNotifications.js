@@ -3,8 +3,8 @@ import { api } from '../api/index.js';
 
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64  = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw     = atob(base64);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 }
 
@@ -15,10 +15,10 @@ async function getSWRegistration() {
 }
 
 export function usePushNotifications() {
-  const [permission,   setPermission]   = useState(Notification.permission);
+  const [permission, setPermission] = useState(Notification.permission);
   const [subscription, setSubscription] = useState(null);
-  const [loading,      setLoading]      = useState(false);
-  const [error,        setError]        = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // On mount: register SW (idempotent via getSWRegistration), then check for existing sub.
   // Register first — navigator.serviceWorker.ready hangs indefinitely on first visit
@@ -41,7 +41,7 @@ export function usePushNotifications() {
       await navigator.serviceWorker.ready;
 
       const sub = await reg.pushManager.subscribe({
-        userVisibleOnly:      true,
+        userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(publicKey),
       });
 
@@ -61,7 +61,9 @@ export function usePushNotifications() {
     setLoading(true);
     setError(null);
     try {
-      await api.post('/api/push/unsubscribe', { endpoint: subscription.endpoint });
+      await api.post('/api/push/unsubscribe', {
+        endpoint: subscription.endpoint,
+      });
       await subscription.unsubscribe();
       setSubscription(null);
     } catch (err) {
@@ -73,5 +75,13 @@ export function usePushNotifications() {
 
   const isSupported = 'serviceWorker' in navigator && 'PushManager' in window;
 
-  return { isSupported, permission, subscription, loading, error, subscribe, unsubscribe };
+  return {
+    isSupported,
+    permission,
+    subscription,
+    loading,
+    error,
+    subscribe,
+    unsubscribe,
+  };
 }

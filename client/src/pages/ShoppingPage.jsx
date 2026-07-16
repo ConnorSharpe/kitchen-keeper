@@ -6,14 +6,19 @@ import ShoppingList from '../components/shopping/ShoppingList.jsx';
 
 export default function ShoppingPage() {
   const { lists, loading, fetchLists, buildList, removeList } = useShopping();
-  const [selectedId, setSelectedId]     = useState(null);
-  const [showBuildModal, setShowModal]  = useState(false);
+  const [selectedId, setSelectedId] = useState(null);
+  const [showBuildModal, setShowModal] = useState(false);
 
-  useEffect(() => { fetchLists(); }, [fetchLists]);
+  useEffect(() => {
+    fetchLists();
+  }, [fetchLists]);
 
   // Auto-select first list when the list loads or changes
   useEffect(() => {
-    if (lists.length > 0 && (selectedId === null || !lists.find((l) => l.id === selectedId))) {
+    if (
+      lists.length > 0 &&
+      (selectedId === null || !lists.find((l) => l.id === selectedId))
+    ) {
       setSelectedId(lists[0].id);
     } else if (lists.length === 0) {
       setSelectedId(null);
@@ -27,7 +32,8 @@ export default function ShoppingPage() {
   }
 
   async function handleDelete(listId) {
-    if (!window.confirm('Delete this shopping list? This cannot be undone.')) return;
+    if (!window.confirm('Delete this shopping list? This cannot be undone.'))
+      return;
     try {
       await removeList(listId);
       toast.success('List deleted.');
@@ -65,9 +71,13 @@ export default function ShoppingPage() {
       ) : lists.length === 0 ? (
         /* Empty state */
         <div className="flex-1 flex flex-col items-center justify-center text-center py-16">
-          <span className="text-5xl mb-4" aria-hidden>🛒</span>
+          <span className="text-5xl mb-4" aria-hidden>
+            🛒
+          </span>
           <p className="text-lg font-medium text-gray-700">No lists yet.</p>
-          <p className="text-sm text-gray-400 mt-1">Build one from your saved recipes.</p>
+          <p className="text-sm text-gray-400 mt-1">
+            Build one from your saved recipes.
+          </p>
           <button
             onClick={() => setShowModal(true)}
             className="mt-6 px-5 py-2.5 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700"
@@ -101,7 +111,10 @@ export default function ShoppingPage() {
                   {list.name}
                 </span>
                 <button
-                  onClick={(e) => { e.stopPropagation(); handleDelete(list.id); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(list.id);
+                  }}
                   title="Delete list"
                   className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-colors text-xs ml-1 flex-shrink-0"
                   aria-label={`Delete list "${list.name}"`}
@@ -117,9 +130,12 @@ export default function ShoppingPage() {
             {selectedList ? (
               <>
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-semibold text-gray-900 text-lg">{selectedList.name}</h2>
+                  <h2 className="font-semibold text-gray-900 text-lg">
+                    {selectedList.name}
+                  </h2>
                   <span className="text-xs text-gray-400">
-                    Created {new Date(selectedList.createdAt).toLocaleDateString()}
+                    Created{' '}
+                    {new Date(selectedList.createdAt).toLocaleDateString()}
                   </span>
                 </div>
                 <ShoppingList key={selectedId} listId={selectedId} />

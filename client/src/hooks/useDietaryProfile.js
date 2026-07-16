@@ -2,14 +2,17 @@ import { useState, useEffect } from 'react';
 import { api } from '../api/index.js';
 
 export function useDietaryProfile() {
-  const [profile, setProfile]   = useState(null);
-  const [loading, setLoading]   = useState(true);
-  const [saving, setSaving]     = useState(false);
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    api.get('/api/dietary')
+    api
+      .get('/api/dietary')
       .then((data) => setProfile(data))
-      .catch(() => setProfile({ conditions: [], allergies: [], foodPreferences: [] }))
+      .catch(() =>
+        setProfile({ conditions: [], allergies: [], foodPreferences: [] })
+      )
       .finally(() => setLoading(false));
   }, []);
 

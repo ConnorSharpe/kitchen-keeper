@@ -14,17 +14,28 @@ try {
   }
 } catch (err) {
   loadError = err;
-  console.error('[shelfLifeService] Failed to load foodkeeper.json:', err.message);
+  console.error(
+    '[shelfLifeService] Failed to load foodkeeper.json:',
+    err.message
+  );
 }
 
 function selectStorageContext(entry, storageLocation) {
   if (storageLocation) {
     const days = entry[`${storageLocation}Days`];
-    return days > 0 ? { storageContext: storageLocation, recommendedDays: days } : null;
+    return days > 0
+      ? { storageContext: storageLocation, recommendedDays: days }
+      : null;
   }
-  if (entry.pantryDays > 0) return { storageContext: 'pantry', recommendedDays: entry.pantryDays };
-  if (entry.refrigeratorDays > 0) return { storageContext: 'refrigerator', recommendedDays: entry.refrigeratorDays };
-  if (entry.freezerDays > 0) return { storageContext: 'freezer', recommendedDays: entry.freezerDays };
+  if (entry.pantryDays > 0)
+    return { storageContext: 'pantry', recommendedDays: entry.pantryDays };
+  if (entry.refrigeratorDays > 0)
+    return {
+      storageContext: 'refrigerator',
+      recommendedDays: entry.refrigeratorDays,
+    };
+  if (entry.freezerDays > 0)
+    return { storageContext: 'freezer', recommendedDays: entry.freezerDays };
   return null;
 }
 
@@ -45,21 +56,24 @@ export function lookup(itemName, storageLocation) {
 
     // 2. Normalized query is a substring of a FoodKeeper name
     if (!entry) {
-      entry = data.find(e => e.name.includes(normalized));
+      entry = data.find((e) => e.name.includes(normalized));
       matchType = 'substring';
     }
 
     // 3. A FoodKeeper name is a substring of the normalized query
     if (!entry) {
-      entry = data.find(e => normalized.includes(e.name));
+      entry = data.find((e) => normalized.includes(e.name));
       matchType = 'substring';
     }
 
     if (!entry) {
       // Only log if it looks like a real food name, not a PLU/SKU
-      const isPluOrSku = /^\d+$/.test(normalized) || /^[a-z]{1,4}\s*\d+/.test(normalized);
+      const isPluOrSku =
+        /^\d+$/.test(normalized) || /^[a-z]{1,4}\s*\d+/.test(normalized);
       if (!isPluOrSku && normalized.length >= 3 && /[a-z]/.test(normalized)) {
-        console.log(`[shelfLifeService] miss normalized="${normalized}" original="${itemName}"`);
+        console.log(
+          `[shelfLifeService] miss normalized="${normalized}" original="${itemName}"`
+        );
       }
       return null;
     }

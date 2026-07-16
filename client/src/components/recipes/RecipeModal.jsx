@@ -2,13 +2,18 @@ import { useState } from 'react';
 import toast from 'react-hot-toast';
 
 const SOURCE_BADGE = {
-  upload:       { label: 'Uploaded',     cls: 'bg-blue-100 text-blue-700' },
+  upload: { label: 'Uploaded', cls: 'bg-blue-100 text-blue-700' },
   ai_suggested: { label: 'AI Suggested', cls: 'bg-purple-100 text-purple-700' },
-  web_suggested:{ label: 'From Web',     cls: 'bg-orange-100 text-orange-700' },
-  manual:       { label: 'Manual',       cls: 'bg-gray-100 text-gray-600' },
+  web_suggested: { label: 'From Web', cls: 'bg-orange-100 text-orange-700' },
+  manual: { label: 'Manual', cls: 'bg-gray-100 text-gray-600' },
 };
 
-export default function RecipeModal({ recipe, onClose, onDelete, onToggleFavorite }) {
+export default function RecipeModal({
+  recipe,
+  onClose,
+  onDelete,
+  onToggleFavorite,
+}) {
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -34,7 +39,9 @@ export default function RecipeModal({ recipe, onClose, onDelete, onToggleFavorit
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header image */}
@@ -46,7 +53,9 @@ export default function RecipeModal({ recipe, onClose, onDelete, onToggleFavorit
           />
         ) : (
           <div className="h-24 bg-gradient-to-br from-orange-50 to-amber-100 flex items-center justify-center flex-shrink-0">
-            <span className="text-5xl" aria-hidden>🍽️</span>
+            <span className="text-5xl" aria-hidden>
+              🍽️
+            </span>
           </div>
         )}
 
@@ -58,7 +67,9 @@ export default function RecipeModal({ recipe, onClose, onDelete, onToggleFavorit
             <button
               onClick={() => onToggleFavorite(recipe.id)}
               className="text-2xl leading-none flex-shrink-0"
-              aria-label={recipe.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+              aria-label={
+                recipe.isFavorite ? 'Remove from favorites' : 'Add to favorites'
+              }
             >
               {recipe.isFavorite ? '★' : '☆'}
             </button>
@@ -66,7 +77,9 @@ export default function RecipeModal({ recipe, onClose, onDelete, onToggleFavorit
 
           {/* Source badge + URL */}
           <div className="flex items-center gap-2 mb-3">
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badge.cls}`}>
+            <span
+              className={`text-xs px-2 py-0.5 rounded-full font-medium ${badge.cls}`}
+            >
               {badge.label}
             </span>
             {recipe.sourceUrl && (
@@ -89,17 +102,20 @@ export default function RecipeModal({ recipe, onClose, onDelete, onToggleFavorit
 
           {/* Meta row */}
           <div className="flex flex-wrap gap-4 text-sm text-gray-500 mb-5">
-            {recipe.servings   && <span>🍽 {recipe.servings} servings</span>}
-            {recipe.prepMins   && <span>🥄 {recipe.prepMins} min prep</span>}
-            {recipe.cookMins   && <span>🔥 {recipe.cookMins} min cook</span>}
-            {totalMins > 0     && <span>⏱ {totalMins} min total</span>}
+            {recipe.servings && <span>🍽 {recipe.servings} servings</span>}
+            {recipe.prepMins && <span>🥄 {recipe.prepMins} min prep</span>}
+            {recipe.cookMins && <span>🔥 {recipe.cookMins} min cook</span>}
+            {totalMins > 0 && <span>⏱ {totalMins} min total</span>}
           </div>
 
           {/* Tags */}
           {recipe.tags?.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-5">
               {recipe.tags.map((tag) => (
-                <span key={tag} className="text-xs bg-gray-100 text-gray-600 rounded px-2 py-0.5">
+                <span
+                  key={tag}
+                  className="text-xs bg-gray-100 text-gray-600 rounded px-2 py-0.5"
+                >
                   {tag}
                 </span>
               ))}
@@ -109,7 +125,9 @@ export default function RecipeModal({ recipe, onClose, onDelete, onToggleFavorit
           {/* Ingredients */}
           {recipe.ingredients?.length > 0 && (
             <section className="mb-5">
-              <h3 className="text-sm font-semibold text-gray-800 mb-2">Ingredients</h3>
+              <h3 className="text-sm font-semibold text-gray-800 mb-2">
+                Ingredients
+              </h3>
               <ul className="space-y-1">
                 {recipe.ingredients.map((ing, i) => (
                   <li key={i} className="text-sm text-gray-700 flex gap-2">
@@ -118,11 +136,12 @@ export default function RecipeModal({ recipe, onClose, onDelete, onToggleFavorit
                       {ing.quantity != null && `${ing.quantity} `}
                       {ing.unit && `${ing.unit} `}
                       {ing.name}
-                      {typeof ing.substitute === 'string' && ing.substitute.trim() !== '' && (
-                        <span className="text-amber-600 text-xs ml-1.5 font-medium">
-                          → pantry sub: {ing.substitute}
-                        </span>
-                      )}
+                      {typeof ing.substitute === 'string' &&
+                        ing.substitute.trim() !== '' && (
+                          <span className="text-amber-600 text-xs ml-1.5 font-medium">
+                            → pantry sub: {ing.substitute}
+                          </span>
+                        )}
                     </span>
                   </li>
                 ))}
@@ -133,7 +152,9 @@ export default function RecipeModal({ recipe, onClose, onDelete, onToggleFavorit
           {/* Steps */}
           {recipe.steps?.length > 0 && (
             <section>
-              <h3 className="text-sm font-semibold text-gray-800 mb-2">Instructions</h3>
+              <h3 className="text-sm font-semibold text-gray-800 mb-2">
+                Instructions
+              </h3>
               <ol className="space-y-3">
                 {recipe.steps.map((step, i) => (
                   <li key={i} className="flex gap-3 text-sm text-gray-700">

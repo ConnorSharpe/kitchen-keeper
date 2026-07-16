@@ -11,33 +11,47 @@ import {
 } from './foodNormalization.js';
 
 describe('normalizeFood — direct plurals (no chain)', () => {
-  test('"tomatoes" → "tomato"',  () => assert.equal(normalizeFood('tomatoes'),  'tomato'));
-  test('"anchovies" → "anchovy"', () => assert.equal(normalizeFood('anchovies'), 'anchovy'));
-  test('"peas" → "pea"',         () => assert.equal(normalizeFood('peas'),      'pea'));
+  test('"tomatoes" → "tomato"', () =>
+    assert.equal(normalizeFood('tomatoes'), 'tomato'));
+  test('"anchovies" → "anchovy"', () =>
+    assert.equal(normalizeFood('anchovies'), 'anchovy'));
+  test('"peas" → "pea"', () => assert.equal(normalizeFood('peas'), 'pea'));
 });
 
 describe('normalizeFood — chain-resolved plurals', () => {
-  test('"scallions" → "green onion" (not "scallion")',   () => assert.equal(normalizeFood('scallions'), 'green onion'));
-  test('"zucchinis" → "courgette" (not "zucchini")',     () => assert.equal(normalizeFood('zucchinis'), 'courgette'));
-  test('"eggplants" → "aubergine" (not "eggplant")',     () => assert.equal(normalizeFood('eggplants'), 'aubergine'));
+  test('"scallions" → "green onion" (not "scallion")', () =>
+    assert.equal(normalizeFood('scallions'), 'green onion'));
+  test('"zucchinis" → "courgette" (not "zucchini")', () =>
+    assert.equal(normalizeFood('zucchinis'), 'courgette'));
+  test('"eggplants" → "aubergine" (not "eggplant")', () =>
+    assert.equal(normalizeFood('eggplants'), 'aubergine'));
 });
 
 describe('normalizeFood — synonyms', () => {
-  test('"scallion" → "green onion"',  () => assert.equal(normalizeFood('scallion'),  'green onion'));
-  test('"cilantro" → "coriander"',    () => assert.equal(normalizeFood('cilantro'),  'coriander'));
-  test('"zucchini" → "courgette"',    () => assert.equal(normalizeFood('zucchini'),  'courgette'));
+  test('"scallion" → "green onion"', () =>
+    assert.equal(normalizeFood('scallion'), 'green onion'));
+  test('"cilantro" → "coriander"', () =>
+    assert.equal(normalizeFood('cilantro'), 'coriander'));
+  test('"zucchini" → "courgette"', () =>
+    assert.equal(normalizeFood('zucchini'), 'courgette'));
 });
 
 describe('normalizeFood — preparation expansions', () => {
-  test('"chicken broth" → "chicken"',       () => assert.equal(normalizeFood('chicken broth'),  'chicken'));
-  test('"ground beef" → "beef"',            () => assert.equal(normalizeFood('ground beef'),     'beef'));
-  test('"heart of palm" → "palm vegetable"', () => assert.equal(normalizeFood('heart of palm'), 'palm vegetable'));
+  test('"chicken broth" → "chicken"', () =>
+    assert.equal(normalizeFood('chicken broth'), 'chicken'));
+  test('"ground beef" → "beef"', () =>
+    assert.equal(normalizeFood('ground beef'), 'beef'));
+  test('"heart of palm" → "palm vegetable"', () =>
+    assert.equal(normalizeFood('heart of palm'), 'palm vegetable'));
 });
 
 describe('normalizeFood — non-breaking passthrough', () => {
-  test('"cheese" → "cheese"',  () => assert.equal(normalizeFood('cheese'),  'cheese'));
-  test('"hummus" → "hummus"',  () => assert.equal(normalizeFood('hummus'),  'hummus'));
-  test('"glass" → "glass"',    () => assert.equal(normalizeFood('glass'),   'glass'));
+  test('"cheese" → "cheese"', () =>
+    assert.equal(normalizeFood('cheese'), 'cheese'));
+  test('"hummus" → "hummus"', () =>
+    assert.equal(normalizeFood('hummus'), 'hummus'));
+  test('"glass" → "glass"', () =>
+    assert.equal(normalizeFood('glass'), 'glass'));
 });
 
 describe('foodsMatch', () => {
@@ -45,8 +59,10 @@ describe('foodsMatch', () => {
     assert.equal(foodsMatch('kidney bean soup', 'kidney bean stew'), true));
   test('false: "red bean" / "bean sprouts" (1 shared token only)', () =>
     assert.equal(foodsMatch('red bean', 'bean sprouts'), false));
-  test('false: "pea" / "peach"',    () => assert.equal(foodsMatch('pea',  'peach'),     false));
-  test('false: "ham" / "chamomile"', () => assert.equal(foodsMatch('ham', 'chamomile'), false));
+  test('false: "pea" / "peach"', () =>
+    assert.equal(foodsMatch('pea', 'peach'), false));
+  test('false: "ham" / "chamomile"', () =>
+    assert.equal(foodsMatch('ham', 'chamomile'), false));
 
   // TASK-035 Part B2: plural handling for single-token targeted queries
   test('true: "onion" / "onions" (exact match via normalizeFood plural map)', () =>
@@ -72,15 +88,21 @@ describe('containsWholeWord', () => {
 
 describe('lightNormalizeForAllergy', () => {
   test('lowercases and strips punctuation', () =>
-    assert.equal(lightNormalizeForAllergy('Almond (Sliced)!'), 'almond sliced'));
+    assert.equal(
+      lightNormalizeForAllergy('Almond (Sliced)!'),
+      'almond sliced'
+    ));
   test('does not expand synonyms', () =>
     assert.equal(lightNormalizeForAllergy('cilantro'), 'cilantro'));
 });
 
 describe('normalizeUnit', () => {
-  test('"tbsp" → "tablespoon"', () => assert.equal(normalizeUnit('tbsp'),  'tablespoon'));
-  test('"ml" → "milliliter"',   () => assert.equal(normalizeUnit('ml'),    'milliliter'));
-  test('unknown passthrough',    () => assert.equal(normalizeUnit('pinch'), 'pinch'));
+  test('"tbsp" → "tablespoon"', () =>
+    assert.equal(normalizeUnit('tbsp'), 'tablespoon'));
+  test('"ml" → "milliliter"', () =>
+    assert.equal(normalizeUnit('ml'), 'milliliter'));
+  test('unknown passthrough', () =>
+    assert.equal(normalizeUnit('pinch'), 'pinch'));
 });
 
 describe('expandAllergen', () => {
@@ -101,17 +123,31 @@ describe('expandAllergen + containsWholeWord', () => {
   });
   test('"shellfish" does NOT match "fish"', () => {
     const terms = expandAllergen('shellfish');
-    assert.equal(terms.some((t) => containsWholeWord('fish', t)), false);
+    assert.equal(
+      terms.some((t) => containsWholeWord('fish', t)),
+      false
+    );
   });
 });
 
 describe('stripIngredientPrefix', () => {
-  test('"2 cloves of garlic" → "garlic"',          () => assert.equal(stripIngredientPrefix('2 cloves of garlic'),     'garlic'));
-  test('"500g chicken breast" → "chicken breast"', () => assert.equal(stripIngredientPrefix('500g chicken breast'),    'chicken breast'));
-  test('"1/2 cup olive oil" → "olive oil"',        () => assert.equal(stripIngredientPrefix('1/2 cup olive oil'),      'olive oil'));
-  test('"1 x onion" → "onion"',                    () => assert.equal(stripIngredientPrefix('1 x onion'),              'onion'));
-  test('"2 cans tomatoes" → "tomatoes"',            () => assert.equal(stripIngredientPrefix('2 cans tomatoes'),        'tomatoes'));
-  test('"3 large eggs" → "eggs"',                   () => assert.equal(stripIngredientPrefix('3 large eggs'),           'eggs'));
-  test('"14 oz diced tomatoes" → "tomatoes"',       () => assert.equal(stripIngredientPrefix('14 oz diced tomatoes'),  'tomatoes'));
-  test('"olive oil" passthrough',                   () => assert.equal(stripIngredientPrefix('olive oil'),              'olive oil'));
+  test('"2 cloves of garlic" → "garlic"', () =>
+    assert.equal(stripIngredientPrefix('2 cloves of garlic'), 'garlic'));
+  test('"500g chicken breast" → "chicken breast"', () =>
+    assert.equal(
+      stripIngredientPrefix('500g chicken breast'),
+      'chicken breast'
+    ));
+  test('"1/2 cup olive oil" → "olive oil"', () =>
+    assert.equal(stripIngredientPrefix('1/2 cup olive oil'), 'olive oil'));
+  test('"1 x onion" → "onion"', () =>
+    assert.equal(stripIngredientPrefix('1 x onion'), 'onion'));
+  test('"2 cans tomatoes" → "tomatoes"', () =>
+    assert.equal(stripIngredientPrefix('2 cans tomatoes'), 'tomatoes'));
+  test('"3 large eggs" → "eggs"', () =>
+    assert.equal(stripIngredientPrefix('3 large eggs'), 'eggs'));
+  test('"14 oz diced tomatoes" → "tomatoes"', () =>
+    assert.equal(stripIngredientPrefix('14 oz diced tomatoes'), 'tomatoes'));
+  test('"olive oil" passthrough', () =>
+    assert.equal(stripIngredientPrefix('olive oil'), 'olive oil'));
 });

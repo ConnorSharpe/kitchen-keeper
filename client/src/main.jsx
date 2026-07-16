@@ -5,11 +5,14 @@ import App from './App.jsx';
 import './index.css';
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+  window.addEventListener('load', () =>
+    navigator.serviceWorker.register('/sw.js')
+  );
 }
 
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-if (!publishableKey) throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY env var');
+if (!publishableKey)
+  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY env var');
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

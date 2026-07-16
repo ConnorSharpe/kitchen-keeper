@@ -4,12 +4,17 @@ const isIosPwa =
   /iPad|iPhone|iPod/.test(navigator.userAgent) &&
   window.navigator.standalone === true;
 
-export function useBrowserSpeechInput({ lang = navigator.language, onResult, onError } = {}) {
+export function useBrowserSpeechInput({
+  lang = navigator.language,
+  onResult,
+  onError,
+} = {}) {
   const recognitionRef = useRef(null);
   const [listening, setListening] = useState(false);
 
   const isTouch = window.matchMedia('(pointer: coarse)').matches;
-  const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const SpeechRecognitionAPI =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
   const supported = isTouch && !!SpeechRecognitionAPI && !isIosPwa;
 
   useEffect(() => {
@@ -37,7 +42,10 @@ export function useBrowserSpeechInput({ lang = navigator.language, onResult, onE
           onError?.(event.error);
           break;
         default:
-          console.warn('[useBrowserSpeechInput] recognition error:', event.error);
+          console.warn(
+            '[useBrowserSpeechInput] recognition error:',
+            event.error
+          );
       }
       setListening(false);
     };
@@ -62,7 +70,11 @@ export function useBrowserSpeechInput({ lang = navigator.language, onResult, onE
     if (!recognition) return;
 
     if (listening) {
-      try { recognition.abort(); } catch { /* ignore */ }
+      try {
+        recognition.abort();
+      } catch {
+        /* ignore */
+      }
       setListening(false);
     } else {
       try {

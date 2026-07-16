@@ -21,7 +21,12 @@ function buildPantryStructures(pantryItems) {
 
 export function score(recipe, pantryItems) {
   const ingredients = recipe.ingredients ?? [];
-  if (!ingredients.length) return { overlapScore: 0, matchedIngredients: [], unmatchedIngredients: [] };
+  if (!ingredients.length)
+    return {
+      overlapScore: 0,
+      matchedIngredients: [],
+      unmatchedIngredients: [],
+    };
 
   const { exactMap, keysList } = buildPantryStructures(pantryItems);
   const matched = [];
@@ -34,7 +39,7 @@ export function score(recipe, pantryItems) {
     // foodsMatch() for fuzzy fallback — token-based overlap, not raw substring.
     // Raw substring was removed: it reintroduced "pea"→"peach" and "ham"→"chamomile" false positives.
     const fuzzyHit = !exactHit && keysList.some((k) => foodsMatch(k, ingNorm));
-    (exactHit || fuzzyHit) ? matched.push(ing.name) : unmatched.push(ing.name);
+    exactHit || fuzzyHit ? matched.push(ing.name) : unmatched.push(ing.name);
   }
 
   return {
@@ -58,7 +63,10 @@ export function annotateHealth(recipe, dietaryProfile) {
       const ingLight = lightNormalizeForAllergy(i.name);
       return allergenTerms.some((term) => containsWholeWord(ingLight, term));
     });
-    if (hit) { allergyHit = allergen; break; }
+    if (hit) {
+      allergyHit = allergen;
+      break;
+    }
   }
 
   // Purine (soft advisory for gout): null category — recipe ingredients have no category.
@@ -68,7 +76,8 @@ export function annotateHealth(recipe, dietaryProfile) {
       (i) => getPurineLevel(stripIngredientPrefix(i.name), null) === 'high'
     ).length;
     if (highCount >= 2) healthNote = 'high-purine — moderate given gout';
-    else if (highCount === 1) healthNote = 'contains one high-purine ingredient — moderate given gout';
+    else if (highCount === 1)
+      healthNote = 'contains one high-purine ingredient — moderate given gout';
   }
 
   return {

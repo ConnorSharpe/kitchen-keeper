@@ -1,10 +1,36 @@
 import { useState } from 'react';
 
 const TAGS = [
-  'breakfast','lunch','dinner','snack','dessert','drink',
-  'italian','mexican','asian','american','mediterranean','indian','french','thai','japanese','greek','chinese',
-  'vegetarian','vegan','gluten-free','dairy-free','low-carb','keto','paleo',
-  'quick','easy','slow-cooker','one-pot','meal-prep','freezer-friendly',
+  'breakfast',
+  'lunch',
+  'dinner',
+  'snack',
+  'dessert',
+  'drink',
+  'italian',
+  'mexican',
+  'asian',
+  'american',
+  'mediterranean',
+  'indian',
+  'french',
+  'thai',
+  'japanese',
+  'greek',
+  'chinese',
+  'vegetarian',
+  'vegan',
+  'gluten-free',
+  'dairy-free',
+  'low-carb',
+  'keto',
+  'paleo',
+  'quick',
+  'easy',
+  'slow-cooker',
+  'one-pot',
+  'meal-prep',
+  'freezer-friendly',
 ];
 
 export default function RecipeReviewModal({ recipe, onSave, onClose }) {
@@ -24,36 +50,45 @@ export default function RecipeReviewModal({ recipe, onSave, onClose }) {
 
   // --- Ingredient helpers ---
   function updateIngredient(key, field, value) {
-    setIngredients(prev => prev.map(ing => ing._key === key ? { ...ing, [field]: value } : ing));
+    setIngredients((prev) =>
+      prev.map((ing) => (ing._key === key ? { ...ing, [field]: value } : ing))
+    );
   }
   function addIngredient() {
-    setIngredients(prev => [...prev, { name: '', quantity: '', unit: '', _key: Date.now() }]);
+    setIngredients((prev) => [
+      ...prev,
+      { name: '', quantity: '', unit: '', _key: Date.now() },
+    ]);
   }
   function removeIngredient(key) {
-    setIngredients(prev => prev.filter(ing => ing._key !== key));
+    setIngredients((prev) => prev.filter((ing) => ing._key !== key));
   }
 
   // --- Step helpers ---
   function updateStep(key, value) {
-    setSteps(prev => prev.map(s => s._key === key ? { ...s, text: value } : s));
+    setSteps((prev) =>
+      prev.map((s) => (s._key === key ? { ...s, text: value } : s))
+    );
   }
   function addStep() {
-    setSteps(prev => [...prev, { text: '', _key: Date.now() }]);
+    setSteps((prev) => [...prev, { text: '', _key: Date.now() }]);
   }
   function insertStepAfter(index) {
-    setSteps(prev => {
+    setSteps((prev) => {
       const next = [...prev];
       next.splice(index + 1, 0, { text: '', _key: crypto.randomUUID() });
       return next;
     });
   }
   function removeStep(key) {
-    setSteps(prev => prev.filter(s => s._key !== key));
+    setSteps((prev) => prev.filter((s) => s._key !== key));
   }
 
   // --- Tag helpers ---
   function toggleTag(tag) {
-    setTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
+    setTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
   }
 
   function handleSave() {
@@ -62,13 +97,14 @@ export default function RecipeReviewModal({ recipe, onSave, onClose }) {
       name: name.trim(),
       description: description.trim() || null,
       ingredients: ingredients
-        .filter(ing => ing.name.trim())
+        .filter((ing) => ing.name.trim())
         .map(({ name: n, quantity, unit }) => ({
           name: n.trim(),
-          quantity: quantity === '' || quantity == null ? null : Number(quantity),
+          quantity:
+            quantity === '' || quantity == null ? null : Number(quantity),
           unit: unit?.trim() || null,
         })),
-      steps: steps.map(s => s.text.trim()).filter(Boolean),
+      steps: steps.map((s) => s.text.trim()).filter(Boolean),
       servings: servings === '' ? null : Number(servings),
       prepMins: prepMins === '' ? null : Number(prepMins),
       cookMins: cookMins === '' ? null : Number(cookMins),
@@ -81,14 +117,20 @@ export default function RecipeReviewModal({ recipe, onSave, onClose }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Review Extracted Recipe</h2>
-            <p className="text-xs text-orange-600 mt-0.5">AI extracted this — please review before saving</p>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Review Extracted Recipe
+            </h2>
+            <p className="text-xs text-orange-600 mt-0.5">
+              AI extracted this — please review before saving
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -101,14 +143,15 @@ export default function RecipeReviewModal({ recipe, onSave, onClose }) {
 
         {/* Scrollable body */}
         <div className="overflow-y-auto flex-1 px-6 py-4 space-y-5">
-
           {/* Name */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Recipe Name *</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Recipe Name *
+            </label>
             <input
               type="text"
               value={name}
-              onChange={e => setName(e.target.value)}
+              onChange={(e) => setName(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
               placeholder="Recipe name"
             />
@@ -116,10 +159,12 @@ export default function RecipeReviewModal({ recipe, onSave, onClose }) {
 
           {/* Description */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Description
+            </label>
             <textarea
               value={description}
-              onChange={e => setDescription(e.target.value)}
+              onChange={(e) => setDescription(e.target.value)}
               rows={2}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
               placeholder="Brief description (optional)"
@@ -129,31 +174,40 @@ export default function RecipeReviewModal({ recipe, onSave, onClose }) {
           {/* Time + Servings */}
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Servings</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Servings
+              </label>
               <input
-                type="number" min="1"
+                type="number"
+                min="1"
                 value={servings}
-                onChange={e => setServings(e.target.value)}
+                onChange={(e) => setServings(e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                 placeholder="—"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Prep (mins)</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Prep (mins)
+              </label>
               <input
-                type="number" min="0"
+                type="number"
+                min="0"
                 value={prepMins}
-                onChange={e => setPrepMins(e.target.value)}
+                onChange={(e) => setPrepMins(e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                 placeholder="—"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Cook (mins)</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Cook (mins)
+              </label>
               <input
-                type="number" min="0"
+                type="number"
+                min="0"
                 value={cookMins}
-                onChange={e => setCookMins(e.target.value)}
+                onChange={(e) => setCookMins(e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                 placeholder="—"
               />
@@ -162,28 +216,36 @@ export default function RecipeReviewModal({ recipe, onSave, onClose }) {
 
           {/* Ingredients */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-2">Ingredients</label>
+            <label className="block text-xs font-medium text-gray-700 mb-2">
+              Ingredients
+            </label>
             <div className="space-y-2">
-              {ingredients.map(ing => (
+              {ingredients.map((ing) => (
                 <div key={ing._key} className="flex gap-2 items-center">
                   <input
                     type="text"
                     value={ing.name}
-                    onChange={e => updateIngredient(ing._key, 'name', e.target.value)}
+                    onChange={(e) =>
+                      updateIngredient(ing._key, 'name', e.target.value)
+                    }
                     placeholder="Ingredient"
                     className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                   />
                   <input
                     type="text"
                     value={ing.quantity ?? ''}
-                    onChange={e => updateIngredient(ing._key, 'quantity', e.target.value)}
+                    onChange={(e) =>
+                      updateIngredient(ing._key, 'quantity', e.target.value)
+                    }
                     placeholder="Qty"
                     className="w-16 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                   />
                   <input
                     type="text"
                     value={ing.unit ?? ''}
-                    onChange={e => updateIngredient(ing._key, 'unit', e.target.value)}
+                    onChange={(e) =>
+                      updateIngredient(ing._key, 'unit', e.target.value)
+                    }
                     placeholder="Unit"
                     className="w-20 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                   />
@@ -207,15 +269,19 @@ export default function RecipeReviewModal({ recipe, onSave, onClose }) {
 
           {/* Steps */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-2">Steps</label>
+            <label className="block text-xs font-medium text-gray-700 mb-2">
+              Steps
+            </label>
             <div className="space-y-2">
               {steps.map((s, idx) => (
                 <div key={s._key}>
                   <div className="flex gap-2 items-start">
-                    <span className="text-xs text-gray-400 mt-2.5 w-5 flex-shrink-0">{idx + 1}.</span>
+                    <span className="text-xs text-gray-400 mt-2.5 w-5 flex-shrink-0">
+                      {idx + 1}.
+                    </span>
                     <textarea
                       value={s.text}
-                      onChange={e => updateStep(s._key, e.target.value)}
+                      onChange={(e) => updateStep(s._key, e.target.value)}
                       rows={2}
                       placeholder={`Step ${idx + 1}`}
                       className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
@@ -253,9 +319,11 @@ export default function RecipeReviewModal({ recipe, onSave, onClose }) {
 
           {/* Tags */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-2">Tags</label>
+            <label className="block text-xs font-medium text-gray-700 mb-2">
+              Tags
+            </label>
             <div className="flex flex-wrap gap-1.5">
-              {TAGS.map(tag => (
+              {TAGS.map((tag) => (
                 <button
                   key={tag}
                   onClick={() => toggleTag(tag)}

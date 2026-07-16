@@ -15,14 +15,23 @@ export async function add(householdId, { source, sourceId, name }) {
   const [row] = await db
     .insert(recipeBlocklist)
     .values({ householdId, source, sourceId, name })
-    .onConflictDoNothing({ target: [recipeBlocklist.householdId, recipeBlocklist.source, recipeBlocklist.sourceId] })
+    .onConflictDoNothing({
+      target: [
+        recipeBlocklist.householdId,
+        recipeBlocklist.source,
+        recipeBlocklist.sourceId,
+      ],
+    })
     .returning();
   return row;
 }
 
 // Two-step ownership: find by id first (→ 404), then check householdId (→ 403).
 export async function remove(householdId, id) {
-  const [existing] = await db.select().from(recipeBlocklist).where(eq(recipeBlocklist.id, id));
+  const [existing] = await db
+    .select()
+    .from(recipeBlocklist)
+    .where(eq(recipeBlocklist.id, id));
   if (!existing) return { status: 'not_found' };
   if (existing.householdId !== householdId) return { status: 'forbidden' };
 
@@ -33,7 +42,10 @@ export async function remove(householdId, id) {
 // Freshly-constructed Set per call — callers must treat it as read-only (not cached/shared).
 export async function getBlockedKeys(householdId) {
   const rows = await db
-    .select({ source: recipeBlocklist.source, sourceId: recipeBlocklist.sourceId })
+    .select({
+      source: recipeBlocklist.source,
+      sourceId: recipeBlocklist.sourceId,
+    })
     .from(recipeBlocklist)
     .where(eq(recipeBlocklist.householdId, householdId));
   return new Set(rows.map((r) => `${r.source}:${r.sourceId}`));

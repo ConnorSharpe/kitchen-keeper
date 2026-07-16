@@ -12,8 +12,8 @@ function formatQty(n) {
 }
 
 const SUGGESTED_PROMPTS = [
-  "What can I make with what I have?",
-  "How do I store leftovers to make them last longer?",
+  'What can I make with what I have?',
+  'How do I store leftovers to make them last longer?',
   "What's a good substitute for eggs in baking?",
 ];
 
@@ -23,16 +23,21 @@ function nextTempId() {
 }
 
 export default function ChatPage() {
-  const [messages, setMessages]       = useState([]);
-  const [input, setInput]             = useState('');
-  const [loading, setLoading]         = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [savedRecipeNames, setSavedRecipeNames] = useState(new Set());
-  const bottomRef  = useRef(null);
+  const bottomRef = useRef(null);
   const textareaRef = useRef(null);
   const { addBlock } = useRecipeBlocklist();
 
-  const { supported: micSupported, iosPwaCaveat, listening, toggle: toggleMic } = useSpeechInput({
+  const {
+    supported: micSupported,
+    iosPwaCaveat,
+    listening,
+    toggle: toggleMic,
+  } = useSpeechInput({
     lang: navigator.language,
     onResult: (transcript) =>
       setInput((prev) => {
@@ -41,20 +46,25 @@ export default function ChatPage() {
       }),
     onError: (errorCode) => {
       if (errorCode === 'not-allowed' || errorCode === 'audio-capture') {
-        toast.error('Microphone permission denied. Check your browser settings.');
+        toast.error(
+          'Microphone permission denied. Check your browser settings.'
+        );
       }
     },
   });
 
   // Load persisted history and saved recipe names on mount
   useEffect(() => {
-    api.get('/api/ai/chat/history')
+    api
+      .get('/api/ai/chat/history')
       .then(({ messages: history }) => {
-        setMessages(history.map((m) => ({
-          ...m,
-          key: String(m.id),
-          recipeSuggestions: m.metadata?.recipeSuggestions ?? [],
-        })));
+        setMessages(
+          history.map((m) => ({
+            ...m,
+            key: String(m.id),
+            recipeSuggestions: m.metadata?.recipeSuggestions ?? [],
+          }))
+        );
         setHistoryLoaded(true);
       })
       .catch(() => {
@@ -62,7 +72,8 @@ export default function ChatPage() {
       });
 
     // Seed savedRecipeNames so history-loaded cards show correct "Saved" state
-    api.get('/api/recipes')
+    api
+      .get('/api/recipes')
       .then(({ recipes }) => {
         setSavedRecipeNames(new Set(recipes.map((r) => r.name)));
       })
@@ -87,7 +98,10 @@ export default function ChatPage() {
     setLoading(true);
 
     try {
-      const { reply, itemsAdded, recipeSuggestions } = await api.post('/api/ai/chat', { message: userText });
+      const { reply, itemsAdded, recipeSuggestions } = await api.post(
+        '/api/ai/chat',
+        { message: userText }
+      );
       setMessages((prev) => [
         ...prev,
         {
@@ -116,7 +130,11 @@ export default function ChatPage() {
 
   async function handleBlockSuggestion(recipe) {
     try {
-      await addBlock({ source: recipe.source, sourceId: recipe.sourceId, name: recipe.name });
+      await addBlock({
+        source: recipe.source,
+        sourceId: recipe.sourceId,
+        name: recipe.name,
+      });
       toast.success(`"${recipe.name}" won't be suggested again`);
     } catch (err) {
       toast.error(err.message || 'Failed to block recipe');
@@ -142,7 +160,6 @@ export default function ChatPage() {
     // h-screen so the input bar stays at the bottom of the viewport.
     // The sidebar is sticky h-screen, so this fills the remaining column.
     <div className="h-screen flex flex-col">
-
       {/* ── Header ── */}
       <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 bg-white">
         <h1 className="text-lg font-semibold text-gray-800">Kitchen Keeper</h1>
@@ -155,12 +172,13 @@ export default function ChatPage() {
       {/* min-h-0 is required: flex children default to min-height:auto which
           prevents the container from shrinking and enabling overflow scroll */}
       <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
-
         {/* Empty state with suggested prompts */}
         {isEmpty && (
           <div className="flex flex-col items-center justify-center h-full gap-6 text-center">
             <div>
-              <p className="text-3xl mb-2" aria-hidden>🍳</p>
+              <p className="text-3xl mb-2" aria-hidden>
+                🍳
+              </p>
               <h2 className="text-base font-semibold text-gray-700">
                 What would you like to know?
               </h2>
@@ -186,198 +204,219 @@ export default function ChatPage() {
         {messages.map((msg) => {
           // TASK-034 Part C: structural suppression — when recipe cards are present, the
           // assistant's text bubble (and avatar) is not rendered at all. Cards only.
-          const hasRecipeCards = msg.role === 'assistant' && msg.recipeSuggestions?.length > 0;
+          const hasRecipeCards =
+            msg.role === 'assistant' && msg.recipeSuggestions?.length > 0;
 
           return (
-          <div key={msg.key}>
-            {!hasRecipeCards && (
-            <div
-              className={`flex items-end gap-2 ${
-                msg.role === 'user' ? 'justify-end' : 'justify-start'
-              }`}
-            >
-              {msg.role === 'assistant' && (
+            <div key={msg.key}>
+              {!hasRecipeCards && (
                 <div
-                  className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center text-sm flex-shrink-0"
-                  aria-hidden
+                  className={`flex items-end gap-2 ${
+                    msg.role === 'user' ? 'justify-end' : 'justify-start'
+                  }`}
                 >
-                  🍳
+                  {msg.role === 'assistant' && (
+                    <div
+                      className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center text-sm flex-shrink-0"
+                      aria-hidden
+                    >
+                      🍳
+                    </div>
+                  )}
+
+                  <div
+                    className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                      msg.role === 'user'
+                        ? 'bg-orange-500 text-white rounded-br-sm'
+                        : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
+                    }`}
+                  >
+                    {msg.role === 'assistant' ? (
+                      // ReactMarkdown with remark-gfm renders tables, task lists,
+                      // and strikethrough correctly — without it, pipes render as text.
+                      <div className="prose-chat">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <span className="whitespace-pre-wrap">{msg.content}</span>
+                    )}
+                  </div>
                 </div>
               )}
 
-              <div
-                className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                  msg.role === 'user'
-                    ? 'bg-orange-500 text-white rounded-br-sm'
-                    : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
-                }`}
-              >
-                {msg.role === 'assistant' ? (
-                  // ReactMarkdown with remark-gfm renders tables, task lists,
-                  // and strikethrough correctly — without it, pipes render as text.
-                  <div className="prose-chat">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {msg.content}
-                    </ReactMarkdown>
-                  </div>
-                ) : (
-                  <span className="whitespace-pre-wrap">{msg.content}</span>
-                )}
-              </div>
-            </div>
-            )}
-
-            {msg.role === 'assistant' && msg.itemsAdded?.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-1.5 ml-9">
-                {msg.itemsAdded.map((item) => (
-                  <span
-                    key={item.id}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 border border-green-200 text-xs text-green-700"
-                  >
-                    <span aria-hidden>+</span>
-                    {item.name} added to pantry
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {msg.role === 'assistant' && msg.recipeSuggestions?.length > 0 && (
-              <div className="flex flex-col gap-3 mt-2 ml-9">
-                {msg.recipeSuggestions.map((recipe) => {
-                  const prepSteps = recipe.prepSteps ?? [];
-                  const ingredients = recipe.ingredients ?? [];
-                  const isSaved = savedRecipeNames.has(recipe.name);
-
-                  return (
-                    <div
-                      key={recipe.name}
-                      className="w-full max-w-md sm:max-w-[75%] bg-white border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-800"
+              {msg.role === 'assistant' && msg.itemsAdded?.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-1.5 ml-9">
+                  {msg.itemsAdded.map((item) => (
+                    <span
+                      key={item.id}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 border border-green-200 text-xs text-green-700"
                     >
-                      {/* Header row: name + save button */}
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <div className="font-semibold leading-snug">
-                          {recipe.sourceUrl ? (
-                            <a
-                              href={recipe.sourceUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-orange-600 hover:underline"
-                            >
-                              {recipe.name} <span aria-hidden>↗</span>
-                            </a>
-                          ) : (
-                            recipe.name
+                      <span aria-hidden>+</span>
+                      {item.name} added to pantry
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {msg.role === 'assistant' &&
+                msg.recipeSuggestions?.length > 0 && (
+                  <div className="flex flex-col gap-3 mt-2 ml-9">
+                    {msg.recipeSuggestions.map((recipe) => {
+                      const prepSteps = recipe.prepSteps ?? [];
+                      const ingredients = recipe.ingredients ?? [];
+                      const isSaved = savedRecipeNames.has(recipe.name);
+
+                      return (
+                        <div
+                          key={recipe.name}
+                          className="w-full max-w-md sm:max-w-[75%] bg-white border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-800"
+                        >
+                          {/* Header row: name + save button */}
+                          <div className="flex items-start justify-between gap-2 mb-1">
+                            <div className="font-semibold leading-snug">
+                              {recipe.sourceUrl ? (
+                                <a
+                                  href={recipe.sourceUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-orange-600 hover:underline"
+                                >
+                                  {recipe.name} <span aria-hidden>↗</span>
+                                </a>
+                              ) : (
+                                recipe.name
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              <button
+                                onClick={() => handleBlockSuggestion(recipe)}
+                                className="text-sm leading-none text-gray-300 hover:text-red-500 transition-colors"
+                                aria-label="Don't suggest again"
+                                title="Don't suggest again"
+                              >
+                                🚫
+                              </button>
+                              <button
+                                onClick={() => handleSaveRecipe(recipe.name)}
+                                disabled={isSaved || loading}
+                                className="px-3 py-1 rounded-lg bg-orange-500 text-white text-xs font-medium hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              >
+                                {isSaved ? 'Saved' : 'Save Recipe'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Description */}
+                          {recipe.description && (
+                            <p className="text-gray-500 text-xs mb-2">
+                              {recipe.description}
+                            </p>
+                          )}
+
+                          {/* Time / servings metadata */}
+                          {(recipe.prepMins != null ||
+                            recipe.cookMins != null ||
+                            recipe.servings != null) && (
+                            <p className="text-xs text-gray-400 mb-3">
+                              ⏱{' '}
+                              {[
+                                recipe.prepMins != null &&
+                                  `${recipe.prepMins} min prep`,
+                                recipe.cookMins != null &&
+                                  `${recipe.cookMins} min cook`,
+                                recipe.servings != null &&
+                                  `${recipe.servings} servings`,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </p>
+                          )}
+
+                          {/* Prep steps */}
+                          {prepSteps.length > 0 && (
+                            <div className="mb-3">
+                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                                Before You Start
+                              </p>
+                              <ul className="space-y-0.5">
+                                {prepSteps.map((step, i) => (
+                                  <li
+                                    key={i}
+                                    className="text-xs text-gray-600 flex gap-1.5"
+                                  >
+                                    <span aria-hidden>•</span>
+                                    <span>{step}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Ingredients */}
+                          {ingredients.length > 0 && (
+                            <div className="mb-2">
+                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                                Ingredients
+                              </p>
+                              <ul className="space-y-0.5">
+                                {ingredients.map((ing, i) => {
+                                  const status = ing.pantryStatus ?? 'missing';
+                                  const have = status === 'have';
+                                  const qty = [
+                                    ing.quantity != null &&
+                                      String(ing.quantity),
+                                    ing.unit,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' ');
+                                  return (
+                                    <li
+                                      key={i}
+                                      className={`text-xs flex gap-1.5 ${have ? 'text-green-700' : 'text-red-600'}`}
+                                    >
+                                      <span aria-hidden>•</span>
+                                      <span>
+                                        <strong>
+                                          {qty && `${qty} `}
+                                          {ing.name}
+                                        </strong>
+                                        {status === 'partial' &&
+                                          ing.needToBuy != null && (
+                                            <span className="font-normal ml-1">
+                                              (need to buy{' '}
+                                              {formatQty(ing.needToBuy)}
+                                              {ing.unit ? ` ${ing.unit}` : ''})
+                                            </span>
+                                          )}
+                                      </span>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Allergy note */}
+                          {recipe.allergyNote && (
+                            <p className="mt-2 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg px-2 py-1">
+                              ⚠ {recipe.allergyNote}
+                            </p>
+                          )}
+
+                          {/* Health note */}
+                          {recipe.healthNote && (
+                            <p className="mt-1.5 text-xs text-blue-600 bg-blue-50 rounded-lg px-2 py-1">
+                              ℹ {recipe.healthNote}
+                            </p>
                           )}
                         </div>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <button
-                            onClick={() => handleBlockSuggestion(recipe)}
-                            className="text-sm leading-none text-gray-300 hover:text-red-500 transition-colors"
-                            aria-label="Don't suggest again"
-                            title="Don't suggest again"
-                          >
-                            🚫
-                          </button>
-                          <button
-                            onClick={() => handleSaveRecipe(recipe.name)}
-                            disabled={isSaved || loading}
-                            className="px-3 py-1 rounded-lg bg-orange-500 text-white text-xs font-medium hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                          >
-                            {isSaved ? 'Saved' : 'Save Recipe'}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Description */}
-                      {recipe.description && (
-                        <p className="text-gray-500 text-xs mb-2">{recipe.description}</p>
-                      )}
-
-                      {/* Time / servings metadata */}
-                      {(recipe.prepMins != null || recipe.cookMins != null || recipe.servings != null) && (
-                        <p className="text-xs text-gray-400 mb-3">
-                          ⏱{' '}
-                          {[
-                            recipe.prepMins != null && `${recipe.prepMins} min prep`,
-                            recipe.cookMins != null && `${recipe.cookMins} min cook`,
-                            recipe.servings != null && `${recipe.servings} servings`,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </p>
-                      )}
-
-                      {/* Prep steps */}
-                      {prepSteps.length > 0 && (
-                        <div className="mb-3">
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                            Before You Start
-                          </p>
-                          <ul className="space-y-0.5">
-                            {prepSteps.map((step, i) => (
-                              <li key={i} className="text-xs text-gray-600 flex gap-1.5">
-                                <span aria-hidden>•</span>
-                                <span>{step}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      {/* Ingredients */}
-                      {ingredients.length > 0 && (
-                        <div className="mb-2">
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                            Ingredients
-                          </p>
-                          <ul className="space-y-0.5">
-                            {ingredients.map((ing, i) => {
-                              const status = ing.pantryStatus ?? 'missing';
-                              const have = status === 'have';
-                              const qty = [
-                                ing.quantity != null && String(ing.quantity),
-                                ing.unit,
-                              ].filter(Boolean).join(' ');
-                              return (
-                                <li
-                                  key={i}
-                                  className={`text-xs flex gap-1.5 ${have ? 'text-green-700' : 'text-red-600'}`}
-                                >
-                                  <span aria-hidden>•</span>
-                                  <span>
-                                    <strong>{qty && `${qty} `}{ing.name}</strong>
-                                    {status === 'partial' && ing.needToBuy != null && (
-                                      <span className="font-normal ml-1">
-                                        (need to buy {formatQty(ing.needToBuy)}{ing.unit ? ` ${ing.unit}` : ''})
-                                      </span>
-                                    )}
-                                  </span>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </div>
-                      )}
-
-                      {/* Allergy note */}
-                      {recipe.allergyNote && (
-                        <p className="mt-2 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg px-2 py-1">
-                          ⚠ {recipe.allergyNote}
-                        </p>
-                      )}
-
-                      {/* Health note */}
-                      {recipe.healthNote && (
-                        <p className="mt-1.5 text-xs text-blue-600 bg-blue-50 rounded-lg px-2 py-1">
-                          ℹ {recipe.healthNote}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                      );
+                    })}
+                  </div>
+                )}
+            </div>
           );
         })}
 
@@ -411,20 +450,28 @@ export default function ChatPage() {
           {(micSupported || iosPwaCaveat) && (
             <button
               type="button"
-              onClick={iosPwaCaveat
-                ? () => toast('Voice input isn\'t available when Kitchen Keeper is installed as an app.')
-                : toggleMic
+              onClick={
+                iosPwaCaveat
+                  ? () =>
+                      toast(
+                        "Voice input isn't available when Kitchen Keeper is installed as an app."
+                      )
+                  : toggleMic
               }
               disabled={!iosPwaCaveat && loading}
               className={`md:hidden flex-shrink-0 w-10 h-10 rounded-xl border flex items-center justify-center text-lg transition-colors
-                ${iosPwaCaveat
-                  ? 'border-gray-100 text-gray-300 cursor-default'
-                  : 'border-gray-200 disabled:opacity-50'
+                ${
+                  iosPwaCaveat
+                    ? 'border-gray-100 text-gray-300 cursor-default'
+                    : 'border-gray-200 disabled:opacity-50'
                 }`}
               aria-label={listening ? 'Stop recording' : 'Voice input'}
             >
               {listening ? (
-                <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse" aria-hidden />
+                <span
+                  className="w-3 h-3 rounded-full bg-red-500 animate-pulse"
+                  aria-hidden
+                />
               ) : (
                 <span aria-hidden>🎙️</span>
               )}

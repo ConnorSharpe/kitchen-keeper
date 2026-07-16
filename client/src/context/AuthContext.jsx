@@ -10,8 +10,12 @@ export function AuthProvider({ children }) {
 
   const user = clerkUser
     ? {
-        id:    clerkUser.id,
-        name:  clerkUser.fullName ?? clerkUser.firstName ?? clerkUser.username ?? 'User',
+        id: clerkUser.id,
+        name:
+          clerkUser.fullName ??
+          clerkUser.firstName ??
+          clerkUser.username ??
+          'User',
         email: clerkUser.primaryEmailAddress?.emailAddress ?? '',
       }
     : null;
@@ -26,7 +30,16 @@ export function AuthProvider({ children }) {
   async function completeOnboarding() {}
 
   return (
-    <AuthContext.Provider value={{ user, loading: !isLoaded, login, register, logout, completeOnboarding }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading: !isLoaded,
+        login,
+        register,
+        logout,
+        completeOnboarding,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

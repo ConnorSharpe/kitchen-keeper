@@ -2,12 +2,17 @@ import { useState } from 'react';
 import toast from 'react-hot-toast';
 
 const SOURCE_LABEL = {
-  saved:       'Saved',
+  saved: 'Saved',
   spoonacular: 'Spoonacular',
-  mealdb:      'TheMealDB',
+  mealdb: 'TheMealDB',
 };
 
-export default function BlockedRecipesModal({ blocklist, loading, onClose, onUnblock }) {
+export default function BlockedRecipesModal({
+  blocklist,
+  loading,
+  onClose,
+  onUnblock,
+}) {
   const [removingId, setRemovingId] = useState(null);
 
   async function handleUnblock(id) {
@@ -24,11 +29,15 @@ export default function BlockedRecipesModal({ blocklist, loading, onClose, onUnb
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 flex-shrink-0">
-          <h2 className="text-base font-semibold text-gray-900">🚫 Blocked Recipes</h2>
+          <h2 className="text-base font-semibold text-gray-900">
+            🚫 Blocked Recipes
+          </h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 text-xl leading-none"
@@ -42,14 +51,21 @@ export default function BlockedRecipesModal({ blocklist, loading, onClose, onUnb
           {loading ? (
             <p className="text-sm text-gray-400 text-center py-8">Loading…</p>
           ) : blocklist.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-8">No blocked recipes yet.</p>
+            <p className="text-sm text-gray-400 text-center py-8">
+              No blocked recipes yet.
+            </p>
           ) : (
             <ul className="space-y-2">
               {blocklist.map((entry) => (
-                <li key={entry.id} className="flex items-center justify-between gap-2 text-sm">
+                <li
+                  key={entry.id}
+                  className="flex items-center justify-between gap-2 text-sm"
+                >
                   <div className="min-w-0">
                     <p className="text-gray-800 truncate">{entry.name}</p>
-                    <span className="text-xs text-gray-400">{SOURCE_LABEL[entry.source] ?? entry.source}</span>
+                    <span className="text-xs text-gray-400">
+                      {SOURCE_LABEL[entry.source] ?? entry.source}
+                    </span>
                   </div>
                   <button
                     onClick={() => handleUnblock(entry.id)}

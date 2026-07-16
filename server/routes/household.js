@@ -14,13 +14,15 @@ router.get('/', async (req, res) => {
   const household = await householdService.getById(req.user.householdId);
   if (!household) return res.status(404).json({ error: 'Household not found' });
 
-  const aiPreview = await householdService.getAiKeyPreview(req.user.householdId);
+  const aiPreview = await householdService.getAiKeyPreview(
+    req.user.householdId
+  );
 
   res.json({
     household: {
-      id:        household.id,
-      name:      household.name,
-      joinCode:  household.joinCode,
+      id: household.id,
+      name: household.name,
+      joinCode: household.joinCode,
       maskedKey: aiPreview.maskedKey,
     },
   });
@@ -59,9 +61,9 @@ router.post('/invite', validate(inviteSchema), async (req, res) => {
   if (!household) return res.status(404).json({ error: 'Household not found' });
 
   await sendHouseholdInvite({
-    toEmail:       req.body.email,
+    toEmail: req.body.email,
     householdName: household.name,
-    joinCode:      household.joinCode,
+    joinCode: household.joinCode,
   });
 
   res.json({ ok: true });
@@ -78,7 +80,7 @@ router.post('/join', validate(joinSchema), async (req, res) => {
   const result = await householdService.joinByCode(
     req.user.id,
     req.user.householdId,
-    req.body.code,
+    req.body.code
   );
   res.json(result);
 });

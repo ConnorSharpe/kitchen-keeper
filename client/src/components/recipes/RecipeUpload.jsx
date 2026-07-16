@@ -5,11 +5,11 @@ import toast from 'react-hot-toast';
 function readExifOrientation(buffer) {
   try {
     const view = new DataView(buffer);
-    if (view.getUint16(0) !== 0xFFD8) return 1;
+    if (view.getUint16(0) !== 0xffd8) return 1;
     let offset = 2;
     while (offset + 4 < view.byteLength) {
       const marker = view.getUint16(offset);
-      if (marker === 0xFFE1) {
+      if (marker === 0xffe1) {
         const exifStart = offset + 4;
         if (view.getUint32(exifStart) !== 0x45786966) return 1; // "Exif"
         const tiff = exifStart + 6;
@@ -22,26 +22,43 @@ function readExifOrientation(buffer) {
           }
         }
         return 1;
-      } else if (marker === 0xFFDA) {
+      } else if (marker === 0xffda) {
         break;
       }
       offset += 2 + view.getUint16(offset + 2);
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return 1;
 }
 
 // Applies EXIF orientation via canvas transform before drawing.
 function applyOrientationTransform(ctx, orientation, sw, sh) {
   switch (orientation) {
-    case 2: ctx.transform(-1, 0, 0,  1,  sw,  0); break;
-    case 3: ctx.transform(-1, 0, 0, -1,  sw, sh); break;
-    case 4: ctx.transform( 1, 0, 0, -1,   0, sh); break;
-    case 5: ctx.transform( 0, 1, 1,  0,   0,  0); break;
-    case 6: ctx.transform( 0, 1,-1,  0,  sh,  0); break;
-    case 7: ctx.transform( 0,-1,-1,  0,  sh, sw); break;
-    case 8: ctx.transform( 0,-1, 1,  0,   0, sw); break;
-    default: break;
+    case 2:
+      ctx.transform(-1, 0, 0, 1, sw, 0);
+      break;
+    case 3:
+      ctx.transform(-1, 0, 0, -1, sw, sh);
+      break;
+    case 4:
+      ctx.transform(1, 0, 0, -1, 0, sh);
+      break;
+    case 5:
+      ctx.transform(0, 1, 1, 0, 0, 0);
+      break;
+    case 6:
+      ctx.transform(0, 1, -1, 0, sh, 0);
+      break;
+    case 7:
+      ctx.transform(0, -1, -1, 0, sh, sw);
+      break;
+    case 8:
+      ctx.transform(0, -1, 1, 0, 0, sw);
+      break;
+    default:
+      break;
   }
 }
 
@@ -61,8 +78,12 @@ async function resizeImage(file, maxPx = 1568, quality = 0.85) {
       canvas.height = dh;
       canvas.getContext('2d').drawImage(bitmap, 0, 0, dw, dh);
       bitmap.close();
-      return await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
-    } catch { /* fall through to fallback */ }
+      return await new Promise((resolve) =>
+        canvas.toBlob(resolve, 'image/jpeg', quality)
+      );
+    } catch {
+      /* fall through to fallback */
+    }
   }
 
   // Fallback: Image element + manual EXIF rotation
@@ -93,7 +114,9 @@ async function resizeImage(file, maxPx = 1568, quality = 0.85) {
   applyOrientationTransform(ctx, orientation, dw, dh);
   ctx.drawImage(img, 0, 0, rotated ? dh : dw, rotated ? dw : dh);
   ctx.restore();
-  return await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+  return await new Promise((resolve) =>
+    canvas.toBlob(resolve, 'image/jpeg', quality)
+  );
 }
 
 export default function RecipeUpload({ onExtracted, onClose }) {
@@ -112,7 +135,9 @@ export default function RecipeUpload({ onExtracted, onClose }) {
       return;
     }
     if (file.type === 'image/heic' || file.type === 'image/heif') {
-      toast.error('HEIC files from share-sheet are not supported. Please take a new photo or select a JPEG/PNG.');
+      toast.error(
+        'HEIC files from share-sheet are not supported. Please take a new photo or select a JPEG/PNG.'
+      );
       return;
     }
 
@@ -145,7 +170,10 @@ export default function RecipeUpload({ onExtracted, onClose }) {
           : controller.signal,
       });
 
-      if (res.status === 401) { window.location.href = '/login'; return; }
+      if (res.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
 
       const data = await res.json().catch(() => ({}));
 
@@ -184,19 +212,29 @@ export default function RecipeUpload({ onExtracted, onClose }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) { abortRef.current?.abort(); onClose(); } }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          abortRef.current?.abort();
+          onClose();
+        }
+      }}
     >
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Upload a Recipe Image</h2>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Upload a Recipe Image
+            </h2>
             <p className="text-xs text-gray-400 mt-0.5">
               Photo of a recipe card, cookbook page, or hand-written recipe
             </p>
           </div>
           <button
-            onClick={() => { abortRef.current?.abort(); onClose(); }}
+            onClick={() => {
+              abortRef.current?.abort();
+              onClose();
+            }}
             className="text-gray-400 hover:text-gray-600 text-xl leading-none"
             aria-label="Close"
           >
@@ -207,7 +245,10 @@ export default function RecipeUpload({ onExtracted, onClose }) {
         {/* Phase: idle */}
         {phase === 'idle' && (
           <div
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
@@ -221,7 +262,9 @@ export default function RecipeUpload({ onExtracted, onClose }) {
             <p className="text-sm font-medium text-gray-700">
               Take a photo or upload a recipe image
             </p>
-            <p className="text-xs text-gray-400 mt-1">JPEG, PNG, WebP or HEIC — max 10 MB</p>
+            <p className="text-xs text-gray-400 mt-1">
+              JPEG, PNG, WebP or HEIC — max 10 MB
+            </p>
             <input
               ref={fileInputRef}
               type="file"
@@ -238,10 +281,14 @@ export default function RecipeUpload({ onExtracted, onClose }) {
           <div className="flex flex-col items-center justify-center py-16">
             <div className="w-9 h-9 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin mb-5" />
             <p className="text-sm font-medium text-gray-700">
-              {phase === 'resizing' ? 'Preparing image…' : 'Reading recipe with AI…'}
+              {phase === 'resizing'
+                ? 'Preparing image…'
+                : 'Reading recipe with AI…'}
             </p>
             <p className="text-xs text-gray-400 mt-1">
-              {phase === 'resizing' ? 'Resizing for upload' : 'This takes about 10 seconds'}
+              {phase === 'resizing'
+                ? 'Resizing for upload'
+                : 'This takes about 10 seconds'}
             </p>
           </div>
         )}

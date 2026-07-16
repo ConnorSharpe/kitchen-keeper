@@ -1,7 +1,18 @@
-import { getExpiryStatus, getExpiryRowClass, getExpiryBadgeClass, getExpiryLabel, getRipeningState, getRipeningDays } from '../../utils/expiry.js';
+import {
+  getExpiryStatus,
+  getExpiryRowClass,
+  getExpiryBadgeClass,
+  getExpiryLabel,
+  getRipeningState,
+  getRipeningDays,
+} from '../../utils/expiry.js';
 import { STORAGE_LOCATION_LABELS } from '../../utils/pantryDefaults.js';
 
-const STORAGE_LOCATION_ICONS = { pantry: '🥫', refrigerator: '🧊', freezer: '❄' };
+const STORAGE_LOCATION_ICONS = {
+  pantry: '🥫',
+  refrigerator: '🧊',
+  freezer: '❄',
+};
 
 function StorageBadge({ storageLocation }) {
   if (!storageLocation) return <span className="text-gray-400 text-xs">—</span>;
@@ -20,18 +31,29 @@ function ExpiryBadge({ expiryDate, status }) {
   const label = getExpiryLabel(expiryDate);
 
   return (
-    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>
+    <span
+      className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}
+    >
       {label}
     </span>
   );
 }
 
-export default function PantryTable({ items, onEdit, onMarkUsed, onToggleFreeze, onSplit, onDelete }) {
+export default function PantryTable({
+  items,
+  onEdit,
+  onMarkUsed,
+  onToggleFreeze,
+  onSplit,
+  onDelete,
+}) {
   if (items.length === 0) {
     return (
       <div className="text-center py-16 text-gray-400">
         <p className="text-4xl mb-3">🧺</p>
-        <p className="text-sm">Your pantry is empty. Add items manually or scan a grocery receipt.</p>
+        <p className="text-sm">
+          Your pantry is empty. Add items manually or scan a grocery receipt.
+        </p>
       </div>
     );
   }
@@ -41,7 +63,16 @@ export default function PantryTable({ items, onEdit, onMarkUsed, onToggleFreeze,
       <table className="min-w-full divide-y divide-gray-200 text-sm">
         <thead className="bg-gray-50">
           <tr>
-            {['Name', 'Category', 'Qty', 'Unit', 'Storage', 'Expires', 'Status', ''].map((h) => (
+            {[
+              'Name',
+              'Category',
+              'Qty',
+              'Unit',
+              'Storage',
+              'Expires',
+              'Status',
+              '',
+            ].map((h) => (
               <th
                 key={h}
                 className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap"
@@ -53,12 +84,16 @@ export default function PantryTable({ items, onEdit, onMarkUsed, onToggleFreeze,
         </thead>
         <tbody className="bg-white divide-y divide-gray-100">
           {items.map((item) => {
-            const ripeState    = getRipeningState(item);
+            const ripeState = getRipeningState(item);
             const expiryStatus = getExpiryStatus(item.expiryDate);
-            const rowStatus = ripeState === 'frozen'   ? 'ok'
-                            : ripeState === 'ripening' ? 'ripening'
-                            : expiryStatus;
-            const rowCls = ripeState === 'frozen' ? '' : getExpiryRowClass(rowStatus);
+            const rowStatus =
+              ripeState === 'frozen'
+                ? 'ok'
+                : ripeState === 'ripening'
+                  ? 'ripening'
+                  : expiryStatus;
+            const rowCls =
+              ripeState === 'frozen' ? '' : getExpiryRowClass(rowStatus);
             const isFrozen = item.storageLocation === 'freezer';
             const badgeStatus = isFrozen ? 'ok' : expiryStatus;
             return (
@@ -71,7 +106,9 @@ export default function PantryTable({ items, onEdit, onMarkUsed, onToggleFreeze,
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{item.category}</td>
+                <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                  {item.category}
+                </td>
                 <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
                   {item.quantity}
                   {item.servingsPerPurchaseUnit != null && (
@@ -80,19 +117,32 @@ export default function PantryTable({ items, onEdit, onMarkUsed, onToggleFreeze,
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{item.unit}</td>
+                <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                  {item.unit}
+                </td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   <StorageBadge storageLocation={item.storageLocation} />
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
-                  <ExpiryBadge expiryDate={item.expiryDate} status={badgeStatus} />
+                  <ExpiryBadge
+                    expiryDate={item.expiryDate}
+                    status={badgeStatus}
+                  />
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
-                  <StatusLabel ripeState={ripeState} expiryStatus={expiryStatus} readyDate={item.readyDate} />
+                  <StatusLabel
+                    ripeState={ripeState}
+                    expiryStatus={expiryStatus}
+                    readyDate={item.readyDate}
+                  />
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   <div className="flex items-center gap-2">
-                    <ActionButton onClick={() => onEdit(item)} title="Edit" label="Edit" />
+                    <ActionButton
+                      onClick={() => onEdit(item)}
+                      title="Edit"
+                      label="Edit"
+                    />
                     <ActionButton
                       onClick={() => onMarkUsed(item.id)}
                       title="Mark as used (I cooked this)"
@@ -136,22 +186,28 @@ function StatusLabel({ ripeState, expiryStatus, readyDate }) {
     return <span className="text-purple-600 text-xs font-medium">{label}</span>;
   }
   const map = {
-    ok:       { cls: 'text-green-600', text: 'Good' },
-    warning:  { cls: 'text-amber-600', text: 'Expiring soon' },
-    critical: { cls: 'text-red-600',   text: 'Critical' },
-    expired:  { cls: 'text-red-700',   text: 'Expired' },
-    none:     { cls: 'text-gray-400',  text: 'No date' },
+    ok: { cls: 'text-green-600', text: 'Good' },
+    warning: { cls: 'text-amber-600', text: 'Expiring soon' },
+    critical: { cls: 'text-red-600', text: 'Critical' },
+    expired: { cls: 'text-red-700', text: 'Expired' },
+    none: { cls: 'text-gray-400', text: 'No date' },
   };
   const { cls, text } = map[expiryStatus] ?? map.none;
   return <span className={`text-xs font-medium ${cls}`}>{text}</span>;
 }
 
-function ActionButton({ onClick, label, title, danger = false, success = false }) {
+function ActionButton({
+  onClick,
+  label,
+  title,
+  danger = false,
+  success = false,
+}) {
   const cls = danger
     ? 'text-red-500 hover:bg-red-50 hover:text-red-700'
     : success
-    ? 'text-green-600 hover:bg-green-50 hover:text-green-800'
-    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700';
+      ? 'text-green-600 hover:bg-green-50 hover:text-green-800'
+      : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700';
   return (
     <button
       onClick={onClick}

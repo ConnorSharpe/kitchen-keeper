@@ -10,15 +10,19 @@ router.use(clerkAuth);
 // GET /api/dietary
 router.get('/', async (req, res) => {
   const profile = await dietaryService.getProfile(req.user.householdId);
-  const { conditions = [], allergies = [], foodPreferences = [] } = profile ?? {};
+  const {
+    conditions = [],
+    allergies = [],
+    foodPreferences = [],
+  } = profile ?? {};
   res.json({ conditions, allergies, foodPreferences });
 });
 
 // PATCH /api/dietary
 const patchDietarySchema = z.object({
-  conditions:       z.array(z.string().min(1).max(100)).max(20).optional(),
-  allergies:        z.array(z.string().min(1).max(100)).max(20).optional(),
-  foodPreferences:  z.array(z.string().min(1).max(100)).max(20).optional(),
+  conditions: z.array(z.string().min(1).max(100)).max(20).optional(),
+  allergies: z.array(z.string().min(1).max(100)).max(20).optional(),
+  foodPreferences: z.array(z.string().min(1).max(100)).max(20).optional(),
 });
 
 router.patch('/', validate(patchDietarySchema), async (req, res) => {

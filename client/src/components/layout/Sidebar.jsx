@@ -19,7 +19,9 @@ export default function Sidebar() {
   const sidebarContent = (
     <>
       <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-        <span className="text-lg font-bold text-orange-600">Kitchen Keeper</span>
+        <span className="text-lg font-bold text-orange-600">
+          Kitchen Keeper
+        </span>
         <button
           className="md:hidden text-gray-400 hover:text-gray-600 text-2xl leading-none"
           onClick={() => setMobileOpen(false)}
@@ -30,17 +32,30 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        <NavLink to="/" end className={navClass} onClick={() => setMobileOpen(false)}>
+        <NavLink
+          to="/"
+          end
+          className={navClass}
+          onClick={() => setMobileOpen(false)}
+        >
           <span aria-hidden>💬</span>
           Chat
         </NavLink>
 
-        <NavLink to="/dashboard" className={navClass} onClick={() => setMobileOpen(false)}>
+        <NavLink
+          to="/dashboard"
+          className={navClass}
+          onClick={() => setMobileOpen(false)}
+        >
           <span aria-hidden>🏠</span>
           Dashboard
         </NavLink>
 
-        <NavLink to="/pantry" className={navClass} onClick={() => setMobileOpen(false)}>
+        <NavLink
+          to="/pantry"
+          className={navClass}
+          onClick={() => setMobileOpen(false)}
+        >
           <span aria-hidden>🥦</span>
           Pantry
           {expiringCount > 0 && (
@@ -53,12 +68,20 @@ export default function Sidebar() {
           )}
         </NavLink>
 
-        <NavLink to="/recipes" className={navClass} onClick={() => setMobileOpen(false)}>
+        <NavLink
+          to="/recipes"
+          className={navClass}
+          onClick={() => setMobileOpen(false)}
+        >
           <span aria-hidden>📖</span>
           Recipes
         </NavLink>
 
-        <NavLink to="/shopping" className={navClass} onClick={() => setMobileOpen(false)}>
+        <NavLink
+          to="/shopping"
+          className={navClass}
+          onClick={() => setMobileOpen(false)}
+        >
           <span aria-hidden>🛒</span>
           Shopping
         </NavLink>
@@ -82,7 +105,9 @@ export default function Sidebar() {
       </nav>
 
       <div className="p-3 border-t border-gray-200 space-y-1">
-        <p className="text-xs font-medium text-gray-700 truncate">{user?.name}</p>
+        <p className="text-xs font-medium text-gray-700 truncate">
+          {user?.name}
+        </p>
         <p className="text-xs text-gray-400 truncate">{user?.email}</p>
         <button
           onClick={logout}
@@ -103,8 +128,18 @@ export default function Sidebar() {
         aria-label="Open menu"
         style={{ display: mobileOpen ? 'none' : undefined }}
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M4 6h16M4 12h16M4 18h16"
+          />
         </svg>
       </button>
 

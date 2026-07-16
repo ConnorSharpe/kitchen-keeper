@@ -2,19 +2,32 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { mealLogs } from '../db/schema.js';
 
-export async function create({ householdId, pantryItemId, itemName, category, purineLevel, wasExpiring, quantityBefore, quantityAfter, source }) {
-  const [row] = await db.insert(mealLogs).values({
-    householdId,
-    pantryItemId: pantryItemId ?? null,
-    itemName,
-    category:       category     ?? 'Other',
-    purineLevel:    purineLevel  ?? 'medium',
-    wasExpiring:    wasExpiring  ?? null,
-    quantityBefore: quantityBefore ?? null,
-    quantityAfter:  quantityAfter  ?? null,
-    loggedAt:       new Date().toISOString(),
-    source:         source ?? 'agent',
-  }).returning();
+export async function create({
+  householdId,
+  pantryItemId,
+  itemName,
+  category,
+  purineLevel,
+  wasExpiring,
+  quantityBefore,
+  quantityAfter,
+  source,
+}) {
+  const [row] = await db
+    .insert(mealLogs)
+    .values({
+      householdId,
+      pantryItemId: pantryItemId ?? null,
+      itemName,
+      category: category ?? 'Other',
+      purineLevel: purineLevel ?? 'medium',
+      wasExpiring: wasExpiring ?? null,
+      quantityBefore: quantityBefore ?? null,
+      quantityAfter: quantityAfter ?? null,
+      loggedAt: new Date().toISOString(),
+      source: source ?? 'agent',
+    })
+    .returning();
   return row;
 }
 
@@ -34,9 +47,11 @@ export async function getRecentSince(householdId, isoTimestamp) {
   return db
     .select()
     .from(mealLogs)
-    .where(and(
-      eq(mealLogs.householdId, householdId),
-      sql`(${mealLogs.loggedAt})::timestamptz >= (${isoTimestamp})::timestamptz`,
-    ))
+    .where(
+      and(
+        eq(mealLogs.householdId, householdId),
+        sql`(${mealLogs.loggedAt})::timestamptz >= (${isoTimestamp})::timestamptz`
+      )
+    )
     .orderBy(desc(mealLogs.loggedAt));
 }

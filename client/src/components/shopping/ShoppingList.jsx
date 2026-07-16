@@ -3,21 +3,21 @@ import { api } from '../../api/index.js';
 import toast from 'react-hot-toast';
 
 export default function ShoppingList({ listId }) {
-  const [items, setItems]       = useState([]);
-  const [loading, setLoading]   = useState(true);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(null); // itemId currently being toggled
 
   // Manual-add form state
-  const [addName, setAddName]   = useState('');
-  const [addQty, setAddQty]     = useState('');
-  const [addUnit, setAddUnit]   = useState('');
-  const [adding, setAdding]     = useState(false);
+  const [addName, setAddName] = useState('');
+  const [addQty, setAddQty] = useState('');
+  const [addUnit, setAddUnit] = useState('');
+  const [adding, setAdding] = useState(false);
 
   // Inline edit form state — single editingId controls which row (if any) shows the form
   const [editingId, setEditingId] = useState(null);
-  const [editName, setEditName]   = useState('');
-  const [editQty, setEditQty]     = useState('');
-  const [editUnit, setEditUnit]   = useState('');
+  const [editName, setEditName] = useState('');
+  const [editQty, setEditQty] = useState('');
+  const [editUnit, setEditUnit] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
 
   const fetchItems = useCallback(async () => {
@@ -39,7 +39,9 @@ export default function ShoppingList({ listId }) {
   async function handleToggle(itemId) {
     setToggling(itemId);
     try {
-      const data = await api.patch(`/api/shopping/${listId}/items/${itemId}/check`);
+      const data = await api.patch(
+        `/api/shopping/${listId}/items/${itemId}/check`
+      );
       setItems((prev) => prev.map((i) => (i.id === itemId ? data.item : i)));
     } catch (err) {
       toast.error(err.message);
@@ -91,7 +93,10 @@ export default function ShoppingList({ listId }) {
         quantity: editQty ? Number(editQty) : null,
         unit: editUnit.trim() || null,
       };
-      const data = await api.patch(`/api/shopping/${listId}/items/${editingId}`, body);
+      const data = await api.patch(
+        `/api/shopping/${listId}/items/${editingId}`,
+        body
+      );
       setItems((prev) => prev.map((i) => (i.id === editingId ? data.item : i)));
       setEditingId(null);
     } catch (err) {
@@ -111,7 +116,7 @@ export default function ShoppingList({ listId }) {
     }
   }
 
-  const checked   = items.filter((i) => i.isChecked);
+  const checked = items.filter((i) => i.isChecked);
   const unchecked = items.filter((i) => !i.isChecked);
 
   if (loading) {
@@ -328,7 +333,9 @@ function ItemRow({
         {checked && <span className="text-xs leading-none">✓</span>}
       </button>
 
-      <span className={`flex-1 text-sm ${checked ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+      <span
+        className={`flex-1 text-sm ${checked ? 'line-through text-gray-400' : 'text-gray-800'}`}
+      >
         {item.ingredientName}
         {(item.quantity != null || item.unit) && (
           <span className="text-gray-400 ml-1.5 font-normal">

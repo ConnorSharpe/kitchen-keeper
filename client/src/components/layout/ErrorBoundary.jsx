@@ -29,8 +29,8 @@ export default class ErrorBoundary extends Component {
               Something went wrong
             </h1>
             <p className="text-sm text-gray-500 mb-6">
-              Kitchen Keeper hit an unexpected error. Your data is safe — refresh
-              to continue.
+              Kitchen Keeper hit an unexpected error. Your data is safe —
+              refresh to continue.
             </p>
             <button
               onClick={this.handleReset}

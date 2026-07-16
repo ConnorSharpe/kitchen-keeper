@@ -1,6 +1,12 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { SignIn, SignUp, SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react';
+import {
+  SignIn,
+  SignUp,
+  SignedIn,
+  SignedOut,
+  RedirectToSignIn,
+} from '@clerk/clerk-react';
 import { AuthProvider } from './context/AuthContext.jsx';
 import AppLayout from './components/layout/AppLayout.jsx';
 import ErrorBoundary from './components/layout/ErrorBoundary.jsx';
@@ -16,7 +22,9 @@ function PrivateRoute({ children }) {
   return (
     <>
       <SignedIn>{children}</SignedIn>
-      <SignedOut><RedirectToSignIn /></SignedOut>
+      <SignedOut>
+        <RedirectToSignIn />
+      </SignedOut>
     </>
   );
 }
@@ -24,28 +32,38 @@ function PrivateRoute({ children }) {
 export default function App() {
   return (
     <ErrorBoundary>
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <BrowserRouter
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
         <AuthProvider>
-        <Toaster position="top-right" />
-        <Routes>
-          <Route path="/sign-in/*" element={<SignIn routing="path" path="/sign-in" />} />
-          <Route path="/sign-up/*" element={<SignUp routing="path" path="/sign-up" />} />
-          <Route path="/join" element={<JoinPage />} />
+          <Toaster position="top-right" />
+          <Routes>
+            <Route
+              path="/sign-in/*"
+              element={<SignIn routing="path" path="/sign-in" />}
+            />
+            <Route
+              path="/sign-up/*"
+              element={<SignUp routing="path" path="/sign-up" />}
+            />
+            <Route path="/join" element={<JoinPage />} />
 
-          <Route element={
-            <PrivateRoute>
-              <AppLayout />
-            </PrivateRoute>
-          }>
-            <Route index element={<ChatPage />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/chat" element={<Navigate to="/" replace />} />
-            <Route path="/pantry" element={<PantryPage />} />
-            <Route path="/recipes" element={<RecipesPage />} />
-            <Route path="/shopping" element={<ShoppingPage />} />
-            <Route path="/household" element={<HouseholdPage />} />
-          </Route>
-        </Routes>
+            <Route
+              element={
+                <PrivateRoute>
+                  <AppLayout />
+                </PrivateRoute>
+              }
+            >
+              <Route index element={<ChatPage />} />
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/chat" element={<Navigate to="/" replace />} />
+              <Route path="/pantry" element={<PantryPage />} />
+              <Route path="/recipes" element={<RecipesPage />} />
+              <Route path="/shopping" element={<ShoppingPage />} />
+              <Route path="/household" element={<HouseholdPage />} />
+            </Route>
+          </Routes>
         </AuthProvider>
       </BrowserRouter>
     </ErrorBoundary>

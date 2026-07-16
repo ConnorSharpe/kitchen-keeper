@@ -10,10 +10,22 @@ import StaplesChecklist from '../components/onboarding/StaplesChecklist.jsx';
 import { fetchProductByBarcode } from '../utils/openFoodFacts.js';
 import PushNotificationBanner from '../components/push/PushNotificationBanner.jsx';
 
-const BarcodeScanner = lazy(() => import('../components/pantry/BarcodeScanner.jsx'));
+const BarcodeScanner = lazy(
+  () => import('../components/pantry/BarcodeScanner.jsx')
+);
 
 export default function PantryPage() {
-  const { items, loading: pantryLoading, addItem, updateItem, removeItem, markUsed, toggleFreeze, splitItem, refresh } = usePantry();
+  const {
+    items,
+    loading: pantryLoading,
+    addItem,
+    updateItem,
+    removeItem,
+    markUsed,
+    toggleFreeze,
+    splitItem,
+    refresh,
+  } = usePantry();
   const { user, loading: authLoading } = useAuth();
 
   // Plain boolean. useEffect resets it on user identity change (System Invariant #11).
@@ -45,7 +57,9 @@ export default function PantryPage() {
     fetchAbortRef.current = controller;
 
     try {
-      const product = await fetchProductByBarcode(barcode, { signal: controller.signal });
+      const product = await fetchProductByBarcode(barcode, {
+        signal: controller.signal,
+      });
       if (!product) {
         toast('Product not found — enter details manually', { icon: '⚠️' });
         setBarcodePrefill(null);
@@ -90,7 +104,11 @@ export default function PantryPage() {
   const handleToggleFreeze = async (id) => {
     try {
       const updated = await toggleFreeze(id);
-      toast.success(updated.storageLocation === 'freezer' ? '❄ Item frozen — expiry extended' : 'Item thawed');
+      toast.success(
+        updated.storageLocation === 'freezer'
+          ? '❄ Item frozen — expiry extended'
+          : 'Item thawed'
+      );
     } catch (err) {
       toast.error(err.message || 'Failed to update freeze status');
     }
@@ -98,7 +116,11 @@ export default function PantryPage() {
 
   const handleSplit = async (id, body) => {
     const data = await splitItem(id, body);
-    toast.success(data.created ? 'Item split across storage locations' : 'Storage location updated');
+    toast.success(
+      data.created
+        ? 'Item split across storage locations'
+        : 'Storage location updated'
+    );
   };
 
   const handleDelete = async (id) => {
@@ -167,7 +189,16 @@ export default function PantryPage() {
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
               <tr>
-                {['Name', 'Category', 'Qty', 'Unit', 'Storage', 'Expires', 'Status', ''].map((h) => (
+                {[
+                  'Name',
+                  'Category',
+                  'Qty',
+                  'Unit',
+                  'Storage',
+                  'Expires',
+                  'Status',
+                  '',
+                ].map((h) => (
                   <th
                     key={h}
                     className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap"
@@ -180,14 +211,30 @@ export default function PantryPage() {
             <tbody className="bg-white divide-y divide-gray-100">
               {[...Array(5)].map((_, i) => (
                 <tr key={i} className="animate-pulse">
-                  <td className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-32" /></td>
-                  <td className="px-4 py-3"><div className="h-4 bg-gray-100 rounded w-16" /></td>
-                  <td className="px-4 py-3"><div className="h-4 bg-gray-100 rounded w-8" /></td>
-                  <td className="px-4 py-3"><div className="h-4 bg-gray-100 rounded w-10" /></td>
-                  <td className="px-4 py-3"><div className="h-4 bg-gray-100 rounded w-14" /></td>
-                  <td className="px-4 py-3"><div className="h-4 bg-gray-100 rounded w-20" /></td>
-                  <td className="px-4 py-3"><div className="h-4 bg-gray-100 rounded w-16" /></td>
-                  <td className="px-4 py-3"><div className="h-4 bg-gray-100 rounded w-24" /></td>
+                  <td className="px-4 py-3">
+                    <div className="h-4 bg-gray-200 rounded w-32" />
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="h-4 bg-gray-100 rounded w-16" />
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="h-4 bg-gray-100 rounded w-8" />
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="h-4 bg-gray-100 rounded w-10" />
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="h-4 bg-gray-100 rounded w-14" />
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="h-4 bg-gray-100 rounded w-20" />
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="h-4 bg-gray-100 rounded w-16" />
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="h-4 bg-gray-100 rounded w-24" />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -216,7 +263,10 @@ export default function PantryPage() {
         <AddItemModal
           item={modalItem || undefined}
           prefill={modalItem === null ? barcodePrefill : undefined}
-          onClose={() => { setModalItem(undefined); setBarcodePrefill(null); }}
+          onClose={() => {
+            setModalItem(undefined);
+            setBarcodePrefill(null);
+          }}
           onSave={handleSave}
         />
       )}

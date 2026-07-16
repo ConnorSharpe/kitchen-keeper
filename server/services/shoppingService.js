@@ -1,6 +1,11 @@
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { shoppingLists, shoppingListItems, recipes, pantryItems } from '../db/schema.js';
+import {
+  shoppingLists,
+  shoppingListItems,
+  recipes,
+  pantryItems,
+} from '../db/schema.js';
 
 function parseJSON(str, fallback = []) {
   try {
@@ -23,7 +28,12 @@ export async function getItems(householdId, listId) {
   const [list] = await db
     .select()
     .from(shoppingLists)
-    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.householdId, householdId)));
+    .where(
+      and(
+        eq(shoppingLists.id, listId),
+        eq(shoppingLists.householdId, householdId)
+      )
+    );
   if (!list) return { status: 'not_found' };
 
   const items = await db
@@ -39,20 +49,34 @@ export async function toggleItem(householdId, listId, itemId) {
   const [list] = await db
     .select()
     .from(shoppingLists)
-    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.householdId, householdId)));
+    .where(
+      and(
+        eq(shoppingLists.id, listId),
+        eq(shoppingLists.householdId, householdId)
+      )
+    );
   if (!list) return { status: 'not_found' };
 
   const [item] = await db
     .select()
     .from(shoppingListItems)
-    .where(and(eq(shoppingListItems.id, itemId), eq(shoppingListItems.listId, listId)));
+    .where(
+      and(
+        eq(shoppingListItems.id, itemId),
+        eq(shoppingListItems.listId, listId)
+      )
+    );
   if (!item) return { status: 'not_found' };
 
-  await db.update(shoppingListItems)
+  await db
+    .update(shoppingListItems)
     .set({ isChecked: !item.isChecked })
     .where(eq(shoppingListItems.id, itemId));
 
-  const [updated] = await db.select().from(shoppingListItems).where(eq(shoppingListItems.id, itemId));
+  const [updated] = await db
+    .select()
+    .from(shoppingListItems)
+    .where(eq(shoppingListItems.id, itemId));
   return { status: 'ok', item: updated };
 }
 
@@ -63,20 +87,34 @@ export async function updateItem(householdId, listId, itemId, data) {
   const [list] = await db
     .select()
     .from(shoppingLists)
-    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.householdId, householdId)));
+    .where(
+      and(
+        eq(shoppingLists.id, listId),
+        eq(shoppingLists.householdId, householdId)
+      )
+    );
   if (!list) return { status: 'not_found' };
 
   const [item] = await db
     .select()
     .from(shoppingListItems)
-    .where(and(eq(shoppingListItems.id, itemId), eq(shoppingListItems.listId, listId)));
+    .where(
+      and(
+        eq(shoppingListItems.id, itemId),
+        eq(shoppingListItems.listId, listId)
+      )
+    );
   if (!item) return { status: 'not_found' };
 
-  await db.update(shoppingListItems)
+  await db
+    .update(shoppingListItems)
     .set({ ...data, hasUnitMismatch: false })
     .where(eq(shoppingListItems.id, itemId));
 
-  const [updated] = await db.select().from(shoppingListItems).where(eq(shoppingListItems.id, itemId));
+  const [updated] = await db
+    .select()
+    .from(shoppingListItems)
+    .where(eq(shoppingListItems.id, itemId));
   return { status: 'ok', item: updated };
 }
 
@@ -85,13 +123,23 @@ export async function deleteItem(householdId, listId, itemId) {
   const [list] = await db
     .select()
     .from(shoppingLists)
-    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.householdId, householdId)));
+    .where(
+      and(
+        eq(shoppingLists.id, listId),
+        eq(shoppingLists.householdId, householdId)
+      )
+    );
   if (!list) return { status: 'not_found' };
 
   const [item] = await db
     .select()
     .from(shoppingListItems)
-    .where(and(eq(shoppingListItems.id, itemId), eq(shoppingListItems.listId, listId)));
+    .where(
+      and(
+        eq(shoppingListItems.id, itemId),
+        eq(shoppingListItems.listId, listId)
+      )
+    );
   if (!item) return { status: 'not_found' };
 
   await db.delete(shoppingListItems).where(eq(shoppingListItems.id, itemId));
@@ -103,7 +151,12 @@ export async function deleteList(householdId, listId) {
   const [list] = await db
     .select()
     .from(shoppingLists)
-    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.householdId, householdId)));
+    .where(
+      and(
+        eq(shoppingLists.id, listId),
+        eq(shoppingLists.householdId, householdId)
+      )
+    );
   if (!list) return { status: 'not_found' };
 
   await db.delete(shoppingLists).where(eq(shoppingLists.id, listId));
@@ -114,7 +167,12 @@ export async function addManualItem(householdId, listId, itemData) {
   const [list] = await db
     .select()
     .from(shoppingLists)
-    .where(and(eq(shoppingLists.id, listId), eq(shoppingLists.householdId, householdId)));
+    .where(
+      and(
+        eq(shoppingLists.id, listId),
+        eq(shoppingLists.householdId, householdId)
+      )
+    );
   if (!list) return { status: 'not_found' };
 
   const existing = await db
@@ -128,9 +186,9 @@ export async function addManualItem(householdId, listId, itemData) {
     .values({
       listId,
       ingredientName: itemData.ingredientName,
-      quantity:       itemData.quantity ?? null,
-      unit:           itemData.unit ?? null,
-      sortOrder:      maxSort + 1,
+      quantity: itemData.quantity ?? null,
+      unit: itemData.unit ?? null,
+      sortOrder: maxSort + 1,
       hasUnitMismatch: false,
     })
     .returning();
@@ -166,8 +224,8 @@ export async function buildFromRecipes(householdId, name, recipeIds) {
       } else {
         ingredientMap.set(key, {
           ingredientName: ing.name,
-          quantity:       ing.quantity ?? null,
-          unit:           ing.unit ?? null,
+          quantity: ing.quantity ?? null,
+          unit: ing.unit ?? null,
           hasUnitMismatch: false,
         });
       }
@@ -178,7 +236,12 @@ export async function buildFromRecipes(householdId, name, recipeIds) {
   const activePantry = await db
     .select()
     .from(pantryItems)
-    .where(and(eq(pantryItems.householdId, householdId), isNull(pantryItems.consumedAt)));
+    .where(
+      and(
+        eq(pantryItems.householdId, householdId),
+        isNull(pantryItems.consumedAt)
+      )
+    );
 
   const pantryMap = new Map();
   for (const p of activePantry) {
@@ -216,14 +279,16 @@ export async function buildFromRecipes(householdId, name, recipeIds) {
     try {
       items = await db
         .insert(shoppingListItems)
-        .values(needed.map((ing, idx) => ({
-          listId:          list.id,
-          ingredientName:  ing.ingredientName,
-          quantity:        ing.quantity,
-          unit:            ing.unit,
-          sortOrder:       idx,
-          hasUnitMismatch: ing.hasUnitMismatch,
-        })))
+        .values(
+          needed.map((ing, idx) => ({
+            listId: list.id,
+            ingredientName: ing.ingredientName,
+            quantity: ing.quantity,
+            unit: ing.unit,
+            sortOrder: idx,
+            hasUnitMismatch: ing.hasUnitMismatch,
+          }))
+        )
         .returning();
     } catch (err) {
       try {
@@ -238,6 +303,8 @@ export async function buildFromRecipes(householdId, name, recipeIds) {
     }
   }
 
-  const warnings = needed.filter((i) => i.hasUnitMismatch).map((i) => i.ingredientName);
+  const warnings = needed
+    .filter((i) => i.hasUnitMismatch)
+    .map((i) => i.ingredientName);
   return { status: 'ok', list, items, warnings };
 }

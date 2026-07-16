@@ -4,44 +4,44 @@
 // These chains are resolved by the flattening step below — do NOT inline
 // the chain manually here; let the flattening loop handle it.
 const PLURAL_FORMS = new Map([
-  ['tomatoes',         'tomato'],
-  ['potatoes',         'potato'],
-  ['avocados',         'avocado'],
-  ['anchovies',        'anchovy'],
-  ['kidney beans',     'kidney bean'],
-  ['chickpeas',        'chickpea'],
-  ['lentils',          'lentil'],
-  ['mushrooms',        'mushroom'],
-  ['onions',           'onion'],
-  ['carrots',          'carrot'],
-  ['aubergines',       'aubergine'],
-  ['courgettes',       'courgette'],
-  ['zucchinis',        'zucchini'],    // chain: zucchini → courgette (resolved by flattening)
-  ['eggplants',        'eggplant'],   // chain: eggplant → aubergine (resolved by flattening)
-  ['scallions',        'scallion'],   // chain: scallion → green onion (resolved by flattening)
-  ['prawns',           'prawn'],
-  ['shrimps',          'shrimp'],
-  ['peas',             'pea'],
-  ['eggs',             'egg'],
-  ['cloves',           'clove'],
+  ['tomatoes', 'tomato'],
+  ['potatoes', 'potato'],
+  ['avocados', 'avocado'],
+  ['anchovies', 'anchovy'],
+  ['kidney beans', 'kidney bean'],
+  ['chickpeas', 'chickpea'],
+  ['lentils', 'lentil'],
+  ['mushrooms', 'mushroom'],
+  ['onions', 'onion'],
+  ['carrots', 'carrot'],
+  ['aubergines', 'aubergine'],
+  ['courgettes', 'courgette'],
+  ['zucchinis', 'zucchini'], // chain: zucchini → courgette (resolved by flattening)
+  ['eggplants', 'eggplant'], // chain: eggplant → aubergine (resolved by flattening)
+  ['scallions', 'scallion'], // chain: scallion → green onion (resolved by flattening)
+  ['prawns', 'prawn'],
+  ['shrimps', 'shrimp'],
+  ['peas', 'pea'],
+  ['eggs', 'egg'],
+  ['cloves', 'clove'],
   ['cloves of garlic', 'garlic'],
 ]);
 
 // ── Regional/cultural synonyms: variant → canonical ──────────────────────────
 const SYNONYM_MAP = new Map([
-  ['cilantro',       'coriander'],
-  ['eggplant',       'aubergine'],
-  ['zucchini',       'courgette'],
-  ['scallion',       'green onion'],
-  ['spring onion',   'green onion'],
-  ['green onions',   'green onion'],
-  ['spring onions',  'green onion'],
-  ['heavy cream',    'cream'],
-  ['double cream',   'cream'],
+  ['cilantro', 'coriander'],
+  ['eggplant', 'aubergine'],
+  ['zucchini', 'courgette'],
+  ['scallion', 'green onion'],
+  ['spring onion', 'green onion'],
+  ['green onions', 'green onion'],
+  ['spring onions', 'green onion'],
+  ['heavy cream', 'cream'],
+  ['double cream', 'cream'],
   ['whipping cream', 'cream'],
-  ['single cream',   'cream'],
-  ['cornstarch',     'cornflour'],
-  ['broil',          'grill'],
+  ['single cream', 'cream'],
+  ['cornstarch', 'cornflour'],
+  ['broil', 'grill'],
 ]);
 
 // ── Preparation expansions: compound form → base ingredient ──────────────────
@@ -49,30 +49,30 @@ const SYNONYM_MAP = new Map([
 // 'heart of palm' → 'palm vegetable' prevents the low-purine vegetable from
 // matching the high-purine 'heart' keyword in purineIndex.js.
 const PREPARATION_EXPANSIONS = new Map([
-  ['beef broth',        'beef'],
-  ['beef stock',        'beef'],
-  ['ground beef',       'beef'],
-  ['minced beef',       'beef'],
-  ['beef mince',        'beef'],
-  ['chicken stock',     'chicken'],
-  ['chicken broth',     'chicken'],
-  ['chicken breast',    'chicken'],
-  ['chicken thigh',     'chicken'],
-  ['chicken wings',     'chicken'],
+  ['beef broth', 'beef'],
+  ['beef stock', 'beef'],
+  ['ground beef', 'beef'],
+  ['minced beef', 'beef'],
+  ['beef mince', 'beef'],
+  ['chicken stock', 'chicken'],
+  ['chicken broth', 'chicken'],
+  ['chicken breast', 'chicken'],
+  ['chicken thigh', 'chicken'],
+  ['chicken wings', 'chicken'],
   ['chicken drumstick', 'chicken'],
-  ['turkey bacon',      'turkey'],
-  ['ground turkey',     'turkey'],
-  ['turkey mince',      'turkey'],
-  ['pork belly',        'pork'],
-  ['pork shoulder',     'pork'],
-  ['pork loin',         'pork'],
-  ['pork mince',        'pork'],
-  ['ground pork',       'pork'],
-  ['ground lamb',       'lamb'],
-  ['lamb mince',        'lamb'],
-  ['lamb chop',         'lamb'],
-  ['lamb chops',        'lamb'],
-  ['heart of palm',     'palm vegetable'],  // low-purine vegetable; must not match 'heart' keyword
+  ['turkey bacon', 'turkey'],
+  ['ground turkey', 'turkey'],
+  ['turkey mince', 'turkey'],
+  ['pork belly', 'pork'],
+  ['pork shoulder', 'pork'],
+  ['pork loin', 'pork'],
+  ['pork mince', 'pork'],
+  ['ground pork', 'pork'],
+  ['ground lamb', 'lamb'],
+  ['lamb mince', 'lamb'],
+  ['lamb chop', 'lamb'],
+  ['lamb chops', 'lamb'],
+  ['heart of palm', 'palm vegetable'], // low-purine vegetable; must not match 'heart' keyword
 ]);
 
 // ── Flattened canonical map ────────────────────────────────────────────────────
@@ -134,7 +134,11 @@ function stripTrailingPlural(token) {
 // Token-based match: requires ≥2 shared tokens OR exact canonical match.
 // Prevents "red bean" matching "bean sprouts" (only 1 shared token).
 function tokenize(name) {
-  return (name || '').toLowerCase().split(/[\s,()/]+/).filter((t) => t.length > 2).map(stripTrailingPlural);
+  return (name || '')
+    .toLowerCase()
+    .split(/[\s,()/]+/)
+    .filter((t) => t.length > 2)
+    .map(stripTrailingPlural);
 }
 
 export function foodsMatch(a, b) {
@@ -179,13 +183,87 @@ export function containsWholeWord(text, word) {
 // Explicit curated safety list — NOT synonym expansion.
 // Any change here requires a corresponding test update (Invariant 12).
 const ALLERGEN_ALIASES = new Map([
-  ['shellfish', ['shrimp', 'prawn', 'lobster', 'crab', 'oyster', 'scallop', 'mussel', 'clam', 'squid', 'octopus']],
-  ['tree nut',  ['almond', 'walnut', 'cashew', 'pecan', 'pistachio', 'hazelnut', 'macadamia', 'brazil nut', 'pine nut']],
-  ['tree nuts', ['almond', 'walnut', 'cashew', 'pecan', 'pistachio', 'hazelnut', 'macadamia', 'brazil nut', 'pine nut']],
-  ['gluten',    ['wheat', 'barley', 'rye', 'spelt', 'farro', 'semolina', 'durum', 'bulgur']],
-  ['dairy',     ['milk', 'cream', 'cheese', 'butter', 'yogurt', 'yoghurt', 'whey', 'casein', 'lactose', 'ghee']],
-  ['fish',      ['salmon', 'tuna', 'cod', 'haddock', 'tilapia', 'trout', 'bass', 'snapper', 'halibut', 'anchovy', 'sardine', 'herring', 'mackerel']],
-  ['soy',       ['soy sauce', 'tofu', 'miso', 'edamame', 'tempeh', 'soya']],
+  [
+    'shellfish',
+    [
+      'shrimp',
+      'prawn',
+      'lobster',
+      'crab',
+      'oyster',
+      'scallop',
+      'mussel',
+      'clam',
+      'squid',
+      'octopus',
+    ],
+  ],
+  [
+    'tree nut',
+    [
+      'almond',
+      'walnut',
+      'cashew',
+      'pecan',
+      'pistachio',
+      'hazelnut',
+      'macadamia',
+      'brazil nut',
+      'pine nut',
+    ],
+  ],
+  [
+    'tree nuts',
+    [
+      'almond',
+      'walnut',
+      'cashew',
+      'pecan',
+      'pistachio',
+      'hazelnut',
+      'macadamia',
+      'brazil nut',
+      'pine nut',
+    ],
+  ],
+  [
+    'gluten',
+    ['wheat', 'barley', 'rye', 'spelt', 'farro', 'semolina', 'durum', 'bulgur'],
+  ],
+  [
+    'dairy',
+    [
+      'milk',
+      'cream',
+      'cheese',
+      'butter',
+      'yogurt',
+      'yoghurt',
+      'whey',
+      'casein',
+      'lactose',
+      'ghee',
+    ],
+  ],
+  [
+    'fish',
+    [
+      'salmon',
+      'tuna',
+      'cod',
+      'haddock',
+      'tilapia',
+      'trout',
+      'bass',
+      'snapper',
+      'halibut',
+      'anchovy',
+      'sardine',
+      'herring',
+      'mackerel',
+    ],
+  ],
+  ['soy', ['soy sauce', 'tofu', 'miso', 'edamame', 'tempeh', 'soya']],
 ]);
 
 export function expandAllergen(allergenLight) {
@@ -195,16 +273,33 @@ export function expandAllergen(allergenLight) {
 
 // ── Unit normalization ────────────────────────────────────────────────────────
 const UNIT_ALIASES = new Map([
-  ['tbsp', 'tablespoon'], ['tbs', 'tablespoon'], ['tablespoons', 'tablespoon'],
-  ['tsp', 'teaspoon'], ['teaspoons', 'teaspoon'],
-  ['g', 'gram'], ['grams', 'gram'],
-  ['kg', 'kilogram'], ['kilograms', 'kilogram'],
-  ['ml', 'milliliter'], ['millilitre', 'milliliter'], ['millilitres', 'milliliter'], ['milliliters', 'milliliter'],
-  ['l', 'liter'], ['litre', 'liter'], ['litres', 'liter'], ['liters', 'liter'],
-  ['oz', 'ounce'], ['ounces', 'ounce'],
-  ['lb', 'pound'], ['lbs', 'pound'], ['pounds', 'pound'],
-  ['c', 'cup'], ['cups', 'cup'],
-  ['pieces', 'piece'], ['pc', 'piece'], ['pcs', 'piece'],
+  ['tbsp', 'tablespoon'],
+  ['tbs', 'tablespoon'],
+  ['tablespoons', 'tablespoon'],
+  ['tsp', 'teaspoon'],
+  ['teaspoons', 'teaspoon'],
+  ['g', 'gram'],
+  ['grams', 'gram'],
+  ['kg', 'kilogram'],
+  ['kilograms', 'kilogram'],
+  ['ml', 'milliliter'],
+  ['millilitre', 'milliliter'],
+  ['millilitres', 'milliliter'],
+  ['milliliters', 'milliliter'],
+  ['l', 'liter'],
+  ['litre', 'liter'],
+  ['litres', 'liter'],
+  ['liters', 'liter'],
+  ['oz', 'ounce'],
+  ['ounces', 'ounce'],
+  ['lb', 'pound'],
+  ['lbs', 'pound'],
+  ['pounds', 'pound'],
+  ['c', 'cup'],
+  ['cups', 'cup'],
+  ['pieces', 'piece'],
+  ['pc', 'piece'],
+  ['pcs', 'piece'],
   ['items', 'item'],
   ['servings', 'serving'],
   ['cloves', 'clove'],

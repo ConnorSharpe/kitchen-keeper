@@ -7,21 +7,29 @@ function getClient() {
 
 const APP_NAME = 'Kitchen Keeper';
 
-export async function sendHouseholdInvite({ toEmail, householdName, joinCode }) {
+export async function sendHouseholdInvite({
+  toEmail,
+  householdName,
+  joinCode,
+}) {
   const client = getClient();
   if (!client) {
-    const err = new Error('Email service is not configured — set RESEND_API_KEY');
+    const err = new Error(
+      'Email service is not configured — set RESEND_API_KEY'
+    );
     err.status = 503;
     throw err;
   }
 
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
-  const appUrl    = (process.env.CLIENT_ORIGIN || 'http://localhost:5173').split(',')[0].trim();
-  const joinLink  = `${appUrl}/join?code=${joinCode}`;
+  const appUrl = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
+    .split(',')[0]
+    .trim();
+  const joinLink = `${appUrl}/join?code=${joinCode}`;
 
   await client.emails.send({
-    from:    `${APP_NAME} <${fromEmail}>`,
-    to:      toEmail,
+    from: `${APP_NAME} <${fromEmail}>`,
+    to: toEmail,
     subject: `You're invited to join a ${APP_NAME} household`,
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#1f2937">

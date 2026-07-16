@@ -2,7 +2,11 @@ import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { api } from '../../api/index.js';
 import { usePantryContext } from '../../context/PantryContext.jsx';
-import { getExpiryLabel, getExpiryBadgeClass, getExpiryStatus } from '../../utils/expiry.js';
+import {
+  getExpiryLabel,
+  getExpiryBadgeClass,
+  getExpiryStatus,
+} from '../../utils/expiry.js';
 
 export default function ExpiryStrip() {
   const { expiringItems, loading, refresh } = usePantryContext();
@@ -24,7 +28,9 @@ export default function ExpiryStrip() {
 
   if (loading) {
     return (
-      <div className="text-center py-4 text-gray-400 text-sm">Loading expiring items…</div>
+      <div className="text-center py-4 text-gray-400 text-sm">
+        Loading expiring items…
+      </div>
     );
   }
 
@@ -38,7 +44,11 @@ export default function ExpiryStrip() {
   }
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-2" role="list" aria-label="Items expiring soon">
+    <div
+      className="flex gap-3 overflow-x-auto pb-2"
+      role="list"
+      aria-label="Items expiring soon"
+    >
       {expiringItems.map((item) => {
         const status = getExpiryStatus(item.expiryDate);
         const badgeCls = getExpiryBadgeClass(status);
@@ -51,11 +61,16 @@ export default function ExpiryStrip() {
             role="listitem"
             className="flex-shrink-0 w-40 rounded-lg border border-gray-200 bg-white p-3 shadow-sm flex flex-col gap-2"
           >
-            <p className="text-sm font-semibold text-gray-900 truncate" title={item.name}>
+            <p
+              className="text-sm font-semibold text-gray-900 truncate"
+              title={item.name}
+            >
               {item.name}
             </p>
 
-            <span className={`self-start inline-block px-2 py-0.5 rounded-full text-xs font-medium ${badgeCls}`}>
+            <span
+              className={`self-start inline-block px-2 py-0.5 rounded-full text-xs font-medium ${badgeCls}`}
+            >
               {item.isFrozen ? '❄️ Frozen' : label}
             </span>
 

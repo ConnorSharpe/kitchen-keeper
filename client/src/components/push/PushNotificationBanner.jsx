@@ -6,11 +6,14 @@ export default function PushNotificationBanner() {
     usePushNotifications();
   const [dismissed, setDismissed] = useState(false);
 
-  if (!isSupported || permission === 'denied' || subscription || dismissed) return null;
+  if (!isSupported || permission === 'denied' || subscription || dismissed)
+    return null;
 
   return (
-    <div className="mb-4 flex items-start justify-between rounded-lg bg-blue-50 border
-                    border-blue-200 px-4 py-3 text-sm gap-3">
+    <div
+      className="mb-4 flex items-start justify-between rounded-lg bg-blue-50 border
+                    border-blue-200 px-4 py-3 text-sm gap-3"
+    >
       <span className="text-blue-800 flex-1">
         🔔 Get notified when items are expiring or ready to use.
       </span>

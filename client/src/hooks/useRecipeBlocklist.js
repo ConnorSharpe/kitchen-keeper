@@ -20,7 +20,11 @@ export function useRecipeBlocklist() {
   }, []);
 
   const addBlock = useCallback(async ({ source, sourceId, name }) => {
-    const result = await api.post('/api/recipes/blocklist', { source, sourceId, name });
+    const result = await api.post('/api/recipes/blocklist', {
+      source,
+      sourceId,
+      name,
+    });
     if (result.entry) {
       setBlocklist((prev) => [result.entry, ...prev]);
     }

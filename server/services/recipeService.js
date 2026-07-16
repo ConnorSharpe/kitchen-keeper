@@ -28,16 +28,22 @@ async function uploadImage(dataUrl, householdId) {
     throw err;
   }
   if (buffer.length > MAX_IMAGE_BYTES) {
-    console.warn(`[recipeService] Image over size cap rejected (household ${householdId}, ${buffer.length} bytes)`);
+    console.warn(
+      `[recipeService] Image over size cap rejected (household ${householdId}, ${buffer.length} bytes)`
+    );
     const err = new Error('Image too large');
     err.status = 413;
     throw err;
   }
   const ext = subtype === 'jpeg' ? 'jpg' : subtype;
-  const { url } = await put(`recipes/${householdId}/${randomUUID()}.${ext}`, buffer, {
-    access: 'public',
-    contentType: mimetype,
-  });
+  const { url } = await put(
+    `recipes/${householdId}/${randomUUID()}.${ext}`,
+    buffer,
+    {
+      access: 'public',
+      contentType: mimetype,
+    }
+  );
   return url;
 }
 
@@ -116,7 +122,8 @@ export async function update(householdId, id, data) {
   if (!existing) return { status: 'not_found' };
   if (existing.householdId !== householdId) return { status: 'forbidden' };
 
-  await db.update(recipes)
+  await db
+    .update(recipes)
     .set({ ...serialize(data), updatedAt: new Date().toISOString() })
     .where(eq(recipes.id, id));
 
@@ -145,8 +152,12 @@ export async function toggleFavorite(householdId, id) {
   if (!existing) return { status: 'not_found' };
   if (existing.householdId !== householdId) return { status: 'forbidden' };
 
-  await db.update(recipes)
-    .set({ isFavorite: !existing.isFavorite, updatedAt: new Date().toISOString() })
+  await db
+    .update(recipes)
+    .set({
+      isFavorite: !existing.isFavorite,
+      updatedAt: new Date().toISOString(),
+    })
     .where(eq(recipes.id, id));
 
   const [updated] = await db.select().from(recipes).where(eq(recipes.id, id));

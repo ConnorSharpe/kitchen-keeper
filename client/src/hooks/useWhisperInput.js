@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 
 const PREFERRED_MIME = 'audio/mp4';
-const mimeType = typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(PREFERRED_MIME)
-  ? PREFERRED_MIME
-  : '';
+const mimeType =
+  typeof MediaRecorder !== 'undefined' &&
+  MediaRecorder.isTypeSupported(PREFERRED_MIME)
+    ? PREFERRED_MIME
+    : '';
 
-export function useWhisperInput({ lang = navigator.language, onResult, onError } = {}) {
+export function useWhisperInput({
+  lang = navigator.language,
+  onResult,
+  onError,
+} = {}) {
   const [phase, setPhase] = useState('idle'); // 'idle' | 'recording' | 'processing'
   const listening = phase === 'recording';
 
@@ -83,7 +89,8 @@ export function useWhisperInput({ lang = navigator.language, onResult, onError }
 
       autoStopTimerRef.current = setTimeout(() => stopRecording(), 90_000);
     } catch (err) {
-      const code = err.name === 'NotAllowedError' ? 'not-allowed' : 'audio-capture';
+      const code =
+        err.name === 'NotAllowedError' ? 'not-allowed' : 'audio-capture';
       onError?.(code);
       setPhase('idle');
     }
@@ -94,7 +101,11 @@ export function useWhisperInput({ lang = navigator.language, onResult, onError }
     autoStopTimerRef.current = null;
     // Set 'processing' BEFORE recorder.stop() to close the idle→processing race window.
     setPhase('processing');
-    try { recorderRef.current?.stop(); } catch { /* ignore */ }
+    try {
+      recorderRef.current?.stop();
+    } catch {
+      /* ignore */
+    }
     recorderRef.current = null;
   }
 
@@ -107,7 +118,11 @@ export function useWhisperInput({ lang = navigator.language, onResult, onError }
   useEffect(() => {
     return () => {
       clearTimeout(autoStopTimerRef.current);
-      try { recorderRef.current?.stop(); } catch { /* ignore */ }
+      try {
+        recorderRef.current?.stop();
+      } catch {
+        /* ignore */
+      }
       stopStream();
       abortControllerRef.current?.abort();
     };

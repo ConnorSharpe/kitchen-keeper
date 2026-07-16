@@ -6,7 +6,7 @@ import { eq, and, isNull, sql } from 'drizzle-orm';
 webPush.setVapidDetails(
   process.env.VAPID_SUBJECT,
   process.env.VAPID_PUBLIC_KEY,
-  process.env.VAPID_PRIVATE_KEY,
+  process.env.VAPID_PRIVATE_KEY
 );
 
 // Permanent push provider failure codes — subscription is expired or revoked.
@@ -21,11 +21,11 @@ export async function getNotificationsForToday() {
   const rows = await db
     .select({
       endpoint: pushSubscriptions.endpoint,
-      p256dh:   pushSubscriptions.p256dh,
-      auth:     pushSubscriptions.auth,
-      subId:    pushSubscriptions.id,
+      p256dh: pushSubscriptions.p256dh,
+      auth: pushSubscriptions.auth,
+      subId: pushSubscriptions.id,
       itemName: pantryItems.name,
-      trigger:  sql`
+      trigger: sql`
         CASE
           WHEN ${pantryItems.expiryDate} IS NOT NULL
                AND LEFT(${pantryItems.expiryDate}, 10)::date = CURRENT_DATE + 1
@@ -39,7 +39,10 @@ export async function getNotificationsForToday() {
       `.as('trigger'),
     })
     .from(pantryItems)
-    .innerJoin(pushSubscriptions, eq(pushSubscriptions.householdId, pantryItems.householdId))
+    .innerJoin(
+      pushSubscriptions,
+      eq(pushSubscriptions.householdId, pantryItems.householdId)
+    )
     .where(
       and(
         isNull(pantryItems.consumedAt),
@@ -50,17 +53,26 @@ export async function getNotificationsForToday() {
           OR
           (${pantryItems.readyDate} IS NOT NULL
            AND LEFT(${pantryItems.readyDate}, 10)::date = CURRENT_DATE)
-        )`,
+        )`
       )
     );
 
-  return rows.filter(r => r.trigger !== null);
+  return rows.filter((r) => r.trigger !== null);
 }
 
 const MESSAGE_FOR = {
-  expiry_1d:   (name) => ({ title: 'Pantry reminder', body: `⚠️ ${name} expires tomorrow` }),
-  expiry_3d:   (name) => ({ title: 'Pantry reminder', body: `⚠️ ${name} expires in 3 days` }),
-  ready_today: (name) => ({ title: 'Pantry update',   body: `✅ ${name} is ready to use` }),
+  expiry_1d: (name) => ({
+    title: 'Pantry reminder',
+    body: `⚠️ ${name} expires tomorrow`,
+  }),
+  expiry_3d: (name) => ({
+    title: 'Pantry reminder',
+    body: `⚠️ ${name} expires in 3 days`,
+  }),
+  ready_today: (name) => ({
+    title: 'Pantry update',
+    body: `✅ ${name} is ready to use`,
+  }),
 };
 
 // Send all notifications for today.
@@ -69,19 +81,29 @@ const MESSAGE_FOR = {
 export async function sendDailyNotifications() {
   const notifications = await getNotificationsForToday();
 
-  let sent = 0, skipped = 0, removed = 0;
+  let sent = 0,
+    skipped = 0,
+    removed = 0;
 
   for (const row of notifications) {
     const payload = MESSAGE_FOR[row.trigger]?.(row.itemName);
-    if (!payload) { skipped++; continue; }
+    if (!payload) {
+      skipped++;
+      continue;
+    }
 
-    const subscription = { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } };
+    const subscription = {
+      endpoint: row.endpoint,
+      keys: { p256dh: row.p256dh, auth: row.auth },
+    };
     try {
       await webPush.sendNotification(subscription, JSON.stringify(payload));
       sent++;
     } catch (err) {
       if (PERMANENT_FAILURE_CODES.has(err.statusCode)) {
-        await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, row.subId));
+        await db
+          .delete(pushSubscriptions)
+          .where(eq(pushSubscriptions.id, row.subId));
         removed++;
       } else {
         console.error(`Push send failed for sub ${row.subId}:`, err.message);

@@ -47,7 +47,10 @@ export default function QuickAdd() {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
       <h2 className="text-sm font-semibold text-gray-700 mb-3">Quick Add</h2>
-      <form onSubmit={handleSubmit} className="flex gap-2 items-center flex-wrap sm:flex-nowrap">
+      <form
+        onSubmit={handleSubmit}
+        className="flex gap-2 items-center flex-wrap sm:flex-nowrap"
+      >
         <input
           ref={nameRef}
           type="text"

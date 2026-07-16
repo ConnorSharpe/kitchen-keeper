@@ -1,5 +1,11 @@
 // @refresh reset
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+} from 'react';
 import toast from 'react-hot-toast';
 import { api } from '../api/index.js';
 
@@ -53,7 +59,9 @@ export function PantryProvider({ children }) {
   }, [refresh]);
 
   return (
-    <PantryContext.Provider value={{ expiringItems, allItems, wasteSaved, loading, refresh }}>
+    <PantryContext.Provider
+      value={{ expiringItems, allItems, wasteSaved, loading, refresh }}
+    >
       {children}
     </PantryContext.Provider>
   );

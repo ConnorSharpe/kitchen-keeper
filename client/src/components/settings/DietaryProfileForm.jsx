@@ -16,8 +16,12 @@ function TagInput({ label, tags, onChange, isWarning }) {
   }
 
   function handleKeyDown(e) {
-    if (e.key === 'Enter') { e.preventDefault(); add(input); }
-    if (e.key === 'Backspace' && !input && tags.length > 0) remove(tags.length - 1);
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      add(input);
+    }
+    if (e.key === 'Backspace' && !input && tags.length > 0)
+      remove(tags.length - 1);
   }
 
   return (
@@ -25,7 +29,9 @@ function TagInput({ label, tags, onChange, isWarning }) {
       <label className="block text-sm font-medium text-gray-700 mb-1">
         {label}
         {isWarning && (
-          <span className="ml-1 text-xs text-red-600 font-semibold">(safety-critical)</span>
+          <span className="ml-1 text-xs text-red-600 font-semibold">
+            (safety-critical)
+          </span>
         )}
       </label>
       <div className="flex flex-wrap gap-1.5 rounded-lg border border-gray-300 p-2 min-h-[42px] focus-within:border-orange-400 focus-within:ring-1 focus-within:ring-orange-400">
@@ -48,7 +54,9 @@ function TagInput({ label, tags, onChange, isWarning }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          onBlur={() => { if (input.trim()) add(input); }}
+          onBlur={() => {
+            if (input.trim()) add(input);
+          }}
           placeholder={tags.length === 0 ? 'Type and press Enter…' : ''}
           className="flex-1 outline-none min-w-24 text-sm bg-transparent"
         />
@@ -59,10 +67,10 @@ function TagInput({ label, tags, onChange, isWarning }) {
 
 export default function DietaryProfileForm() {
   const { profile, loading, saving, save } = useDietaryProfile();
-  const [conditions,       setConditions]       = useState([]);
-  const [allergies,        setAllergies]        = useState([]);
-  const [foodPreferences,  setFoodPreferences]  = useState([]);
-  const [savedFlash,       setSavedFlash]       = useState(false);
+  const [conditions, setConditions] = useState([]);
+  const [allergies, setAllergies] = useState([]);
+  const [foodPreferences, setFoodPreferences] = useState([]);
+  const [savedFlash, setSavedFlash] = useState(false);
 
   useEffect(() => {
     if (profile) {

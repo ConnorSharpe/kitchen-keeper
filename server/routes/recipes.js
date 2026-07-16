@@ -9,9 +9,9 @@ const router = express.Router();
 router.use(clerkAuth);
 
 const ingredientSchema = z.object({
-  name:     z.string().min(1),
+  name: z.string().min(1),
   quantity: z.coerce.number().nullable().optional(),
-  unit:     z.string().nullable().optional(),
+  unit: z.string().nullable().optional(),
 });
 
 const sourceUrlSchema = z
@@ -22,18 +22,21 @@ const sourceUrlSchema = z
   .or(z.literal('').transform(() => null));
 
 const createSchema = z.object({
-  name:        z.string().min(1).max(200),
+  name: z.string().min(1).max(200),
   description: z.string().max(1000).nullable().optional(),
-  source:      z.enum(['upload', 'ai_suggested', 'web_suggested', 'manual']).optional(),
-  sourceUrl:   sourceUrlSchema,
-  imageUrl:    z.string().nullable().optional(),
+  source: z
+    .enum(['upload', 'ai_suggested', 'web_suggested', 'manual'])
+    .optional(),
+  sourceUrl: sourceUrlSchema,
+  imageUrl: z.string().nullable().optional(),
   ingredients: z.array(ingredientSchema).default([]),
-  steps:       z.array(z.string()).default([]),
-  servings:    z.coerce.number().int().positive().nullable().optional(),
-  prepMins:    z.coerce.number().int().nonnegative().nullable().optional(),
-  cookMins:    z.coerce.number().int().nonnegative().nullable().optional(),
-  tags:        z.array(z.string()).default([]),
-  imageBase64: z.string()
+  steps: z.array(z.string()).default([]),
+  servings: z.coerce.number().int().positive().nullable().optional(),
+  prepMins: z.coerce.number().int().nonnegative().nullable().optional(),
+  cookMins: z.coerce.number().int().nonnegative().nullable().optional(),
+  tags: z.array(z.string()).default([]),
+  imageBase64: z
+    .string()
     .regex(/^data:image\/(jpeg|png|webp);base64,/)
     .optional(),
 });
@@ -56,8 +59,10 @@ router.post('/', validate(createSchema), async (req, res) => {
 router.patch('/:id', validate(updateSchema), async (req, res) => {
   const id = Number(req.params.id);
   const result = await recipeService.update(req.user.householdId, id, req.body);
-  if (result.status === 'not_found') return res.status(404).json({ error: 'Not found' });
-  if (result.status === 'forbidden')  return res.status(403).json({ error: 'Forbidden' });
+  if (result.status === 'not_found')
+    return res.status(404).json({ error: 'Not found' });
+  if (result.status === 'forbidden')
+    return res.status(403).json({ error: 'Forbidden' });
   res.json({ recipe: result.recipe });
 });
 
@@ -65,8 +70,10 @@ router.patch('/:id', validate(updateSchema), async (req, res) => {
 router.delete('/:id', async (req, res) => {
   const id = Number(req.params.id);
   const result = await recipeService.remove(req.user.householdId, id);
-  if (result.status === 'not_found') return res.status(404).json({ error: 'Not found' });
-  if (result.status === 'forbidden')  return res.status(403).json({ error: 'Forbidden' });
+  if (result.status === 'not_found')
+    return res.status(404).json({ error: 'Not found' });
+  if (result.status === 'forbidden')
+    return res.status(403).json({ error: 'Forbidden' });
   res.status(204).end();
 });
 
@@ -74,8 +81,10 @@ router.delete('/:id', async (req, res) => {
 router.patch('/:id/favorite', async (req, res) => {
   const id = Number(req.params.id);
   const result = await recipeService.toggleFavorite(req.user.householdId, id);
-  if (result.status === 'not_found') return res.status(404).json({ error: 'Not found' });
-  if (result.status === 'forbidden')  return res.status(403).json({ error: 'Forbidden' });
+  if (result.status === 'not_found')
+    return res.status(404).json({ error: 'Not found' });
+  if (result.status === 'forbidden')
+    return res.status(403).json({ error: 'Forbidden' });
   res.json({ recipe: result.recipe });
 });
 
@@ -87,13 +96,16 @@ router.get('/blocklist', async (req, res) => {
 
 // POST /api/recipes/blocklist
 const blocklistCreateSchema = z.object({
-  source:   z.string().min(1).max(50),
+  source: z.string().min(1).max(50),
   sourceId: z.string().min(1).max(200),
-  name:     z.string().min(1).max(200),
+  name: z.string().min(1).max(200),
 });
 
 router.post('/blocklist', validate(blocklistCreateSchema), async (req, res) => {
-  const entry = await recipeBlocklistService.add(req.user.householdId, req.body);
+  const entry = await recipeBlocklistService.add(
+    req.user.householdId,
+    req.body
+  );
   res.json({ entry: entry ?? null });
 });
 
@@ -101,8 +113,10 @@ router.post('/blocklist', validate(blocklistCreateSchema), async (req, res) => {
 router.delete('/blocklist/:id', async (req, res) => {
   const id = Number(req.params.id);
   const result = await recipeBlocklistService.remove(req.user.householdId, id);
-  if (result.status === 'not_found') return res.status(404).json({ error: 'Not found' });
-  if (result.status === 'forbidden')  return res.status(403).json({ error: 'Forbidden' });
+  if (result.status === 'not_found')
+    return res.status(404).json({ error: 'Not found' });
+  if (result.status === 'forbidden')
+    return res.status(403).json({ error: 'Forbidden' });
   res.status(204).end();
 });
 

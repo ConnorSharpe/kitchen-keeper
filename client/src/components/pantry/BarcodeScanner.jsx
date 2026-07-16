@@ -32,7 +32,7 @@ export default function BarcodeScanner({ onDetected, onClose, onError }) {
           if (stoppedRef.current) return;
           stopScanner().then(() => onDetected(decodedText));
         },
-        () => {},
+        () => {}
       )
       .catch((err) => {
         stoppedRef.current = true;
@@ -47,13 +47,19 @@ export default function BarcodeScanner({ onDetected, onClose, onError }) {
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80">
       <div className="relative w-full max-w-sm">
-        <div id="barcode-scanner-region" className="w-full rounded-lg overflow-hidden" />
+        <div
+          id="barcode-scanner-region"
+          className="w-full rounded-lg overflow-hidden"
+        />
         <p className="text-white text-sm text-center mt-4 opacity-75">
           Point at a barcode to scan
         </p>
       </div>
       <button
-        onClick={() => { stopScanner(); onClose(); }}
+        onClick={() => {
+          stopScanner();
+          onClose();
+        }}
         className="mt-6 px-5 py-2 bg-white text-gray-900 text-sm font-medium rounded-md"
       >
         Cancel

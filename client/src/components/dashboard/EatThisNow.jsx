@@ -4,18 +4,22 @@ import { api } from '../../api/index.js';
 import { usePantryContext } from '../../context/PantryContext.jsx';
 
 const DIFFICULTY_BADGE = {
-  easy:   'bg-green-100 text-green-700',
+  easy: 'bg-green-100 text-green-700',
   medium: 'bg-amber-100 text-amber-700',
-  hard:   'bg-red-100 text-red-700',
+  hard: 'bg-red-100 text-red-700',
 };
 
 function SuggestionCard({ suggestion, onSave, isSaving }) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-semibold text-gray-900">{suggestion.name}</h3>
+        <h3 className="text-sm font-semibold text-gray-900">
+          {suggestion.name}
+        </h3>
         {suggestion.difficulty && (
-          <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${DIFFICULTY_BADGE[suggestion.difficulty] || 'bg-gray-100 text-gray-600'}`}>
+          <span
+            className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${DIFFICULTY_BADGE[suggestion.difficulty] || 'bg-gray-100 text-gray-600'}`}
+          >
             {suggestion.difficulty}
           </span>
         )}
@@ -26,7 +30,10 @@ function SuggestionCard({ suggestion, onSave, isSaving }) {
       {suggestion.usesExpiring?.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {suggestion.usesExpiring.map((ing) => (
-            <span key={ing} className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded px-1.5 py-0.5">
+            <span
+              key={ing}
+              className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded px-1.5 py-0.5"
+            >
               {ing}
             </span>
           ))}
@@ -35,7 +42,9 @@ function SuggestionCard({ suggestion, onSave, isSaving }) {
 
       <div className="flex items-center justify-between mt-auto pt-1">
         {suggestion.estimatedMinutes != null && (
-          <span className="text-xs text-gray-400">~{suggestion.estimatedMinutes} min</span>
+          <span className="text-xs text-gray-400">
+            ~{suggestion.estimatedMinutes} min
+          </span>
         )}
         <button
           onClick={() => onSave(suggestion)}
@@ -64,7 +73,10 @@ function FallbackRecipeCard({ recipe, expiringNames }) {
       {matchingIngredients.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {matchingIngredients.map((name) => (
-            <span key={name} className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded px-1.5 py-0.5">
+            <span
+              key={name}
+              className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded px-1.5 py-0.5"
+            >
               {name}
             </span>
           ))}
@@ -100,9 +112,13 @@ export default function EatThisNow() {
       // AI unavailable — fall back to saved recipes that use expiring ingredients
       try {
         const data = await api.get('/api/recipes');
-        const expiringNames = new Set(expiringItems.map((i) => i.name.toLowerCase()));
+        const expiringNames = new Set(
+          expiringItems.map((i) => i.name.toLowerCase())
+        );
         const matching = (data.recipes || []).filter((r) =>
-          (r.ingredients || []).some((ing) => expiringNames.has(ing.name?.toLowerCase()))
+          (r.ingredients || []).some((ing) =>
+            expiringNames.has(ing.name?.toLowerCase())
+          )
         );
         if (matching.length > 0) {
           setFallbackRecipes(matching);
@@ -138,7 +154,9 @@ export default function EatThisNow() {
     <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-base font-semibold text-gray-900">What Can I Make?</h2>
+          <h2 className="text-base font-semibold text-gray-900">
+            What Can I Make?
+          </h2>
           <p className="text-xs text-gray-500 mt-0.5">
             AI suggestions using your expiring ingredients
           </p>
@@ -152,13 +170,30 @@ export default function EatThisNow() {
         >
           {mode === 'loading' ? (
             <span className="flex items-center gap-2">
-              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              <svg
+                className="animate-spin h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8v8H4z"
+                />
               </svg>
               Thinking…
             </span>
-          ) : '✨ Suggest Meals'}
+          ) : (
+            '✨ Suggest Meals'
+          )}
         </button>
       </div>
 
@@ -170,9 +205,13 @@ export default function EatThisNow() {
 
       {!pantryIsEmpty && mode === 'idle' && (
         <div className="text-center py-6 text-gray-400 select-none">
-          <p className="text-4xl mb-3" aria-hidden>🍽️</p>
+          <p className="text-4xl mb-3" aria-hidden>
+            🍽️
+          </p>
           <p className="text-sm text-gray-500 max-w-xs mx-auto">
-            Tap <span className="font-medium text-gray-700">✨ Suggest Meals</span> to get personalised ideas that use your expiring ingredients first.
+            Tap{' '}
+            <span className="font-medium text-gray-700">✨ Suggest Meals</span>{' '}
+            to get personalised ideas that use your expiring ingredients first.
           </p>
         </div>
       )}
@@ -180,7 +219,10 @@ export default function EatThisNow() {
       {mode === 'loading' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="rounded-lg border border-gray-200 bg-white p-4 animate-pulse">
+            <div
+              key={i}
+              className="rounded-lg border border-gray-200 bg-white p-4 animate-pulse"
+            >
               <div className="h-4 bg-gray-200 rounded w-3/4 mb-3" />
               <div className="h-3 bg-gray-100 rounded w-full mb-2" />
               <div className="h-3 bg-gray-100 rounded w-4/5 mb-4" />
@@ -208,11 +250,16 @@ export default function EatThisNow() {
       {mode === 'fallback' && (
         <>
           <p className="text-xs text-amber-600 mb-3">
-            AI unavailable — showing saved recipes that use your expiring ingredients:
+            AI unavailable — showing saved recipes that use your expiring
+            ingredients:
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {fallbackRecipes.map((r) => (
-              <FallbackRecipeCard key={r.id} recipe={r} expiringNames={expiringNames} />
+              <FallbackRecipeCard
+                key={r.id}
+                recipe={r}
+                expiringNames={expiringNames}
+              />
             ))}
           </div>
         </>
@@ -220,7 +267,8 @@ export default function EatThisNow() {
 
       {mode === 'empty' && (
         <p className="text-sm text-gray-400 text-center py-4">
-          No suggestions available right now. Try adding more items to your pantry.
+          No suggestions available right now. Try adding more items to your
+          pantry.
         </p>
       )}
     </div>

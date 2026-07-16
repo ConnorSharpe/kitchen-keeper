@@ -3,11 +3,41 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { api } from '../../api/index.js';
 
 const STAPLES = [
-  { category: 'Baking',            items: ['Flour', 'Sugar', 'Salt', 'Baking soda', 'Baking powder', 'Vanilla extract'] },
-  { category: 'Grains & Pasta',    items: ['Rice', 'Pasta', 'Oats', 'Breadcrumbs'] },
-  { category: 'Oils & Condiments', items: ['Olive oil', 'Vegetable oil', 'Soy sauce', 'Vinegar', 'Hot sauce'] },
-  { category: 'Canned & Jarred',   items: ['Canned tomatoes', 'Canned beans', 'Chicken broth', 'Tomato paste'] },
-  { category: 'Spices',            items: ['Black pepper', 'Garlic powder', 'Onion powder', 'Paprika', 'Cumin', 'Oregano', 'Cinnamon'] },
+  {
+    category: 'Baking',
+    items: [
+      'Flour',
+      'Sugar',
+      'Salt',
+      'Baking soda',
+      'Baking powder',
+      'Vanilla extract',
+    ],
+  },
+  {
+    category: 'Grains & Pasta',
+    items: ['Rice', 'Pasta', 'Oats', 'Breadcrumbs'],
+  },
+  {
+    category: 'Oils & Condiments',
+    items: ['Olive oil', 'Vegetable oil', 'Soy sauce', 'Vinegar', 'Hot sauce'],
+  },
+  {
+    category: 'Canned & Jarred',
+    items: ['Canned tomatoes', 'Canned beans', 'Chicken broth', 'Tomato paste'],
+  },
+  {
+    category: 'Spices',
+    items: [
+      'Black pepper',
+      'Garlic powder',
+      'Onion powder',
+      'Paprika',
+      'Cumin',
+      'Oregano',
+      'Cinnamon',
+    ],
+  },
 ];
 
 const ALL_STAPLES = STAPLES.flatMap(({ category, items }) =>
@@ -40,7 +70,7 @@ export default function StaplesChecklist({ onComplete, onDismiss }) {
         await api.post('/api/pantry/bulk', { items });
       }
       await completeOnboarding(); // Persistence Rule: only path that commits onboardingComplete
-      onComplete();               // triggers PantryPage.refresh()
+      onComplete(); // triggers PantryPage.refresh()
     } catch {
       setOnboardingState('error');
       setErrorMessage('Something went wrong. Please try again.');
@@ -68,7 +98,9 @@ export default function StaplesChecklist({ onComplete, onDismiss }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
         <div className="px-6 pt-6 pb-4 border-b border-gray-100">
-          <h2 className="text-xl font-semibold text-gray-900">Stock your pantry</h2>
+          <h2 className="text-xl font-semibold text-gray-900">
+            Stock your pantry
+          </h2>
           <p className="mt-1 text-sm text-gray-500">
             Select items you already have. You can add more anytime.
           </p>
@@ -134,8 +166,8 @@ export default function StaplesChecklist({ onComplete, onDismiss }) {
             {submitting
               ? 'Saving…'
               : selected.size > 0
-              ? `Add ${selected.size} item${selected.size === 1 ? '' : 's'}`
-              : 'Continue'}
+                ? `Add ${selected.size} item${selected.size === 1 ? '' : 's'}`
+                : 'Continue'}
           </button>
         </div>
       </div>

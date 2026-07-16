@@ -19,7 +19,9 @@ export function usePantry() {
     }
   }, []);
 
-  useEffect(() => { fetchItems(); }, [fetchItems]);
+  useEffect(() => {
+    fetchItems();
+  }, [fetchItems]);
 
   const addItem = async (body) => {
     const data = await api.post('/api/pantry', body);
@@ -65,5 +67,15 @@ export function usePantry() {
     return data;
   };
 
-  return { items, loading, addItem, updateItem, removeItem, markUsed, toggleFreeze, splitItem, refresh: fetchItems };
+  return {
+    items,
+    loading,
+    addItem,
+    updateItem,
+    removeItem,
+    markUsed,
+    toggleFreeze,
+    splitItem,
+    refresh: fetchItems,
+  };
 }

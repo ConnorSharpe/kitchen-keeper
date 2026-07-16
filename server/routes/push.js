@@ -24,9 +24,12 @@ router.post('/subscribe', clerkAuth, async (req, res) => {
   const { endpoint, keys } = req.body;
 
   if (
-    typeof endpoint !== 'string' || !endpoint ||
-    typeof keys?.p256dh !== 'string' || !keys.p256dh ||
-    typeof keys?.auth !== 'string' || !keys.auth
+    typeof endpoint !== 'string' ||
+    !endpoint ||
+    typeof keys?.p256dh !== 'string' ||
+    !keys.p256dh ||
+    typeof keys?.auth !== 'string' ||
+    !keys.auth
   ) {
     return res.status(422).json({ error: 'Invalid subscription object' });
   }
@@ -42,15 +45,23 @@ router.post('/subscribe', clerkAuth, async (req, res) => {
   // Step 1: remove any stale cross-household binding for this endpoint.
   await db
     .delete(pushSubscriptions)
-    .where(and(
-      eq(pushSubscriptions.endpoint, endpoint),
-      ne(pushSubscriptions.householdId, req.user.householdId),
-    ));
+    .where(
+      and(
+        eq(pushSubscriptions.endpoint, endpoint),
+        ne(pushSubscriptions.householdId, req.user.householdId)
+      )
+    );
 
   // Step 2: upsert. On same-endpoint conflict (same household re-subscribing), update keys only.
   await db
     .insert(pushSubscriptions)
-    .values({ householdId: req.user.householdId, endpoint, p256dh: keys.p256dh, auth: keys.auth, createdAt: new Date().toISOString() })
+    .values({
+      householdId: req.user.householdId,
+      endpoint,
+      p256dh: keys.p256dh,
+      auth: keys.auth,
+      createdAt: new Date().toISOString(),
+    })
     .onConflictDoUpdate({
       target: pushSubscriptions.endpoint,
       set: { p256dh: keys.p256dh, auth: keys.auth },
@@ -71,10 +82,12 @@ router.post('/unsubscribe', clerkAuth, async (req, res) => {
 
   await db
     .delete(pushSubscriptions)
-    .where(and(
-      eq(pushSubscriptions.endpoint, endpoint),
-      eq(pushSubscriptions.householdId, req.user.householdId),
-    ));
+    .where(
+      and(
+        eq(pushSubscriptions.endpoint, endpoint),
+        eq(pushSubscriptions.householdId, req.user.householdId)
+      )
+    );
 
   res.json({ ok: true });
 });
@@ -92,12 +105,12 @@ router.get('/cron', async (req, res) => {
   const secret = process.env.CRON_SECRET;
   if (!secret) return res.status(401).json({ error: 'Unauthorized' });
 
-  const authHeader  = req.headers['authorization'];
+  const authHeader = req.headers['authorization'];
   // Normalize: req.query.secret can be string | string[] | ParsedQs in Express
-  const rawQuery    = req.query.secret;
+  const rawQuery = req.query.secret;
   const querySecret = Array.isArray(rawQuery) ? rawQuery[0] : rawQuery;
   const validHeader = authHeader === `Bearer ${secret}`;
-  const validQuery  = querySecret === secret;
+  const validQuery = querySecret === secret;
 
   if (!validHeader && !validQuery) {
     return res.status(401).json({ error: 'Unauthorized' });

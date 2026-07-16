@@ -1,9 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { getDefaultStorageLocation, STORAGE_LOCATIONS, STORAGE_LOCATION_LABELS } from '../../utils/pantryDefaults.js';
+import {
+  getDefaultStorageLocation,
+  STORAGE_LOCATIONS,
+  STORAGE_LOCATION_LABELS,
+} from '../../utils/pantryDefaults.js';
 
 const CATEGORIES = [
-  'Produce', 'Dairy', 'Meat', 'Seafood', 'Bakery',
-  'Frozen', 'Pantry', 'Beverages', 'Condiments', 'Other',
+  'Produce',
+  'Dairy',
+  'Meat',
+  'Seafood',
+  'Bakery',
+  'Frozen',
+  'Pantry',
+  'Beverages',
+  'Condiments',
+  'Other',
 ];
 
 // HTML date inputs give "YYYY-MM-DD". Server's z.string().datetime() requires full ISO.
@@ -21,29 +33,33 @@ function buildInitialState(item, prefill) {
   if (!item) {
     const category = prefill?.category ?? 'Other';
     return {
-      name:            prefill?.name ?? '',
+      name: prefill?.name ?? '',
       category,
-      quantity:        '1',
-      unit:            'item',
-      purchaseDate:    '',
-      readyDate:       '',
-      expiryDate:      '',
+      quantity: '1',
+      unit: 'item',
+      purchaseDate: '',
+      readyDate: '',
+      expiryDate: '',
       storageLocation: getDefaultStorageLocation(category),
       servingsPerPurchaseUnit: '',
-      notes:           '',
+      notes: '',
     };
   }
   return {
-    name:            item.name,
-    category:        item.category,
-    quantity:        String(item.quantity),
-    unit:            item.unit,
-    purchaseDate:    fromISO(item.purchaseDate),
-    readyDate:       fromISO(item.readyDate),
-    expiryDate:      fromISO(item.expiryDate),
-    storageLocation: item.storageLocation ?? getDefaultStorageLocation(item.category),
-    servingsPerPurchaseUnit: item.servingsPerPurchaseUnit != null ? String(item.servingsPerPurchaseUnit) : '',
-    notes:           item.notes ?? '',
+    name: item.name,
+    category: item.category,
+    quantity: String(item.quantity),
+    unit: item.unit,
+    purchaseDate: fromISO(item.purchaseDate),
+    readyDate: fromISO(item.readyDate),
+    expiryDate: fromISO(item.expiryDate),
+    storageLocation:
+      item.storageLocation ?? getDefaultStorageLocation(item.category),
+    servingsPerPurchaseUnit:
+      item.servingsPerPurchaseUnit != null
+        ? String(item.servingsPerPurchaseUnit)
+        : '',
+    notes: item.notes ?? '',
   };
 }
 
@@ -55,19 +71,26 @@ export default function AddItemModal({ item, prefill, onClose, onSave }) {
   const firstInputRef = useRef(null);
   const isEdit = Boolean(item);
   // Captured once at mount — lets handleSubmit tell "field re-sent unchanged" from "user retyped it".
-  const initialExpiryDate = useRef(isEdit ? fromISO(item.expiryDate) : null).current;
+  const initialExpiryDate = useRef(
+    isEdit ? fromISO(item.expiryDate) : null
+  ).current;
 
   // Focus the first field on open
-  useEffect(() => { firstInputRef.current?.focus(); }, []);
+  useEffect(() => {
+    firstInputRef.current?.focus();
+  }, []);
 
   // Close on Escape
   useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    const handler = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  const set = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
+  const set = (field) => (e) =>
+    setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -76,15 +99,17 @@ export default function AddItemModal({ item, prefill, onClose, onSave }) {
     setSaving(true);
     try {
       const body = {
-        name:            form.name.trim(),
-        category:        form.category,
-        quantity:        Number(form.quantity),
-        unit:            form.unit.trim() || 'item',
-        purchaseDate:    form.purchaseDate ? toISO(form.purchaseDate) : null,
-        readyDate:       form.readyDate    ? toISO(form.readyDate)    : null,
+        name: form.name.trim(),
+        category: form.category,
+        quantity: Number(form.quantity),
+        unit: form.unit.trim() || 'item',
+        purchaseDate: form.purchaseDate ? toISO(form.purchaseDate) : null,
+        readyDate: form.readyDate ? toISO(form.readyDate) : null,
         storageLocation: form.storageLocation,
-        servingsPerPurchaseUnit: form.servingsPerPurchaseUnit ? Number(form.servingsPerPurchaseUnit) : null,
-        notes:           form.notes.trim() || null,
+        servingsPerPurchaseUnit: form.servingsPerPurchaseUnit
+          ? Number(form.servingsPerPurchaseUnit)
+          : null,
+        notes: form.notes.trim() || null,
       };
       // Only include expiryDate if the user actually typed it (create), or changed it from what was
       // loaded (edit) — an edit that leaves it untouched must not read as a fresh manual entry, or a
@@ -107,7 +132,9 @@ export default function AddItemModal({ item, prefill, onClose, onSave }) {
     // Backdrop
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
         <div className="flex items-center justify-between mb-5">
@@ -125,7 +152,9 @@ export default function AddItemModal({ item, prefill, onClose, onSave }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2">{error}</p>
+            <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2">
+              {error}
+            </p>
           )}
 
           <Field label="Name" required error={fieldErrors.name?.[0]}>
@@ -143,9 +172,15 @@ export default function AddItemModal({ item, prefill, onClose, onSave }) {
 
           <div className="grid grid-cols-2 gap-4">
             <Field label="Category" error={fieldErrors.category?.[0]}>
-              <select value={form.category} onChange={set('category')} className={inputCls}>
+              <select
+                value={form.category}
+                onChange={set('category')}
+                className={inputCls}
+              >
                 {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
                 ))}
               </select>
             </Field>
@@ -176,9 +211,15 @@ export default function AddItemModal({ item, prefill, onClose, onSave }) {
             </Field>
 
             <Field label="Storage" error={fieldErrors.storageLocation?.[0]}>
-              <select value={form.storageLocation} onChange={set('storageLocation')} className={inputCls}>
+              <select
+                value={form.storageLocation}
+                onChange={set('storageLocation')}
+                className={inputCls}
+              >
                 {STORAGE_LOCATIONS.map((loc) => (
-                  <option key={loc} value={loc}>{STORAGE_LOCATION_LABELS[loc]}</option>
+                  <option key={loc} value={loc}>
+                    {STORAGE_LOCATION_LABELS[loc]}
+                  </option>
                 ))}
               </select>
             </Field>
@@ -220,7 +261,10 @@ export default function AddItemModal({ item, prefill, onClose, onSave }) {
             />
           </Field>
 
-          <Field label="Ready date — when this item will be usable (optional)" error={fieldErrors.readyDate?.[0]}>
+          <Field
+            label="Ready date — when this item will be usable (optional)"
+            error={fieldErrors.readyDate?.[0]}
+          >
             <input
               type="date"
               value={form.readyDate}
@@ -269,7 +313,8 @@ function Field({ label, required, error, children }) {
   return (
     <div>
       <label className="block text-xs font-medium text-gray-600 mb-1">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+        {label}
+        {required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       {children}
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
