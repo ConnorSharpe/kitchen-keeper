@@ -15,8 +15,10 @@ import * as recipeSearchService from '../services/recipeSearchService.js';
 import { createToolHandlers } from '../services/chat/createToolHandlers.js';
 import { getExpiryDays, getExpiryStatus } from '../../shared/expiry.js';
 import { getDefaultStorageLocation } from '../../shared/pantryDefaults.js';
+import { aiRateLimit } from '../middleware/aiRateLimit.js';
 const router = express.Router();
 router.use(clerkAuth);
+router.use(aiRateLimit);
 
 // POST /api/ai/eat-this-now
 router.post('/eat-this-now', async (req, res) => {

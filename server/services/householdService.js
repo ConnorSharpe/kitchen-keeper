@@ -5,6 +5,7 @@ import { db } from '../db/client.js';
 import { households, householdMembers, pantryItems } from '../db/schema.js';
 import { encrypt, decrypt } from '../utils/encryption.js';
 import { maskKey } from '../utils/keyEncryption.js';
+import * as platformSettingsService from './platformSettingsService.js';
 
 const JOIN_CODE_CONSTRAINT = 'households_join_code_unique';
 const CLERK_LOOKUP_TIMEOUT_MS = 5000;
@@ -226,17 +227,23 @@ export async function joinByCode(clerkUserId, currentHouseholdId, code) {
   return { householdId: target.id, householdName: target.name };
 }
 
-// Returns { provider: clerkUserId, decryptedKey } for resolveProvider.
+// Returns { provider: clerkUserId, decryptedKey, publicAiAccessEnabled } for resolveProvider.
 // The 'provider' field carries clerkUserId so aiService.js requires no changes.
 // Throws with status 422 if key is stored but cannot be decrypted.
 export async function getAiConfig(householdId) {
   const row = await getById(householdId);
+  const publicAiAccessEnabled =
+    await platformSettingsService.isPublicAiAccessEnabled();
   if (!row?.openaiApiKey) {
-    return { provider: row?.clerkUserId ?? null, decryptedKey: null };
+    return {
+      provider: row?.clerkUserId ?? null,
+      decryptedKey: null,
+      publicAiAccessEnabled,
+    };
   }
   try {
     const decryptedKey = decrypt(row.openaiApiKey);
-    return { provider: row.clerkUserId, decryptedKey };
+    return { provider: row.clerkUserId, decryptedKey, publicAiAccessEnabled };
   } catch {
     const err = new Error(
       'Your configured AI key could not be decrypted. Please update it in Household Settings.'

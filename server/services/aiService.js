@@ -602,10 +602,11 @@ export async function chat(
     `Allergy notes are critical warnings. Surface them explicitly to the user — never omit or soften them.\n` +
     `Dietary conditions are soft constraints — suggest alternatives, do not refuse. Never eliminate a food category entirely.`;
 
-  const provider = resolveProvider(
-    aiConfig?.provider ?? null,
-    aiConfig?.decryptedKey ?? null
-  );
+  const provider = resolveProvider({
+    clerkUserId: aiConfig?.provider ?? null,
+    decryptedKey: aiConfig?.decryptedKey ?? null,
+    publicAiAccessEnabled: aiConfig?.publicAiAccessEnabled ?? false,
+  });
 
   const providerName = 'openai';
   const modelName = 'gpt-4o-mini';

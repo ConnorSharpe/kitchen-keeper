@@ -175,6 +175,18 @@ export const recipeBlocklist = pgTable('recipe_blocklist', {
     .$defaultFn(() => new Date().toISOString()),
 });
 
+export const platformSettings = pgTable('platform_settings', {
+  id: integer('id').primaryKey(),
+  publicAiAccessEnabled: boolean('public_ai_access_enabled')
+    .notNull()
+    .default(false),
+  aiRateLimitMax: integer('ai_rate_limit_max').notNull().default(20),
+  updatedAt: text('updated_at')
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+  updatedByClerkId: text('updated_by_clerk_id'),
+});
+
 export const mealLogs = pgTable('meal_logs', {
   id: serial('id').primaryKey(),
   householdId: integer('household_id')

@@ -24,12 +24,20 @@ export default function HouseholdPage() {
   const [aiStatus, setAiStatus] = useState(null); // 'saved' | 'removed' | 'error'
   const [aiError, setAiError] = useState('');
 
+  const [viewerIsOwner, setViewerIsOwner] = useState(false);
+  const [platformSettings, setPlatformSettings] = useState(null); // { publicAiAccessEnabled, aiRateLimitMax, updatedAt, updatedByClerkId } | null
+  const [platformSettingsLoading, setPlatformSettingsLoading] = useState(false);
+  const [platformSettingsSaving, setPlatformSettingsSaving] = useState(false);
+  const [platformSettingsError, setPlatformSettingsError] = useState('');
+  const [rateLimitInput, setRateLimitInput] = useState('');
+
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const h = await api.get('/api/household');
-      setHousehold(h.household);
+      const { household, viewerIsOwner } = await api.get('/api/household');
+      setHousehold(household);
+      setViewerIsOwner(viewerIsOwner);
     } catch (err) {
       setLoadError(err.message || 'Failed to load household');
     } finally {
@@ -40,6 +48,19 @@ export default function HouseholdPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!viewerIsOwner) return;
+    setPlatformSettingsLoading(true);
+    api
+      .get('/api/admin/platform-settings')
+      .then((s) => {
+        setPlatformSettings(s);
+        setRateLimitInput(String(s.aiRateLimitMax));
+      })
+      .catch((err) => setPlatformSettingsError(err.message))
+      .finally(() => setPlatformSettingsLoading(false));
+  }, [viewerIsOwner]);
 
   const loadMembers = useCallback(async () => {
     setMembersLoading(true);
@@ -97,6 +118,33 @@ export default function HouseholdPage() {
     } finally {
       setAiSaving(false);
     }
+  }
+
+  async function patchPlatformSettings(patch) {
+    setPlatformSettingsSaving(true);
+    setPlatformSettingsError('');
+    try {
+      const result = await api.patch('/api/admin/platform-settings', patch);
+      setPlatformSettings(result);
+      setRateLimitInput(String(result.aiRateLimitMax));
+    } catch (err) {
+      setPlatformSettingsError(err.message);
+    } finally {
+      setPlatformSettingsSaving(false);
+    }
+  }
+
+  function toggleAiAccess() {
+    patchPlatformSettings({
+      publicAiAccessEnabled: !platformSettings.publicAiAccessEnabled,
+    });
+  }
+
+  function saveRateLimit(e) {
+    e.preventDefault();
+    const value = Number(rateLimitInput);
+    if (!Number.isInteger(value) || value < 1) return;
+    patchPlatformSettings({ aiRateLimitMax: value });
   }
 
   async function handleInvite(e) {
@@ -323,6 +371,78 @@ export default function HouseholdPage() {
           </p>
         )}
       </section>
+
+      {/* Platform AI settings (owner only) */}
+      {viewerIsOwner && (
+        <section className="bg-white border border-gray-200 rounded-2xl p-6">
+          <h2 className="text-base font-semibold text-gray-800 mb-1">
+            Platform AI settings (owner only)
+          </h2>
+          <p className="text-xs text-gray-500 mb-4">
+            When public AI access is enabled, every household without their own
+            OpenAI key uses your platform key. Turn this off instantly if usage
+            spikes — households without their own key will need to add one to
+            keep using AI features.
+          </p>
+          {platformSettingsLoading && (
+            <p className="text-sm text-gray-400">Loading…</p>
+          )}
+          {platformSettings && (
+            <div className="space-y-4">
+              <button
+                onClick={toggleAiAccess}
+                disabled={platformSettingsSaving}
+                className={`w-full py-2 px-4 font-medium rounded-lg transition-colors text-sm disabled:opacity-50 ${
+                  platformSettings.publicAiAccessEnabled
+                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                    : 'bg-green-600 hover:bg-green-700 text-white'
+                }`}
+              >
+                {platformSettingsSaving
+                  ? 'Saving…'
+                  : platformSettings.publicAiAccessEnabled
+                    ? 'Disable public AI access (require BYOK)'
+                    : 'Enable public AI access (use platform key for all)'}
+              </button>
+
+              <form
+                onSubmit={saveRateLimit}
+                className="flex items-center gap-2"
+              >
+                <label className="text-xs text-gray-600 flex-1">
+                  AI requests per household / 15 min
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={rateLimitInput}
+                  onChange={(e) => setRateLimitInput(e.target.value)}
+                  className="w-20 rounded-lg border-gray-300 shadow-sm text-sm"
+                />
+                <button
+                  type="submit"
+                  disabled={platformSettingsSaving}
+                  className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Save
+                </button>
+              </form>
+
+              {platformSettings.updatedAt && (
+                <p className="text-xs text-gray-400">
+                  Last changed{' '}
+                  {new Date(platformSettings.updatedAt).toLocaleString()}
+                </p>
+              )}
+            </div>
+          )}
+          {platformSettingsError && (
+            <p className="mt-3 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
+              {platformSettingsError}
+            </p>
+          )}
+        </section>
+      )}
     </div>
   );
 }

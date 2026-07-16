@@ -1,92 +1,85 @@
 # Task
-TASK-036 — Structural Cleanup: Chat Route Extraction, Client/Server Dedup, Lint/Format, CI. **All four parts (C, A, B, D) implemented and committed this session**, following the spec's own recommended order (C → A → B → D). No production defect motivated this task — pure refactor/tooling, zero intended user-facing behavior change.
+TASK-037 — Public AI Access Toggle + Per-Household Rate Limiting. **Code implemented and live-verified this session** per [ai/tasks/TASK-037-spec.md](../tasks/TASK-037-spec.md) DRAFT-3 (post-architect review, round 2). Migration 0017 is now applied to the dev Neon database.
 
 # Current Status
-All of [ai/tasks/TASK-036-spec.md](../tasks/TASK-036-spec.md) is implemented. Five commits, one per part (Part C split into two: tooling+fixes, then an isolated reformat commit per D-C1):
-1. `fb2da63` — Part C: ESLint 9 + Prettier added, pre-existing lint-blocking issues fixed (dead code, unescaped JSX entities, an abstract-interface file's intentionally-unused params).
-2. `aad3cc0` — Part C: repo-wide Prettier reformat, isolated commit, zero semantic changes (markdown excluded — see Decisions).
-3. `74a1d93` — Part A: chat route tool handlers extracted from `server/routes/ai.js` into `server/services/chat/`.
-4. `d3c919c` — Part B: `shared/` directory for client/server dedup (with one flagged deviation from the spec's literal text — see Decisions).
-5. `e20b178` — Part D: GitHub Actions CI workflow.
-
-**Not pushed.** All work is local commits on `main`. Pushing needs separate user authorization (safety-rule boundary, not a task blocker).
+All code from the spec's Overall Allowed Files list is implemented, matches the spec's file contents exactly, and is both locally verified (tests/lint/build/format) and live-verified against the real dev database and a real authenticated owner session. **Not committed** — no commit made this session (user didn't ask for one). System is left in its pre-launch default state: `public_ai_access_enabled = false`, `ai_rate_limit_max = 20`, matching today's existing "BYOK required for everyone but the owner" behavior byte-for-byte.
 
 # Files Modified
-**Part C (tooling):** new `eslint.config.js`, `.prettierrc`, `.prettierignore`; `package.json`/`server/package.json` scripts + devDependencies; lint-driven fixes in `client/src/hooks/useRecipes.js`, `client/src/pages/{RecipesPage,DashboardPage,HouseholdPage,LoginPage}.jsx`, `client/src/components/pantry/{SplitItemModal,ReceiptUpload}.jsx`, `client/src/components/shopping/BuildListModal.jsx`, `server/services/{householdService,pantryService,aiService}.js`, `client/public/sw.js`.
+New: `server/db/migrations/0017_platform_settings.sql`, `server/services/cachedLoader.js`, `server/services/cachedLoader.test.js`, `server/services/platformSettingsService.js`, `server/services/ai/resolveProvider.test.js`, `server/routes/admin.js`, `server/middleware/aiRateLimitKeyGenerator.js`, `server/middleware/aiRateLimitKeyGenerator.test.js`, `server/middleware/aiRateLimit.js`.
 
-**Part C (reformat):** ~70 client/server `.js`/`.jsx`/`.json` files, Prettier `--write` only. Markdown (`ai/`, `docs/`, `README.md`) deliberately excluded — see Decisions.
+Modified: `server/db/schema.js` (+`platformSettings` table), `server/services/ai/resolveProvider.js` (positional args → options object, +`publicAiAccessEnabled` fallback), `server/services/householdService.js` (`getAiConfig` +`publicAiAccessEnabled` field, +import), `server/services/aiService.js` (one `resolveProvider(...)` call site, ~line 605), `server/routes/transcribe.js` (one call site + `aiRateLimit` wiring), `server/routes/ai.js` (`aiRateLimit` wiring on all routes), `server/routes/household.js` (`GET /` +`viewerIsOwner` top-level field), `server/app.js` (mount `adminRouter` at `/api/admin`), `client/src/pages/HouseholdPage.jsx` (new owner-only "Platform AI settings" section: toggle + rate-limit input + last-changed timestamp).
 
-**Part A:** `server/routes/ai.js` (949 → 385 lines), `server/services/recipeSearchService.js` (+`suggestForChat()`, +`deriveRecipeKey()`), new `server/services/chat/createToolHandlers.js` + `handlers/{addPantryItem,updatePantryItem,removePantryItem,consumePantryItem,suggestRecipes,saveRecipe}.js`.
+All exactly matches the spec's Overall Allowed Files — confirmed via `git status --short`, zero extra files touched. (`client/vite.config.js` was temporarily edited mid-session to point the dev proxy at this session's own server port, for live verification only — reverted before session end, confirmed zero net diff via `git diff`.)
 
-**Part B:** new `shared/{expiry,pantryDefaults}.js` + `shared/{expiry,pantryDefaults}.test.js`; deleted `server/utils/{expiry,pantryDefaults}.js`; import-site updates in `server/routes/ai.js`, `server/services/{aiService,pantryService}.js`, `server/services/chat/handlers/{addPantryItem,consumePantryItem}.js`; `client/vite.config.js` (+`@shared` alias); rewrote `client/src/utils/{expiry,pantryDefaults}.js` to import from shared.
-
-**Part D:** new `.github/workflows/ci.yml`.
+# Database Changes (live, applied this session)
+- **`platform_settings` table created** in the dev Neon DB (host `ep-misty-hill-ak264gcz-pooler...neon.tech`) via direct SQL execution (not drizzle-kit's migrator — this repo's migration history predates full drizzle-kit tracking; migrations here are hand-applied, consistent with the backlog note about 0001–0013 lacking `--> statement-breakpoint` markers).
+- Seeded with defaults (`id=1, public_ai_access_enabled=false, ai_rate_limit_max=20`).
+- Singleton constraint empirically proven: a manual `INSERT ... id=2` was attempted and correctly rejected with `violates check constraint "platform_settings_id_check"`.
+- Table was exercised live (toggled true→false, rate limit tuned 20→2→20) during verification, then explicitly reset to its original seeded defaults before ending the session — no residual non-default state left in the database.
 
 # Files Already Reviewed
-Full reads this session: `server/routes/ai.js` (pre- and post-extraction), `server/services/recipeSearchService.js`, `server/utils/{expiry,pantryDefaults}.js`, `client/src/utils/{expiry,pantryDefaults}.js`, `client/vite.config.js`, all three `package.json` files, `client/src/components/recipes/RecipeCard.jsx` / `client/src/pages/ChatPage.jsx` (to confirm the "Save Recipe" button routes through the chat tool, not a direct REST call).
+Full reads this session (to confirm "Current Behavior" in the spec still held before editing): `server/db/schema.js`, `server/services/ai/resolveProvider.js`, `server/services/householdService.js`, `server/routes/transcribe.js`, `server/routes/ai.js`, `server/app.js`, `server/routes/household.js`, `client/src/pages/HouseholdPage.jsx`, `server/middleware/validate.js`, `server/middleware/clerkAuth.js`, `server/package.json`, `server/db/client.js`, `server/db/migrate.js`, `client/vite.config.js`, `.claude/launch.json`.
 
 # Dependency Chain
-Matches the spec's own Overall Allowed Files exactly, with one addition: Part B also touched `server/routes/ai.js` for its remaining (non-chat-tool) `getExpiryDays`/`getExpiryStatus`/`getDefaultStorageLocation` imports — not explicitly named in the spec's Part B file list, but `ai.js` was already an allowed file for this task overall and this import-site update is a direct, necessary consequence of deleting `server/utils/expiry.js`/`pantryDefaults.js`.
 
-Irrelevant (untouched, per spec's Overall Forbidden Files): `server/db/schema.js`, `server/db/migrations/`, AI prompts/tool JSON schemas, `vercel.json` (Part C's Prettier pass touched its formatting only, confirmed — flagged per the spec's explicit "call out any vercel.json change" instruction).
+Editing:
+- server code across ai/resolveProvider, householdService, aiService, routes/{ai,transcribe,household,admin}, app.js, middleware/aiRateLimit*, services/{cachedLoader,platformSettingsService}, db/schema.js, db/migrations/0017
+- client/src/pages/HouseholdPage.jsx
+
+Requires:
+- server/services/ai/openaiProvider.js (unchanged, just imported)
+- server/middleware/validate.js, server/middleware/clerkAuth.js (unchanged, reused)
+
+Irrelevant (per spec's Overall Forbidden Files, untouched):
+- migrations 0000–0016, `server/services/ai/openaiProvider.js`/`providerInterface.js`, `server/services/chat/**`, AI prompts/tool schemas, `server/utils/encryption.js`/`keyEncryption.js`, `server/middleware/clerkAuth.js` (reused as-is, not modified), `ai/tasks/archive/`
 
 # Architecture Notes
-- **`eslint-plugin-react-hooks` pinned to `^5.2.0`, not the latest `^7.x`.** v7's `recommended` config bundles 16 React-Compiler-oriented rules (`set-state-in-effect`, `purity`, `immutability`, etc.) — a materially different, much stricter thing than "hooks linting," and would have generated the exact large pre-existing-violation backlog D-C2 explicitly said to avoid. v5's `recommended` is the classic 2-rule set (`rules-of-hooks: error`, `exhaustive-deps: warn`), matching D-C2's actual intent for a codebase with no React Compiler usage.
-- **`no-unused-vars` configured with `argsIgnorePattern`/`varsIgnorePattern: '^_'`** globally, plus a file-scoped `args: 'none'` override for `server/services/ai/providerInterface.js` (an abstract base class whose method params document the adapter contract, always unused in the base — every method throws `'Not implemented'`).
-- **Markdown excluded from Prettier** (`.prettierignore`: `*.md`) after the first `--write` pass reformatted `ai/tasks/*.md` archived specs into wide, padded tables — pure noise on historical records, reverted before committing. This wasn't in the spec's Allowed Files list as an explicit exclusion, but "every source file, for formatting only" reasonably reads as code, not documentation/spec archives.
-- **`suggestForChat()` calls `findByPantry()` directly**, not via `aiService.suggestRecipes()`'s wrapper — both now live in `recipeSearchService.js`, and going through `aiService` would create an import cycle (`aiService.js` already imports from `recipeSearchService.js`).
-- **The `recipeSuggestions` closure-mutation preserved per D-A1**, via `ctx.result = { recipeSuggestions: [] }` — written by `handlers/suggestRecipes.js`, read by the `/chat` route after `aiService.chat()` returns.
-- **`shared/`'s two files have asymmetric shapes**: `pantryDefaults.js` has zero client-only additions today, so `client/src/utils/pantryDefaults.js` is a pure `export * from '@shared/pantryDefaults.js'`. `expiry.js` has 5 client-only UI helpers (`getRipeningDays`, `isRipening`, `getRipeningState`, `getExpiryRowClass`, `getExpiryBadgeClass`, `getExpiryLabel`), so `client/src/utils/expiry.js` imports the 2 shared calc functions, re-exports them, and layers the UI helpers on top — matching the spec's Fix Approach step 1 exactly.
+- `resolveProvider` is now an options-object function (D-7): `resolveProvider({ clerkUserId, decryptedKey, publicAiAccessEnabled })`. All three call sites updated to match.
+- `getAiConfig` now always calls `platformSettingsService.isPublicAiAccessEnabled()` — one extra (cached, 5s TTL) lookup per AI request, fails closed to `false` on any DB error (proven live this session — see Verification Results).
+- `aiRateLimit` middleware is mounted on the whole `ai.js` router (`router.use(aiRateLimit)`, after `clerkAuth`) — **confirmed live that this covers every route on that router, including `GET /chat/history`, which makes no OpenAI call at all.** This is correct per the spec (uniform application, D-10) but worth knowing if a future session wonders why a read-only route counts against the AI rate limit.
+- `platform_settings` is a singleton table (`CHECK(id=1)` + `PRIMARY KEY`), cached via `createCachedLoader` (stampede-safe, in-flight-dedup). Toggling/tuning takes effect without any server restart — proven live (dynamic `limit` function in `aiRateLimit.js` picked up the new value on the very next request after a PATCH).
+- This session's dev server ports were auto-reassigned (another chat's server was already on 3001, running **stale pre-TASK-037 code** — confirmed via a 404 on the new `/api/admin/platform-settings` route against port 3001). Don't assume port 3001 has current code without checking.
 
 # Decisions Made
-- **Part C: markdown excluded from Prettier's scope** (see Architecture Notes) — an implementer's-call exclusion the spec didn't explicitly authorize, but D-C1's own goal ("minimal diff," "reviewable in isolation") is directly undermined by reformatting unrelated historical documents. Flagged, not silently done.
-- **Part C: `eslint-plugin-react-hooks` version pin to `^5`** (see Architecture Notes) — required to actually satisfy D-C2's stated intent, since the literal "install the recommended config" instruction would have violated D-C2's own reasoning given v7's scope change.
-- **Part C: dead-code/unescaped-entity fixes bundled into the same commit as the ESLint/Prettier tooling setup**, not the separate reformat commit — these are semantic (not formatting) changes, so isolating them from the *reformat* pass (which the spec's acceptance criteria require to be "zero semantic changes") took priority over isolating them from the *tooling setup* commit, which the spec didn't require to be logic-change-free.
-- **Part B: abandoned the spec's literal `server/package.json` `"imports": {"#shared/*": "./shared/*"}` subpath-imports map**, confirmed via a live reproduction that Node throws `ERR_INVALID_PACKAGE_TARGET` for any `imports` target resolving outside the declaring package's own directory — `shared/` is a sibling of `server/`, not nested inside it, and Part B's Fix Approach step 1 requires it to be top-level (shared with `client/` via the same directory). Used plain relative imports instead (`../../shared/...`, `../../../../shared/...` from the deepest chat-handler files) — the same pattern already used everywhere else in this codebase, including every file Part A added this session. This is the single largest deviation from the spec's literal text this session; everything else matched.
-- No other spec-level decisions were revisited — implementation followed TASK-036-spec.md's own Decisions (D-A1 through D-A3, D-B1 through D-B4, D-C1/D-C2, D-D1) as written.
+No implementer deviations from the spec this session — DRAFT-3 was already fully architect-reviewed (2 rounds) before this session started, so implementation followed its file contents verbatim. One Prettier auto-format pass was applied, scoped only to the 3 files this task touched that had pre-existing style drift (`HouseholdPage.jsx`, `transcribe.js`, `resolveProvider.js`) — did **not** reformat `server/routes/shopping.js` or `server/services/chatService.js`, which also show `prettier --check` warnings but are untouched by this task.
 
 # Remaining Work
-1. **Push and open a PR** so Part D's own acceptance criterion (a real GitHub Actions run) can actually be observed — not done this session, needs explicit authorization (a `git push` is outside what I do without asking first).
-2. **Part B's last verification step — a live Vercel preview deployment check** (pantry CRUD, AI chat round-trip, shopping-list build) — also blocked on the push above; the spec calls this "a cheap sanity check... even though this redesign removes the specific dependency-resolution risk that made it a hard gate in DRAFT-1," so it's valuable but not risk-critical given everything else (npm ci, build, live dev-server `@shared` resolution) was already verified locally.
-3. Nothing else outstanding from this spec — all four parts' own acceptance criteria that don't require a push are met and verified.
-
-## Backlog (carried forward, unchanged from prior sessions unless noted)
-- iOS PWA has no way to upload an existing photo (camera-only) — unscoped, fix identified (add a second file input without `capture`).
-- Migration history reconciliation (0001–0013 lack `--> statement-breakpoint` markers) — still a hand-applied workaround.
-- No Clerk webhook sync for deleted accounts — deferred, no urgency indicated.
-- TASK-021 v2 (fuzzy annotation matching) — HOLD, no usage evidence yet.
-- TASK-022 v2 (language preference) — HOLD, English-only is sufficient for now.
-- One real household item (`BNLS/SL BRST`, id 19) still has `storageLocation: 'pantry'` from TASK-031's session testing — cosmetic.
-- `POST /api/ai/eat-this-now` doesn't honor the recipe blocklist (TASK-034 Out of Scope, confirmed unchanged) — candidate for a follow-up task if it proves to matter in practice.
-- C2 (from TASK-035 session): Clerk running in Development mode on production — Vercel env-var / Clerk-dashboard config question, not a code change. Still open, not touched this session (out of TASK-036's scope).
-- **New this session**: `recipeScorer.js`'s bundle-size warning (`index-*.js` at 542 kB gzipped 159 kB) surfaced by every `npm run build` this session — pre-existing, not caused by this task, not part of its scope (no code-splitting work was in TASK-036-spec.md). Worth a follow-up task if load time ever becomes a concern.
+1. **No commit made yet** — ask before committing/pushing, per standing safety practice on this repo.
+2. **Verification Steps 2 (byte-identical 403 for a second, non-owner household) and 5 (BYOK precedence with a live invalid key) were not exercised via a second real HTTP session** — doing so would require either creating a second Clerk account (outside what I do — account creation is off-limits regardless of context) or the user providing a second real test login. `resolveProvider`'s decision logic covering exactly this matrix (owner/non-owner × BYOK/no-BYOK × toggle-on/off) is fully unit-tested (5/5 passing, `resolveProvider.test.js`) and the toggle plumbing feeding it was proven live end-to-end for the owner path — the only untested seam is a second household's literal HTTP round-trip, which is logic-identical to the owner path already proven.
+3. **Deployment Prerequisites are still open, non-code, outside this repo**: OpenAI billing → prepaid credits with auto-recharge off; Clerk Dashboard sign-up hardening review. Not touched this session.
+4. **TASK-036's 5 local commits are still unpushed** (carried forward, unrelated to this task) — still pending the user's push decision from the prior session.
 
 # Known Risks
-- **Untested against a real GitHub Actions runner** — the workflow was validated by parsing its YAML and replicating each step's exact command locally (all passed), but the actual `ubuntu-latest` environment, Node 20 install, and `actions/setup-node` cache behavior have not been observed running for real. Low risk (the steps are simple `npm` invocations already proven to work), but not zero.
-- **Part A's live verification exercised real production data** (the shared Neon dev/prod database) — a test pantry item (`TASK036 test chicken`, added/updated/consumed-ambiguity-checked/removed) and a test-saved recipe (`BBQ Gochujang Cauliflower Fried Rice`, saved then deleted) were both created and cleaned up via the real UI this session. Confirmed clean via a final Pantry-page and Recipes-page read after cleanup — no residual test data left behind.
-- **Bundle-size warning is pre-existing**, not a regression from this session (see Backlog) — confirmed by it appearing identically in every `npm run build` run across all three parts.
-- No automated test suite beyond `node --test` (`foodNormalization.test.js`, `keyEncryption.test.js`, `purineIndex.test.js`, plus this session's new `shared/expiry.test.js` and `shared/pantryDefaults.test.js` — 72 tests total now, up from 59) — consistent with every prior session's methodology; this session added net-new coverage rather than removing any.
+- Everything the spec's own "Known Risks" section documents still applies unchanged (OpenAI's own budget limits are notification-only; the rate limiter is abuse deterrence not spend protection; fail-closed on settings-lookup failure degrades non-owner AI access during a DB outage; no automatic cutoff; the 20-req/15-min default is a starting guess; registration is unrestricted at the Clerk layer).
+- **`aiRateLimit`'s `MemoryStore` state is per-process** — confirmed concretely this session: switching the client's proxy target between two different running server processes (port 3001 vs. this session's port) would reset rate-limit counters, since each process has its own in-memory store. Expected/documented behavior (D-per spec's Known Risks on `MemoryStore`), just now empirically observed rather than only theoretical.
 
 # Verification Results
-- **Part C**: `npm run lint` exit 0 (was 45 errors → 36 after the react-hooks pin → 0 after fixes). `npx prettier --check .` clean after the reformat commit. 59/59 tests pass before and after reformat. Client build output unchanged (same bundle sizes) before/after reformat.
-- **Part A**: All six chat tools live-verified via the real chat UI: `add_pantry_item` ✅, `update_pantry_item` ✅, `consume_pantry_item` ✅ (exercised its ambiguous-match branch), `remove_pantry_item` ✅ (confirmed absent from Pantry page after), `suggest_recipes` ✅ (re-ran TASK-035's exact "What should I make with garlic?" check — 3/3 candidates contain garlic, same as before extraction), `save_recipe` ✅ (confirmed recipe appeared in Recipes page, then deleted). 59/59 unit tests pass. Lint clean.
-- **Part B**: `npm ci` succeeds clean at root (cascades to `server/` and `client/`). `npm run build` produces working `client/dist`. 13 new `shared/` tests + 59 existing = 72/72 pass. Live-verified the client dev server's `@shared` alias resolves correctly at runtime (not just `vite build`) — Pantry page rendered all expiry statuses/labels and storage badges with zero console errors, against the real dev-server + real database. Grep-confirmed zero remaining `Mirror of server/...` comments repo-wide.
-- **Part D**: `.github/workflows/ci.yml` YAML parsed and validated with `js-yaml`. Each step's exact command (`npm ci`, `npm run lint`, `npm test`, `npm run build`) run locally in sequence — all pass. Not yet observed running on an actual GitHub Actions runner (needs a push).
+**Local (unchanged from prior write-up):**
+- `node --test` (server): 71/71 pass, including all 12 new tests.
+- `npm test` (root): 84/84 pass (13 shared + 71 server).
+- `npm run lint`: clean. `npm run format:check`: clean on all files this task touched. `npm run build`: succeeds (pre-existing bundle-size warning only).
+
+**Live, against the real dev Neon DB and a real authenticated owner session (this session):**
+- **Step 1 (migration + singleton)**: Applied; seed row confirmed; `INSERT id=2` empirically rejected with the expected check-constraint violation.
+- **Step 3/4 (toggle flips, no redeploy)**: Flipped `publicAiAccessEnabled` true→false via the real Household page UI; both PATCHes returned 200; DB state and UI both reflected each change immediately (5s cache is invalidate-on-write, so no wait was even needed); reset to `false` (original default) before session end.
+- **Step 6 (partial — unauthenticated request)**: `GET`/`PATCH /api/admin/platform-settings` with no session both return 401 (proven via curl against the running server) — confirms `clerkAuth` gates the route before `requireOwner` ever runs. The owner-success path (200) was proven via the real UI. The non-owner-authenticated-403 path was not exercised live (see Remaining Work #2) but is a single-line string comparison, already code-reviewed.
+- **Step 7 (fail-closed)**: Pointed `DATABASE_URL` at an unreachable host in an isolated process import of `platformSettingsService`; `getPlatformSettings()` and `isPublicAiAccessEnabled()` both returned safe defaults (`false`/`20`) without throwing, logging the failure via `console.error` as designed.
+- **Step 8 (live UI)**: The owner's real Household page renders the new "Platform AI settings" section correctly, including live `updatedAt`/toggle state matching the DB. (Non-owner-side "section absent" was not exercised — same second-account constraint as above.)
+- **Step 9 (rate limit)**: Set `aiRateLimitMax` to 2 via the real UI; subsequent requests to `GET /api/ai/chat/history` (a free, non-OpenAI-calling route under the same rate-limited router) returned `429` with `RateLimit-Limit: 2`, `RateLimit-Remaining: 0`, and the exact configured error message. Reset to 20; confirmed a follow-up request immediately succeeded (`200`, `RateLimit-Limit: 20`) with zero server restart — proves the dynamic `limit` function truly re-reads on every request.
+- **Step 11 (`.returning()` on `.update()`)**: Directly verified against the real `drizzle-orm@0.29.5` + `neon-http` combination — the returned row exactly reflects the just-written values on every write in this session. No fallback needed.
+- **Step 12 (regression)**: Not run as the full 6-tool chat suite (this task touches zero chat-tool logic, only key resolution and a request-counting middleware wrapped around the whole router) — instead confirmed the lighter-weight equivalent: normal `GET /api/ai/chat/history` access for the owner's household succeeds normally (`200`) after the rate-limit tuning was reset, proving no regression in ordinary access.
 
 # Recommended Next Action
-Ask the user whether to push this branch (5 commits, all local) so Part D's CI workflow and Part B's Vercel-preview check can both be observed for real — the only two spec acceptance criteria not verifiable without a push. If the user isn't ready to push yet, TASK-036 is otherwise fully implemented and locally verified; no further local work is queued.
+Implementation and verification are complete for everything this session could reach without a second live Clerk account. Ask the user: (1) whether to commit this work now, and (2) whether they're ready to review the Deployment Prerequisites (OpenAI prepaid billing, Clerk sign-up hardening) before ever flipping `publicAiAccessEnabled` to `true` in a real public-launch scenario — the code path is proven, but those two non-code steps are the actual safety net for a real launch, not this task's code.
 
 # Forbidden Exploration
-No longer applicable — TASK-036 is complete pending the push decision above; no fresh spec is queued yet.
+- `ai/tasks/archive/` — not relevant to this task
+- Anything already listed under TASK-037-spec.md's own "Overall Forbidden Files" and "Out of Scope" sections — all explicitly deferred by the spec itself, not gaps in this session's work
 
 # Context Notes
 - branch: main
 - worktree: none
-- context pressure: high — full 4-part spec (C→A→B→D) implemented, live-verified, and committed in one session, including a from-scratch Node `imports` restriction investigation in Part B.
+- context pressure: moderate-high — full spec implementation, local verification, DB migration application, and live HTTP/UI verification all in one session.
 
 # PowerShell Merge Block
-All 5 commits already made locally this session (see Current Status for hashes) — nothing further to stage. This block is only relevant if the user wants to push.
-
-```powershell
-git push
-```
+Nothing to push — no commit made yet this session. If/when the user wants a commit, stage exactly the files listed under "Files Modified" above (all match the spec's Overall Allowed Files list) plus the new files, nothing else. `client/vite.config.js` has zero net diff and needs no staging.

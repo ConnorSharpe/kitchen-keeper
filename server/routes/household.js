@@ -25,6 +25,7 @@ router.get('/', async (req, res) => {
       joinCode: household.joinCode,
       maskedKey: aiPreview.maskedKey,
     },
+    viewerIsOwner: req.user.id === process.env.OWNER_CLERK_ID,
   });
 });
 
