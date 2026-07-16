@@ -1,6 +1,6 @@
 let handler;
 
-module.exports = async (req, res) => {
+export default async (req, res) => {
   if (!handler) {
     const { default: app } = await import('../server/app.js');
     handler = app;
