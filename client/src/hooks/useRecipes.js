@@ -1,6 +1,5 @@
 import { useState, useCallback } from 'react';
 import { api } from '../api/index.js';
-import toast from 'react-hot-toast';
 
 export function useRecipes() {
   const [recipes, setRecipes] = useState([]);
@@ -43,5 +42,14 @@ export function useRecipes() {
     return result.recipe;
   }, []);
 
-  return { recipes, loading, error, refresh, addRecipe, updateRecipe, removeRecipe, toggleFavorite };
+  return {
+    recipes,
+    loading,
+    error,
+    refresh,
+    addRecipe,
+    updateRecipe,
+    removeRecipe,
+    toggleFavorite,
+  };
 }

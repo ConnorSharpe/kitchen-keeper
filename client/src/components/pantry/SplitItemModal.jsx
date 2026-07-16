@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { STORAGE_LOCATIONS, STORAGE_LOCATION_LABELS } from '../../utils/pantryDefaults.js';
+import {
+  STORAGE_LOCATIONS,
+  STORAGE_LOCATION_LABELS,
+} from '../../utils/pantryDefaults.js';
 
 export default function SplitItemModal({ item, onClose, onSplit }) {
   // TASK-033: quantity/servings are mutually exclusive at the UI layer — a toggle selects which
@@ -11,18 +14,25 @@ export default function SplitItemModal({ item, onClose, onSplit }) {
   const [splitQuantity, setSplitQuantity] = useState('');
   const [splitServings, setSplitServings] = useState('');
   const [storageLocation, setStorageLocation] = useState(
-    STORAGE_LOCATIONS.find((loc) => loc !== item.storageLocation) ?? STORAGE_LOCATIONS[0],
+    STORAGE_LOCATIONS.find((loc) => loc !== item.storageLocation) ??
+      STORAGE_LOCATIONS[0]
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const firstInputRef = useRef(null);
 
-  const maxServings = hasServings ? item.quantity * item.servingsPerPurchaseUnit : null;
-
-  useEffect(() => { firstInputRef.current?.focus(); }, [mode]);
+  const maxServings = hasServings
+    ? item.quantity * item.servingsPerPurchaseUnit
+    : null;
 
   useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    firstInputRef.current?.focus();
+  }, [mode]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
@@ -33,15 +43,18 @@ export default function SplitItemModal({ item, onClose, onSplit }) {
 
     const value = Number(mode === 'quantity' ? splitQuantity : splitServings);
     if (!Number.isFinite(value) || value <= 0) {
-      setError(`Enter a ${mode === 'quantity' ? 'quantity' : 'servings amount'} greater than 0`);
+      setError(
+        `Enter a ${mode === 'quantity' ? 'quantity' : 'servings amount'} greater than 0`
+      );
       return;
     }
 
     setSaving(true);
     try {
-      const body = mode === 'quantity'
-        ? { splitQuantity: value, storageLocation }
-        : { splitServings: value, storageLocation };
+      const body =
+        mode === 'quantity'
+          ? { splitQuantity: value, storageLocation }
+          : { splitServings: value, storageLocation };
       await onSplit(item.id, body);
       onClose();
     } catch (err) {
@@ -54,11 +67,15 @@ export default function SplitItemModal({ item, onClose, onSplit }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold text-gray-900">Split "{item.name}"</h2>
+          <h2 className="text-lg font-semibold text-gray-900">
+            Split &quot;{item.name}&quot;
+          </h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 text-xl leading-none"
@@ -69,13 +86,16 @@ export default function SplitItemModal({ item, onClose, onSplit }) {
         </div>
 
         <p className="text-sm text-gray-500 mb-4">
-          Currently {item.quantity} {item.unit}. Move part of this quantity to a different storage
-          location — the rest stays here with its current expiry.
+          Currently {item.quantity} {item.unit}. Move part of this quantity to a
+          different storage location — the rest stays here with its current
+          expiry.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2">{error}</p>
+            <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2">
+              {error}
+            </p>
           )}
 
           {hasServings && (
@@ -89,7 +109,9 @@ export default function SplitItemModal({ item, onClose, onSplit }) {
                   type="button"
                   onClick={() => setMode(key)}
                   className={`flex-1 rounded px-3 py-1.5 transition-colors ${
-                    mode === key ? 'bg-orange-500 text-white' : 'text-gray-600 hover:bg-gray-100'
+                    mode === key
+                      ? 'bg-orange-500 text-white'
+                      : 'text-gray-600 hover:bg-gray-100'
                   }`}
                 >
                   {label}
@@ -146,7 +168,9 @@ export default function SplitItemModal({ item, onClose, onSplit }) {
               className={inputCls}
             >
               {STORAGE_LOCATIONS.map((loc) => (
-                <option key={loc} value={loc}>{STORAGE_LOCATION_LABELS[loc]}</option>
+                <option key={loc} value={loc}>
+                  {STORAGE_LOCATION_LABELS[loc]}
+                </option>
               ))}
             </select>
           </div>

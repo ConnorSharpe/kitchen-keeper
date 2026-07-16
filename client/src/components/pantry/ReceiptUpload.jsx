@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { STORAGE_LOCATIONS, STORAGE_LOCATION_LABELS } from '../../utils/pantryDefaults.js';
+import {
+  STORAGE_LOCATIONS,
+  STORAGE_LOCATION_LABELS,
+} from '../../utils/pantryDefaults.js';
 
 // ReceiptUpload runs through three phases:
 //   upload   — drag-drop / click-to-select file
@@ -20,7 +23,9 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    setIsMobile(window.matchMedia('(hover: none) and (pointer: coarse)').matches);
+    setIsMobile(
+      window.matchMedia('(hover: none) and (pointer: coarse)').matches
+    );
   }, []);
 
   async function scanFile(file) {
@@ -49,7 +54,9 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
       const { candidates: items, skipped: sk } = data;
 
       if (items.length === 0) {
-        toast.error('No food items could be found on that receipt. Try a clearer photo.');
+        toast.error(
+          'No food items could be found on that receipt. Try a clearer photo.'
+        );
         setPhase('upload');
         return;
       }
@@ -116,7 +123,9 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
   }
 
   function setStorageLocation(index, storageLocation) {
-    setCandidates((prev) => prev.map((c, i) => (i === index ? { ...c, storageLocation } : c)));
+    setCandidates((prev) =>
+      prev.map((c, i) => (i === index ? { ...c, storageLocation } : c))
+    );
   }
 
   const selectedCount = Object.values(checked).filter(Boolean).length;
@@ -124,16 +133,20 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 p-6 max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between mb-5 flex-shrink-0">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Scan a receipt</h2>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Scan a receipt
+            </h2>
             {phase === 'preview' && (
               <p className="text-xs text-gray-400 mt-0.5">
-                Uncheck any items you don't want to add
+                Uncheck any items you don&apos;t want to add
               </p>
             )}
           </div>
@@ -149,7 +162,10 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
         {/* Phase: upload */}
         {phase === 'upload' && (
           <div
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
@@ -163,7 +179,9 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
             <p className="text-sm font-medium text-gray-700">
               Drop a receipt photo here, or click to upload
             </p>
-            <p className="text-xs text-gray-400 mt-1">JPEG, PNG, WebP or HEIC — max 10 MB</p>
+            <p className="text-xs text-gray-400 mt-1">
+              JPEG, PNG, WebP or HEIC — max 10 MB
+            </p>
             <input
               ref={fileInputRef}
               type="file"
@@ -179,7 +197,9 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
         {phase === 'scanning' && (
           <div className="flex flex-col items-center justify-center py-20">
             <div className="w-9 h-9 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin mb-5" />
-            <p className="text-sm font-medium text-gray-700">Scanning receipt…</p>
+            <p className="text-sm font-medium text-gray-700">
+              Scanning receipt…
+            </p>
             <p className="text-xs text-gray-400 mt-1">Reading items with AI</p>
           </div>
         )}
@@ -190,11 +210,12 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
             {/* Summary row */}
             <div className="flex items-center justify-between mb-3 flex-shrink-0">
               <p className="text-sm text-gray-600">
-                Found <span className="font-medium">{candidates.length}</span> item
+                Found <span className="font-medium">{candidates.length}</span>{' '}
+                item
                 {candidates.length !== 1 ? 's' : ''}
                 {skipped > 0 && (
                   <span className="text-gray-400 ml-1">
-                    ({skipped} couldn't be parsed)
+                    ({skipped} couldn&apos;t be parsed)
                   </span>
                 )}
               </p>
@@ -220,7 +241,15 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
               <table className="min-w-full divide-y divide-gray-200 text-sm">
                 <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
-                    {['', 'Name', 'Category', 'Qty', 'Unit', 'Storage', 'Expires'].map((h) => (
+                    {[
+                      '',
+                      'Name',
+                      'Category',
+                      'Qty',
+                      'Unit',
+                      'Storage',
+                      'Expires',
+                    ].map((h) => (
                       <th
                         key={h}
                         className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap"
@@ -241,7 +270,10 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
                           type="checkbox"
                           checked={!!checked[i]}
                           onChange={(e) =>
-                            setChecked((prev) => ({ ...prev, [i]: e.target.checked }))
+                            setChecked((prev) => ({
+                              ...prev,
+                              [i]: e.target.checked,
+                            }))
                           }
                           className="rounded border-gray-300 text-orange-500 focus:ring-orange-400 cursor-pointer"
                         />
@@ -261,11 +293,15 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
                       <td className="px-3 py-2.5 whitespace-nowrap">
                         <select
                           value={item.storageLocation ?? 'pantry'}
-                          onChange={(e) => setStorageLocation(i, e.target.value)}
+                          onChange={(e) =>
+                            setStorageLocation(i, e.target.value)
+                          }
                           className="rounded border-gray-300 text-xs py-1 pl-2 pr-6 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
                         >
                           {STORAGE_LOCATIONS.map((loc) => (
-                            <option key={loc} value={loc}>{STORAGE_LOCATION_LABELS[loc]}</option>
+                            <option key={loc} value={loc}>
+                              {STORAGE_LOCATION_LABELS[loc]}
+                            </option>
                           ))}
                         </select>
                       </td>

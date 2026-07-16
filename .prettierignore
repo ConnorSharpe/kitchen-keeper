@@ -1,0 +1,11 @@
+node_modules/
+client/dist/
+uploads/
+*.db
+*.db-wal
+*.db-shm
+package-lock.json
+
+# Docs/specs formatting is out of scope for this task — Markdown reflow (table
+# padding etc.) is noisy churn on historical records, not a code-quality signal.
+*.md

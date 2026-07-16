@@ -9,7 +9,14 @@ import { lookup } from './shelfLifeService.js';
 // never depends on which function is calling this.
 //   source: 'manual'      — existingExpiry is a value a human just typed in *this* request.
 //           'ai_estimate' — existingExpiry is algorithm-produced (or absent), eligible for override.
-export function computeExpiryForStorage({ name, category, storageLocation, purchaseDate, existingExpiry, source }) {
+export function computeExpiryForStorage({
+  name,
+  category: _category,
+  storageLocation,
+  purchaseDate,
+  existingExpiry,
+  source,
+}) {
   if (source === 'manual' && existingExpiry != null) return existingExpiry;
 
   const result = lookup(name, storageLocation);
@@ -25,11 +32,11 @@ export function computeExpiryForStorage({ name, category, storageLocation, purch
 
 function enrichWithExpiry(item, source) {
   const expiryDate = computeExpiryForStorage({
-    name:            item.name,
-    category:        item.category,
+    name: item.name,
+    category: item.category,
     storageLocation: item.storageLocation,
-    purchaseDate:    item.purchaseDate,
-    existingExpiry:  item.expiryDate ?? null,
+    purchaseDate: item.purchaseDate,
+    existingExpiry: item.expiryDate ?? null,
     source,
   });
   return { ...item, expiryDate };
@@ -49,13 +56,19 @@ export async function getAll(householdId, { expiringWithin } = {}) {
     conditions.push(lte(pantryItems.expiryDate, cutoff.toISOString()));
   }
 
-  return db.select().from(pantryItems).where(and(...conditions));
+  return db
+    .select()
+    .from(pantryItems)
+    .where(and(...conditions));
 }
 
 // source: 'manual' | 'ai_estimate' — caller states explicitly, per Decision 1's presence-check rule.
 export async function create(householdId, data, source) {
   const enriched = enrichWithExpiry(data, source);
-  const [row] = await db.insert(pantryItems).values({ ...enriched, householdId }).returning();
+  const [row] = await db
+    .insert(pantryItems)
+    .values({ ...enriched, householdId })
+    .returning();
   return row;
 }
 
@@ -63,7 +76,10 @@ export async function create(householdId, data, source) {
 // Editing storageLocation recomputes expiry from purchaseDate (Decision 4); any other edit
 // (e.g. quantity, notes) passes through untouched.
 export async function update(householdId, id, data) {
-  const [existing] = await db.select().from(pantryItems).where(eq(pantryItems.id, id));
+  const [existing] = await db
+    .select()
+    .from(pantryItems)
+    .where(eq(pantryItems.id, id));
   if (!existing) return { status: 'not_found' };
   if (existing.householdId !== householdId) return { status: 'forbidden' };
 
@@ -72,25 +88,32 @@ export async function update(householdId, id, data) {
   if ('storageLocation' in data) {
     const hasManualExpiry = 'expiryDate' in data;
     patch.expiryDate = computeExpiryForStorage({
-      name:            existing.name,
-      category:        existing.category,
+      name: existing.name,
+      category: existing.category,
       storageLocation: data.storageLocation,
-      purchaseDate:    existing.purchaseDate ?? existing.createdAt,
-      existingExpiry:  hasManualExpiry ? data.expiryDate : existing.expiryDate,
-      source:          hasManualExpiry ? 'manual' : 'ai_estimate',
+      purchaseDate: existing.purchaseDate ?? existing.createdAt,
+      existingExpiry: hasManualExpiry ? data.expiryDate : existing.expiryDate,
+      source: hasManualExpiry ? 'manual' : 'ai_estimate',
     });
   }
 
-  await db.update(pantryItems)
+  await db
+    .update(pantryItems)
     .set({ ...patch, updatedAt: new Date().toISOString() })
     .where(eq(pantryItems.id, id));
 
-  const [item] = await db.select().from(pantryItems).where(eq(pantryItems.id, id));
+  const [item] = await db
+    .select()
+    .from(pantryItems)
+    .where(eq(pantryItems.id, id));
   return { status: 'ok', item };
 }
 
 export async function remove(householdId, id) {
-  const [existing] = await db.select().from(pantryItems).where(eq(pantryItems.id, id));
+  const [existing] = await db
+    .select()
+    .from(pantryItems)
+    .where(eq(pantryItems.id, id));
   if (!existing) return { status: 'not_found' };
   if (existing.householdId !== householdId) return { status: 'forbidden' };
 
@@ -99,18 +122,22 @@ export async function remove(householdId, id) {
 }
 
 export async function markUsed(householdId, id) {
-  const [existing] = await db.select().from(pantryItems).where(eq(pantryItems.id, id));
+  const [existing] = await db
+    .select()
+    .from(pantryItems)
+    .where(eq(pantryItems.id, id));
   if (!existing) return { status: 'not_found' };
   if (existing.householdId !== householdId) return { status: 'forbidden' };
 
   const expiryStatus = getExpiryStatus(existing.expiryDate);
-  const wasExpiring  = expiryStatus === 'warning' || expiryStatus === 'critical';
+  const wasExpiring = expiryStatus === 'warning' || expiryStatus === 'critical';
 
-  await db.update(pantryItems)
+  await db
+    .update(pantryItems)
     .set({
-      consumedAt:  new Date().toISOString(),
+      consumedAt: new Date().toISOString(),
       wasExpiring,
-      updatedAt:   new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     })
     .where(eq(pantryItems.id, id));
 
@@ -124,7 +151,10 @@ export async function markUsed(householdId, id) {
 // Freeze OFF: restores storageLocation to whatever preFreezeStorageLocation recorded (not a fixed
 //   default), recomputing expiry for that location rather than blindly replaying the stale snapshot.
 export async function toggleFreeze(householdId, id) {
-  const [existing] = await db.select().from(pantryItems).where(eq(pantryItems.id, id));
+  const [existing] = await db
+    .select()
+    .from(pantryItems)
+    .where(eq(pantryItems.id, id));
   if (!existing) return { status: 'not_found' };
   if (existing.householdId !== householdId) return { status: 'forbidden' };
 
@@ -134,51 +164,57 @@ export async function toggleFreeze(householdId, id) {
   if (isFrozen) {
     const restoreTo = existing.preFreezeStorageLocation ?? 'refrigerator';
     const expiryDate = computeExpiryForStorage({
-      name:            existing.name,
-      category:        existing.category,
+      name: existing.name,
+      category: existing.category,
       storageLocation: restoreTo,
       purchaseDate,
-      existingExpiry:  existing.originalExpiryDate,
-      source:          'ai_estimate',
+      existingExpiry: existing.originalExpiryDate,
+      source: 'ai_estimate',
     });
-    await db.update(pantryItems)
+    await db
+      .update(pantryItems)
       .set({
-        storageLocation:          restoreTo,
+        storageLocation: restoreTo,
         preFreezeStorageLocation: null,
-        frozenAt:                 null,
+        frozenAt: null,
         expiryDate,
-        originalExpiryDate:       null,
-        freezeNotes:              null,
-        updatedAt:                new Date().toISOString(),
+        originalExpiryDate: null,
+        freezeNotes: null,
+        updatedAt: new Date().toISOString(),
       })
       .where(eq(pantryItems.id, id));
   } else {
     const matched = lookup(existing.name, 'freezer') != null;
     const expiryDate = matched
       ? computeExpiryForStorage({
-          name:            existing.name,
-          category:        existing.category,
+          name: existing.name,
+          category: existing.category,
           storageLocation: 'freezer',
           purchaseDate,
-          existingExpiry:  existing.expiryDate,
-          source:          'ai_estimate',
+          existingExpiry: existing.expiryDate,
+          source: 'ai_estimate',
         })
-      : getStaticFreezeExtension(existing.category, existing.expiryDate).newExpiryDate;
+      : getStaticFreezeExtension(existing.category, existing.expiryDate)
+          .newExpiryDate;
 
-    await db.update(pantryItems)
+    await db
+      .update(pantryItems)
       .set({
-        storageLocation:          'freezer',
+        storageLocation: 'freezer',
         preFreezeStorageLocation: existing.storageLocation ?? 'refrigerator',
-        frozenAt:                 new Date().toISOString(),
-        originalExpiryDate:       existing.expiryDate,
+        frozenAt: new Date().toISOString(),
+        originalExpiryDate: existing.expiryDate,
         expiryDate,
-        freezeNotes:              null,
-        updatedAt:                new Date().toISOString(),
+        freezeNotes: null,
+        updatedAt: new Date().toISOString(),
       })
       .where(eq(pantryItems.id, id));
   }
 
-  const [item] = await db.select().from(pantryItems).where(eq(pantryItems.id, id));
+  const [item] = await db
+    .select()
+    .from(pantryItems)
+    .where(eq(pantryItems.id, id));
   return { status: 'ok', item };
 }
 
@@ -204,59 +240,94 @@ export async function toggleFreeze(householdId, id) {
 // artifacts) without meaningfully constraining legitimate precision for any realistic purchase
 // unit. Extracted as a named helper (rather than inlined in splitItem) purely for future reuse —
 // e.g. consume-by-servings or recipe-servings math, should either ever need this same conversion.
-export function computeSplitQuantityFromServings(splitServings, servingsPerPurchaseUnit) {
+export function computeSplitQuantityFromServings(
+  splitServings,
+  servingsPerPurchaseUnit
+) {
   return Math.round((splitServings / servingsPerPurchaseUnit) * 1e6) / 1e6;
 }
 
-export async function splitItem(householdId, id, { splitQuantity, splitServings, storageLocation }) {
+export async function splitItem(
+  householdId,
+  id,
+  { splitQuantity, splitServings, storageLocation }
+) {
   let quantity = splitQuantity;
 
   // splitServings requires a lookup first (to convert against the item's own
   // servingsPerPurchaseUnit) — this read is not itself part of the race-safety mechanism, only
   // the atomic conditional UPDATE below is (see the module-level comment above).
   if (splitServings != null) {
-    const [item] = await db.select().from(pantryItems)
-      .where(and(eq(pantryItems.id, id), eq(pantryItems.householdId, householdId)));
+    const [item] = await db
+      .select()
+      .from(pantryItems)
+      .where(
+        and(eq(pantryItems.id, id), eq(pantryItems.householdId, householdId))
+      );
     if (!item) return { status: 'not_found' };
-    if (item.servingsPerPurchaseUnit == null) return { status: 'no_servings_configured' };
-    quantity = computeSplitQuantityFromServings(splitServings, item.servingsPerPurchaseUnit);
+    if (item.servingsPerPurchaseUnit == null)
+      return { status: 'no_servings_configured' };
+    quantity = computeSplitQuantityFromServings(
+      splitServings,
+      item.servingsPerPurchaseUnit
+    );
   }
 
-  const [decremented] = await db.update(pantryItems)
-    .set({ quantity: sql`${pantryItems.quantity} - ${quantity}`, updatedAt: new Date().toISOString() })
-    .where(and(
-      eq(pantryItems.id, id),
-      eq(pantryItems.householdId, householdId),
-      gte(pantryItems.quantity, quantity),
-    ))
+  const [decremented] = await db
+    .update(pantryItems)
+    .set({
+      quantity: sql`${pantryItems.quantity} - ${quantity}`,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(
+      and(
+        eq(pantryItems.id, id),
+        eq(pantryItems.householdId, householdId),
+        gte(pantryItems.quantity, quantity)
+      )
+    )
     .returning();
 
   if (!decremented) {
-    const [existing] = await db.select().from(pantryItems)
-      .where(and(eq(pantryItems.id, id), eq(pantryItems.householdId, householdId)));
+    const [existing] = await db
+      .select()
+      .from(pantryItems)
+      .where(
+        and(eq(pantryItems.id, id), eq(pantryItems.householdId, householdId))
+      );
     return { status: existing ? 'invalid_quantity' : 'not_found' };
   }
 
   const purchaseDate = decremented.purchaseDate ?? decremented.createdAt;
   const expiryDate = computeExpiryForStorage({
-    name:            decremented.name,
-    category:        decremented.category,
+    name: decremented.name,
+    category: decremented.category,
     storageLocation,
     purchaseDate,
-    existingExpiry:  null,
-    source:          'ai_estimate',
+    existingExpiry: null,
+    source: 'ai_estimate',
   });
 
   if (decremented.quantity === 0) {
-    await db.update(pantryItems)
+    await db
+      .update(pantryItems)
       .set({ storageLocation, expiryDate, updatedAt: new Date().toISOString() })
       .where(eq(pantryItems.id, id));
-    const [original] = await db.select().from(pantryItems).where(eq(pantryItems.id, id));
+    const [original] = await db
+      .select()
+      .from(pantryItems)
+      .where(eq(pantryItems.id, id));
     return { status: 'ok', original, created: null };
   }
 
-  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...clonable } = decremented;
-  const [created] = await db.insert(pantryItems)
+  const {
+    id: _id,
+    createdAt: _createdAt,
+    updatedAt: _updatedAt,
+    ...clonable
+  } = decremented;
+  const [created] = await db
+    .insert(pantryItems)
     .values({ ...clonable, householdId, quantity, storageLocation, expiryDate })
     .returning();
 
@@ -272,10 +343,17 @@ export async function bulkCreate(householdId, items) {
   for (const item of items) {
     try {
       const enriched = enrichWithExpiry(item, 'ai_estimate');
-      const [row] = await db.insert(pantryItems).values({ ...enriched, householdId }).returning();
+      const [row] = await db
+        .insert(pantryItems)
+        .values({ ...enriched, householdId })
+        .returning();
       results.push(row);
     } catch (err) {
-      console.error('[pantryService] bulkCreate: failed to insert item:', item?.name, err.message);
+      console.error(
+        '[pantryService] bulkCreate: failed to insert item:',
+        item?.name,
+        err.message
+      );
     }
   }
   return results;
@@ -286,11 +364,13 @@ export async function getWasteSaved(householdId, since) {
   const [result] = await db
     .select({ count: sql`count(*)` })
     .from(pantryItems)
-    .where(and(
-      eq(pantryItems.householdId, householdId),
-      eq(pantryItems.wasExpiring, true),
-      sql`${pantryItems.consumedAt} >= ${sinceDate}`,
-    ));
+    .where(
+      and(
+        eq(pantryItems.householdId, householdId),
+        eq(pantryItems.wasExpiring, true),
+        sql`${pantryItems.consumedAt} >= ${sinceDate}`
+      )
+    );
   return Number(result?.count ?? 0);
 }
 

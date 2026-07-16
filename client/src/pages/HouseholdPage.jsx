@@ -6,23 +6,23 @@ import DietaryProfileForm from '../components/settings/DietaryProfileForm.jsx';
 export default function HouseholdPage() {
   const { user } = useAuth();
   const [household, setHousehold] = useState(null);
-  const [loading, setLoading]     = useState(true);
+  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
-  const [copied, setCopied]       = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const [members, setMembers]               = useState([]);
-  const [membersLoading, setMembersLoading]  = useState(true);
-  const [membersError, setMembersError]      = useState(null);
+  const [members, setMembers] = useState([]);
+  const [membersLoading, setMembersLoading] = useState(true);
+  const [membersError, setMembersError] = useState(null);
 
-  const [inviteEmail, setInviteEmail]   = useState('');
-  const [inviting, setInviting]         = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviting, setInviting] = useState(false);
   const [inviteStatus, setInviteStatus] = useState(null); // 'sent' | 'error'
-  const [inviteError, setInviteError]   = useState('');
+  const [inviteError, setInviteError] = useState('');
 
-  const [aiKey, setAiKey]       = useState('');
+  const [aiKey, setAiKey] = useState('');
   const [aiSaving, setAiSaving] = useState(false);
   const [aiStatus, setAiStatus] = useState(null); // 'saved' | 'removed' | 'error'
-  const [aiError, setAiError]   = useState('');
+  const [aiError, setAiError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -37,7 +37,9 @@ export default function HouseholdPage() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const loadMembers = useCallback(async () => {
     setMembersLoading(true);
@@ -52,7 +54,9 @@ export default function HouseholdPage() {
     }
   }, []);
 
-  useEffect(() => { loadMembers(); }, [loadMembers]);
+  useEffect(() => {
+    loadMembers();
+  }, [loadMembers]);
 
   async function copyCode() {
     await navigator.clipboard.writeText(household.joinCode);
@@ -113,13 +117,22 @@ export default function HouseholdPage() {
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64 text-gray-400">Loading…</div>;
+    return (
+      <div className="flex items-center justify-center h-64 text-gray-400">
+        Loading…
+      </div>
+    );
   }
   if (loadError) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <p className="text-sm text-red-600">{loadError}</p>
-        <button onClick={load} className="text-sm text-orange-600 hover:underline">Retry</button>
+        <button
+          onClick={load}
+          className="text-sm text-orange-600 hover:underline"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -145,29 +158,42 @@ export default function HouseholdPage() {
           </button>
         </div>
         <p className="mt-3 text-xs text-orange-600">
-          Anyone who registers with this code will share your pantry, recipes, and shopping lists.
+          Anyone who registers with this code will share your pantry, recipes,
+          and shopping lists.
         </p>
       </section>
 
       {/* Members */}
       <section className="bg-white border border-gray-200 rounded-2xl p-6">
-        <h2 className="text-base font-semibold text-gray-800 mb-4">Household members</h2>
+        <h2 className="text-base font-semibold text-gray-800 mb-4">
+          Household members
+        </h2>
         {membersLoading && <p className="text-sm text-gray-400">Loading…</p>}
         {membersError && (
           <div className="flex items-center justify-between">
             <p className="text-sm text-red-600">{membersError}</p>
-            <button onClick={loadMembers} className="text-sm text-orange-600 hover:underline">Retry</button>
+            <button
+              onClick={loadMembers}
+              className="text-sm text-orange-600 hover:underline"
+            >
+              Retry
+            </button>
           </div>
         )}
         {!membersLoading && !membersError && (
           <ul className="space-y-2">
             {members.map((m) => (
-              <li key={m.clerkUserId} className="flex items-center justify-between text-sm">
+              <li
+                key={m.clerkUserId}
+                className="flex items-center justify-between text-sm"
+              >
                 <span className="text-gray-800">
-                  {m.displayName}{m.clerkUserId === user?.id && ' (You)'}
+                  {m.displayName}
+                  {m.clerkUserId === user?.id && ' (You)'}
                 </span>
                 <span className="text-xs text-gray-400">
-                  {m.role === 'owner' ? 'Owner' : 'Member'} · joined {new Date(m.joinedAt).toLocaleDateString()}
+                  {m.role === 'owner' ? 'Owner' : 'Member'} · joined{' '}
+                  {new Date(m.joinedAt).toLocaleDateString()}
                 </span>
               </li>
             ))}
@@ -177,7 +203,9 @@ export default function HouseholdPage() {
 
       {/* Invite by email */}
       <section className="bg-white border border-gray-200 rounded-2xl p-6">
-        <h2 className="text-base font-semibold text-gray-800 mb-4">Invite someone by email</h2>
+        <h2 className="text-base font-semibold text-gray-800 mb-4">
+          Invite someone by email
+        </h2>
         <form onSubmit={handleInvite} className="space-y-3">
           <input
             type="email"
@@ -198,7 +226,7 @@ export default function HouseholdPage() {
 
         {inviteStatus === 'sent' && (
           <p className="mt-3 text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">
-            Invite sent! They'll receive the join code by email.
+            Invite sent! They&apos;ll receive the join code by email.
           </p>
         )}
         {inviteStatus === 'error' && (
@@ -210,27 +238,39 @@ export default function HouseholdPage() {
 
       {/* Dietary profile */}
       <section className="bg-white border border-gray-200 rounded-2xl p-6">
-        <h2 className="text-base font-semibold text-gray-800 mb-4">Dietary profile</h2>
+        <h2 className="text-base font-semibold text-gray-800 mb-4">
+          Dietary profile
+        </h2>
         <p className="text-xs text-gray-500 mb-4">
-          Shared across all household members. Used by the AI assistant to personalise meal suggestions.
+          Shared across all household members. Used by the AI assistant to
+          personalise meal suggestions.
         </p>
         <DietaryProfileForm />
       </section>
 
       {/* OpenAI API key */}
       <section className="bg-white border border-gray-200 rounded-2xl p-6">
-        <h2 className="text-base font-semibold text-gray-800 mb-1">OpenAI API key</h2>
+        <h2 className="text-base font-semibold text-gray-800 mb-1">
+          OpenAI API key
+        </h2>
         <p className="text-xs text-gray-500 mb-4">
-          Required to use AI features. Your key is encrypted at rest and never logged.
-          Get one at{' '}
-          <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-orange-600 hover:underline">
+          Required to use AI features. Your key is encrypted at rest and never
+          logged. Get one at{' '}
+          <a
+            href="https://platform.openai.com/api-keys"
+            target="_blank"
+            rel="noreferrer"
+            className="text-orange-600 hover:underline"
+          >
             platform.openai.com
-          </a>.
+          </a>
+          .
         </p>
 
         {household?.maskedKey && (
           <p className="text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2 mb-4 font-mono">
-            Current key: <span className="font-semibold">{household.maskedKey}</span>
+            Current key:{' '}
+            <span className="font-semibold">{household.maskedKey}</span>
           </p>
         )}
 
@@ -239,7 +279,11 @@ export default function HouseholdPage() {
             type="password"
             value={aiKey}
             onChange={(e) => setAiKey(e.target.value)}
-            placeholder={household?.maskedKey ? `Current: ${household.maskedKey} — paste to replace` : 'sk-...'}
+            placeholder={
+              household?.maskedKey
+                ? `Current: ${household.maskedKey} — paste to replace`
+                : 'sk-...'
+            }
             className="w-full rounded-lg border-gray-300 shadow-sm focus:border-orange-400 focus:ring-orange-400 text-sm font-mono"
           />
           <div className="flex gap-2">
@@ -279,7 +323,6 @@ export default function HouseholdPage() {
           </p>
         )}
       </section>
-
     </div>
   );
 }

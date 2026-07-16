@@ -3,15 +3,16 @@ import { api } from '../../api/index.js';
 import toast from 'react-hot-toast';
 
 export default function BuildListModal({ onClose, onBuild }) {
-  const [recipes, setRecipes]         = useState([]);
-  const [loadingRecipes, setLoading]  = useState(true);
+  const [recipes, setRecipes] = useState([]);
+  const [loadingRecipes, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState(new Set());
-  const [listName, setListName]       = useState('');
-  const [building, setBuilding]       = useState(false);
-  const [result, setResult]           = useState(null); // { list, items, warnings } after build
+  const [listName, setListName] = useState('');
+  const [building, setBuilding] = useState(false);
+  const [result, setResult] = useState(null); // { list, items, warnings } after build
 
   useEffect(() => {
-    api.get('/api/recipes')
+    api
+      .get('/api/recipes')
       .then((data) => setRecipes(data.recipes ?? []))
       .catch((err) => toast.error(err.message))
       .finally(() => setLoading(false));
@@ -26,8 +27,14 @@ export default function BuildListModal({ onClose, onBuild }) {
   }
 
   async function handleBuild() {
-    if (!listName.trim()) { toast.error('Give the list a name.'); return; }
-    if (selectedIds.size === 0) { toast.error('Select at least one recipe.'); return; }
+    if (!listName.trim()) {
+      toast.error('Give the list a name.');
+      return;
+    }
+    if (selectedIds.size === 0) {
+      toast.error('Select at least one recipe.');
+      return;
+    }
 
     setBuilding(true);
     try {
@@ -60,7 +67,10 @@ export default function BuildListModal({ onClose, onBuild }) {
         {result ? (
           <div className="p-4 space-y-4">
             <p className="text-sm text-gray-700">
-              <span className="font-medium">"{result.list.name}"</span> created with{' '}
+              <span className="font-medium">
+                &quot;{result.list.name}&quot;
+              </span>{' '}
+              created with{' '}
               <span className="font-medium">{result.items.length}</span> item
               {result.items.length !== 1 ? 's' : ''}.
             </p>
@@ -78,8 +88,9 @@ export default function BuildListModal({ onClose, onBuild }) {
                   ))}
                 </ul>
                 <p className="text-xs text-amber-600 mt-1">
-                  The same ingredient appeared in multiple recipes with different units.
-                  Quantities could not be combined — check the list and adjust manually.
+                  The same ingredient appeared in multiple recipes with
+                  different units. Quantities could not be combined — check the
+                  list and adjust manually.
                 </p>
               </div>
             )}
@@ -112,7 +123,9 @@ export default function BuildListModal({ onClose, onBuild }) {
                 <p className="text-sm font-medium text-gray-700 mb-2">
                   Select recipes{' '}
                   {selectedIds.size > 0 && (
-                    <span className="text-orange-600">({selectedIds.size} selected)</span>
+                    <span className="text-orange-600">
+                      ({selectedIds.size} selected)
+                    </span>
                   )}
                 </p>
 
@@ -134,9 +147,13 @@ export default function BuildListModal({ onClose, onBuild }) {
                             className="mt-0.5 accent-orange-600"
                           />
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-800 truncate">{r.name}</p>
+                            <p className="text-sm font-medium text-gray-800 truncate">
+                              {r.name}
+                            </p>
                             {r.tags?.length > 0 && (
-                              <p className="text-xs text-gray-400 truncate">{r.tags.join(', ')}</p>
+                              <p className="text-xs text-gray-400 truncate">
+                                {r.tags.join(', ')}
+                              </p>
                             )}
                           </div>
                         </label>
@@ -156,7 +173,9 @@ export default function BuildListModal({ onClose, onBuild }) {
               </button>
               <button
                 onClick={handleBuild}
-                disabled={building || selectedIds.size === 0 || !listName.trim()}
+                disabled={
+                  building || selectedIds.size === 0 || !listName.trim()
+                }
                 className="flex-1 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {building ? 'Building…' : 'Build List'}

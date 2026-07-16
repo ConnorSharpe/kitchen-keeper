@@ -2,7 +2,7 @@ import { randomBytes } from 'crypto';
 import { eq, sql } from 'drizzle-orm';
 import { clerkClient } from '@clerk/express';
 import { db } from '../db/client.js';
-import { households, householdMembers, pantryItems, users } from '../db/schema.js';
+import { households, householdMembers, pantryItems } from '../db/schema.js';
 import { encrypt, decrypt } from '../utils/encryption.js';
 import { maskKey } from '../utils/keyEncryption.js';
 
@@ -14,13 +14,17 @@ function generateJoinCode() {
 }
 
 export async function getById(householdId) {
-  const [row] = await db.select().from(households).where(eq(households.id, householdId));
+  const [row] = await db
+    .select()
+    .from(households)
+    .where(eq(households.id, householdId));
   return row ?? null;
 }
 
 function resolveDisplayName(clerkUser, role) {
   if (!clerkUser) return role === 'owner' ? 'Former owner' : 'Former member';
-  const fullName = `${clerkUser.firstName ?? ''} ${clerkUser.lastName ?? ''}`.trim();
+  const fullName =
+    `${clerkUser.firstName ?? ''} ${clerkUser.lastName ?? ''}`.trim();
   if (fullName) return fullName;
   if (clerkUser.username) return clerkUser.username;
   const primaryEmail = clerkUser.emailAddresses?.find(
@@ -41,12 +45,18 @@ async function lookupClerkUsers(ids) {
     const { data } = await Promise.race([
       clerkClient.users.getUserList({ userId: ids, limit: ids.length }),
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Clerk user lookup timed out')), CLERK_LOOKUP_TIMEOUT_MS)
+        setTimeout(
+          () => reject(new Error('Clerk user lookup timed out')),
+          CLERK_LOOKUP_TIMEOUT_MS
+        )
       ),
     ]);
     return new Map(data.map((u) => [u.id, u]));
   } catch (err) {
-    console.warn(`[householdService] Clerk user lookup failed, falling back for ${ids.length} household member(s):`, err.message);
+    console.warn(
+      `[householdService] Clerk user lookup failed, falling back for ${ids.length} household member(s):`,
+      err.message
+    );
     return new Map();
   }
 }
@@ -58,8 +68,8 @@ export async function getMembers(householdId) {
   const memberRows = await db
     .select({
       clerkUserId: householdMembers.clerkUserId,
-      role:        householdMembers.role,
-      joinedAt:    householdMembers.joinedAt,
+      role: householdMembers.role,
+      joinedAt: householdMembers.joinedAt,
     })
     .from(householdMembers)
     .where(eq(householdMembers.householdId, householdId))
@@ -68,7 +78,11 @@ export async function getMembers(householdId) {
   // Owner may be null for households whose creator only ever joined via a
   // householdMembers row (see getOrCreate's resolution order) — skip if so.
   const ownerRow = household.clerkUserId
-    ? { clerkUserId: household.clerkUserId, role: 'owner', joinedAt: household.createdAt }
+    ? {
+        clerkUserId: household.clerkUserId,
+        role: 'owner',
+        joinedAt: household.createdAt,
+      }
     : null;
 
   const orderedRows = ownerRow ? [ownerRow, ...memberRows] : memberRows;
@@ -79,8 +93,8 @@ export async function getMembers(householdId) {
 
   return orderedRows.map((r) => ({
     clerkUserId: r.clerkUserId,
-    role:        r.role,
-    joinedAt:    r.joinedAt,
+    role: r.role,
+    joinedAt: r.joinedAt,
     displayName: resolveDisplayName(byId.get(r.clerkUserId), r.role),
   }));
 }
@@ -121,7 +135,11 @@ async function createHousehold(clerkUserId) {
     try {
       const [row] = await db
         .insert(households)
-        .values({ clerkUserId, name: 'My Household', joinCode: generateJoinCode() })
+        .values({
+          clerkUserId,
+          name: 'My Household',
+          joinCode: generateJoinCode(),
+        })
         .returning();
       return row;
     } catch (err) {
@@ -184,7 +202,9 @@ export async function joinByCode(clerkUserId, currentHouseholdId, code) {
   // Guard C: current household has data
   const disposable = await isDisposableHousehold(currentHouseholdId);
   if (!disposable) {
-    const err = new Error('Your household already has data — cannot join another household');
+    const err = new Error(
+      'Your household already has data — cannot join another household'
+    );
     err.status = 409;
     throw err;
   }
@@ -240,13 +260,15 @@ export async function getAiKeyPreview(householdId) {
 
 export async function setAiApiKey(householdId, key) {
   const encryptedKey = encrypt(key);
-  await db.update(households)
+  await db
+    .update(households)
     .set({ openaiApiKey: encryptedKey })
     .where(eq(households.id, householdId));
 }
 
 export async function removeAiApiKey(householdId) {
-  await db.update(households)
+  await db
+    .update(households)
     .set({ openaiApiKey: null })
     .where(eq(households.id, householdId));
 }
@@ -257,7 +279,10 @@ export async function create(ownerName) {
     try {
       const [household] = await db
         .insert(households)
-        .values({ name: `${ownerName}'s Household`, joinCode: generateJoinCode() })
+        .values({
+          name: `${ownerName}'s Household`,
+          joinCode: generateJoinCode(),
+        })
         .returning();
       return household;
     } catch (err) {

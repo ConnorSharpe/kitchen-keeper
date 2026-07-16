@@ -14,7 +14,9 @@ function WebSuggestionCard({ suggestion, onSave, isSaving, onBlock }) {
   return (
     <div className="bg-white rounded-xl border border-orange-200 shadow-sm p-4 flex flex-col gap-2">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-semibold text-gray-900 leading-snug">{suggestion.name}</h3>
+        <h3 className="text-sm font-semibold text-gray-900 leading-snug">
+          {suggestion.name}
+        </h3>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {onBlock && (
             <button
@@ -33,12 +35,19 @@ function WebSuggestionCard({ suggestion, onSave, isSaving, onBlock }) {
       </div>
 
       {suggestion.description && (
-        <p className="text-xs text-gray-500 line-clamp-2">{suggestion.description}</p>
+        <p className="text-xs text-gray-500 line-clamp-2">
+          {suggestion.description}
+        </p>
       )}
 
       <div className="flex flex-wrap gap-1">
         {suggestion.tags?.slice(0, 3).map((tag) => (
-          <span key={tag} className="text-xs bg-gray-100 text-gray-600 rounded px-1.5 py-0.5">{tag}</span>
+          <span
+            key={tag}
+            className="text-xs bg-gray-100 text-gray-600 rounded px-1.5 py-0.5"
+          >
+            {tag}
+          </span>
         ))}
       </div>
 
@@ -53,7 +62,9 @@ function WebSuggestionCard({ suggestion, onSave, isSaving, onBlock }) {
           >
             View source
           </a>
-        ) : <span />}
+        ) : (
+          <span />
+        )}
         <button
           onClick={() => onSave(suggestion)}
           disabled={isSaving}
@@ -67,44 +78,53 @@ function WebSuggestionCard({ suggestion, onSave, isSaving, onBlock }) {
 }
 
 export default function RecipesPage() {
-  const { recipes, loading, error, refresh, addRecipe, removeRecipe, toggleFavorite } = useRecipes();
   const {
-    blocklist, loading: blocklistLoading, refresh: refreshBlocklist, addBlock, removeBlock,
+    recipes,
+    loading,
+    error,
+    refresh,
+    addRecipe,
+    removeRecipe,
+    toggleFavorite,
+  } = useRecipes();
+  const {
+    blocklist,
+    loading: blocklistLoading,
+    refresh: refreshBlocklist,
+    addBlock,
+    removeBlock,
   } = useRecipeBlocklist();
 
-  const [openRecipe, setOpenRecipe]           = useState(null);
-  const [showUpload, setShowUpload]           = useState(false);
-  const [reviewRecipe, setReviewRecipe]       = useState(null);
-  const [reviewImage, setReviewImage]         = useState(null); // Blob | null
-  const [favLoadingId, setFavLoadingId]       = useState(null);
-  const [showBlocklist, setShowBlocklist]     = useState(false);
+  const [openRecipe, setOpenRecipe] = useState(null);
+  const [showUpload, setShowUpload] = useState(false);
+  const [reviewRecipe, setReviewRecipe] = useState(null);
+  const [reviewImage, setReviewImage] = useState(null); // Blob | null
+  const [favLoadingId, setFavLoadingId] = useState(null);
+  const [showBlocklist, setShowBlocklist] = useState(false);
 
   // Web suggestion state
-  const [webSuggestions, setWebSuggestions]   = useState([]);
-  const [webLoading, setWebLoading]           = useState(false);
-  const [savingName, setSavingName]           = useState(null);
+  const [webSuggestions, setWebSuggestions] = useState([]);
+  const [webLoading, setWebLoading] = useState(false);
+  const [savingName, setSavingName] = useState(null);
 
   // Filter state — all client-side
-  const [filterSource, setFilterSource]       = useState('all');
+  const [filterSource, setFilterSource] = useState('all');
   const [filterFavorites, setFilterFavorites] = useState(false);
-  const [filterTag, setFilterTag]             = useState('');
+  const [filterTag, setFilterTag] = useState('');
 
-  useEffect(() => { refresh(); }, [refresh]);
-
-  // All unique tags across saved recipes — for the tag filter suggestions
-  const allTags = useMemo(() => {
-    const seen = new Set();
-    for (const r of recipes) {
-      for (const t of r.tags ?? []) seen.add(t);
-    }
-    return [...seen].sort();
-  }, [recipes]);
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   const filtered = useMemo(() => {
     return recipes.filter((r) => {
       if (filterSource !== 'all' && r.source !== filterSource) return false;
       if (filterFavorites && !r.isFavorite) return false;
-      if (filterTag && !r.tags?.some((t) => t.toLowerCase().includes(filterTag.toLowerCase()))) return false;
+      if (
+        filterTag &&
+        !r.tags?.some((t) => t.toLowerCase().includes(filterTag.toLowerCase()))
+      )
+        return false;
       return true;
     });
   }, [recipes, filterSource, filterFavorites, filterTag]);
@@ -117,7 +137,10 @@ export default function RecipesPage() {
       if (data.suggestions?.length > 0) {
         setWebSuggestions(data.suggestions);
       } else {
-        toast('No web suggestions found for your expiring items. Try again later.', { icon: 'ℹ️' });
+        toast(
+          'No web suggestions found for your expiring items. Try again later.',
+          { icon: 'ℹ️' }
+        );
       }
     } catch (err) {
       toast.error(err.message || 'Failed to find recipes online');
@@ -133,7 +156,9 @@ export default function RecipesPage() {
         ...suggestion,
         source: 'web_suggested',
       });
-      setWebSuggestions((prev) => prev.filter((s) => s.name !== suggestion.name));
+      setWebSuggestions((prev) =>
+        prev.filter((s) => s.name !== suggestion.name)
+      );
       toast.success(`"${saved.name}" saved to your recipes!`);
     } catch (err) {
       toast.error(err.message || 'Failed to save recipe');
@@ -156,7 +181,11 @@ export default function RecipesPage() {
   }
 
   async function handleBlockWebSuggestion(suggestion) {
-    await handleBlockRecipe(suggestion.source, suggestion.sourceId, suggestion.name);
+    await handleBlockRecipe(
+      suggestion.source,
+      suggestion.sourceId,
+      suggestion.name
+    );
     setWebSuggestions((prev) => prev.filter((s) => s.name !== suggestion.name));
   }
 
@@ -171,7 +200,9 @@ export default function RecipesPage() {
       await toggleFavorite(id);
       // If modal is open for this recipe, update it
       if (openRecipe?.id === id) {
-        setOpenRecipe((prev) => prev && { ...prev, isFavorite: !prev.isFavorite });
+        setOpenRecipe(
+          (prev) => prev && { ...prev, isFavorite: !prev.isFavorite }
+        );
       }
     } catch (err) {
       toast.error(err.message || 'Failed to update favorite');
@@ -185,10 +216,6 @@ export default function RecipesPage() {
     toast.success('Recipe deleted');
   }
 
-  function handleRecipeAdded(recipe) {
-    refresh();
-  }
-
   function handleExtracted(recipe, imageBlob) {
     setShowUpload(false);
     setReviewRecipe(recipe);
@@ -200,7 +227,9 @@ export default function RecipesPage() {
       let payload = recipe;
       if (reviewImage) {
         if (reviewImage.size > 3 * 1024 * 1024) {
-          console.warn(`[RecipesPage] Skipping oversized image (${reviewImage.size} bytes) on save`);
+          console.warn(
+            `[RecipesPage] Skipping oversized image (${reviewImage.size} bytes) on save`
+          );
           toast.error('Photo too large to save — recipe saved without it');
         } else {
           const imageBase64 = await blobToDataUrl(reviewImage);
@@ -256,13 +285,30 @@ export default function RecipesPage() {
           >
             {webLoading ? (
               <>
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                <svg
+                  className="animate-spin h-4 w-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v8H4z"
+                  />
                 </svg>
                 Searching…
               </>
-            ) : '🔍 Find Recipes Online'}
+            ) : (
+              '🔍 Find Recipes Online'
+            )}
           </button>
         </div>
       </div>
@@ -332,7 +378,11 @@ export default function RecipesPage() {
 
         {(filterSource !== 'all' || filterFavorites || filterTag) && (
           <button
-            onClick={() => { setFilterSource('all'); setFilterFavorites(false); setFilterTag(''); }}
+            onClick={() => {
+              setFilterSource('all');
+              setFilterFavorites(false);
+              setFilterTag('');
+            }}
             className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
           >
             Clear filters
@@ -344,13 +394,19 @@ export default function RecipesPage() {
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="bg-gray-100 rounded-xl h-56 animate-pulse" />
+            <div
+              key={i}
+              className="bg-gray-100 rounded-xl h-56 animate-pulse"
+            />
           ))}
         </div>
       ) : error ? (
         <div className="text-center py-16">
           <p className="text-sm text-red-500">{error}</p>
-          <button onClick={refresh} className="mt-2 text-sm text-orange-600 hover:underline">
+          <button
+            onClick={refresh}
+            className="mt-2 text-sm text-orange-600 hover:underline"
+          >
             Retry
           </button>
         </div>
@@ -359,14 +415,24 @@ export default function RecipesPage() {
           {recipes.length === 0 ? (
             <>
               <p className="text-4xl mb-3">📖</p>
-              <p className="text-sm font-medium text-gray-600">No saved recipes yet.</p>
-              <p className="text-xs mt-1">Scan a recipe card or find recipes online.</p>
+              <p className="text-sm font-medium text-gray-600">
+                No saved recipes yet.
+              </p>
+              <p className="text-xs mt-1">
+                Scan a recipe card or find recipes online.
+              </p>
             </>
           ) : (
             <>
-              <p className="text-sm font-medium text-gray-600">No recipes match your filters.</p>
+              <p className="text-sm font-medium text-gray-600">
+                No recipes match your filters.
+              </p>
               <button
-                onClick={() => { setFilterSource('all'); setFilterFavorites(false); setFilterTag(''); }}
+                onClick={() => {
+                  setFilterSource('all');
+                  setFilterFavorites(false);
+                  setFilterTag('');
+                }}
                 className="mt-2 text-xs text-orange-600 hover:underline"
               >
                 Clear filters
@@ -410,7 +476,10 @@ export default function RecipesPage() {
         <RecipeReviewModal
           recipe={reviewRecipe}
           onSave={handleReviewSave}
-          onClose={() => { setReviewRecipe(null); setReviewImage(null); }}
+          onClose={() => {
+            setReviewRecipe(null);
+            setReviewImage(null);
+          }}
         />
       )}
 
