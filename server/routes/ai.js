@@ -9,64 +9,14 @@ import * as pantryService from '../services/pantryService.js';
 import * as recipeService from '../services/recipeService.js';
 import * as chatService from '../services/chatService.js';
 import * as aiService from '../services/aiService.js';
-import * as mealLogService from '../services/mealLogService.js';
 import * as dietaryService from '../services/dietaryService.js';
-import * as recipeScorer from '../utils/recipeScorer.js';
 import * as recipeBlocklistService from '../services/recipeBlocklistService.js';
-import {
-  normalizeFood,
-  foodsMatch,
-  stripIngredientPrefix,
-  normalizeUnit,
-} from '../utils/foodNormalization.js';
-import { getPurineLevel } from '../data/purineIndex.js';
+import * as recipeSearchService from '../services/recipeSearchService.js';
+import { createToolHandlers } from '../services/chat/createToolHandlers.js';
 import { getExpiryDays, getExpiryStatus } from '../utils/expiry.js';
 import { getDefaultStorageLocation } from '../utils/pantryDefaults.js';
 const router = express.Router();
 router.use(clerkAuth);
-
-// Builds a Set of dedup keys from previously shown recipe suggestions in chat history.
-// Key format: `${source}:${sourceId}` when available, normalized name as fallback.
-// Handles old history rows that pre-date the sourceId field gracefully.
-function extractSuggestedRecipeKeys(history) {
-  const keys = new Set();
-  for (const msg of history) {
-    for (const s of msg.metadata?.recipeSuggestions ?? []) {
-      if (s.source && s.sourceId) {
-        keys.add(`${s.source}:${s.sourceId}`);
-      } else if (s.name) {
-        keys.add(s.name.toLowerCase().trim());
-      }
-    }
-  }
-  return keys;
-}
-
-// TASK-034 Decision D3: `${source}:${sourceId}` key format, shared by dedup, the recency-penalty
-// lookup, and the blocklist filter — extracted once instead of re-inlined a third time.
-function deriveRecipeKey(candidate) {
-  return candidate.source && candidate.sourceId
-    ? `${candidate.source}:${candidate.sourceId}`
-    : (candidate.name ?? '').toLowerCase().trim();
-}
-
-// TASK-034 Decision A3.1: "contains a target ingredient" reuses foodsMatch()/normalizeFood()
-// exactly — same TASK-011 invariant as everywhere else in this pipeline (no cross-variety
-// matching: a target of "steelhead" will not match a recipe calling for "salmon").
-function candidateContainsTarget(candidate, targetIngredients) {
-  const ingredientNames = (candidate.ingredients ?? []).map((ing) =>
-    stripIngredientPrefix(ing.name)
-  );
-  return targetIngredients.some((t) =>
-    ingredientNames.some((n) => foodsMatch(t, n))
-  );
-}
-
-// TASK-034 Decision B1: subtracted from effectiveScore for recipes already shown in this
-// session's loaded history. Chosen empirically (comparable in magnitude to the saved-source
-// ranking bonus below) — not derived from an existing convention. Tune here if suggestions
-// feel too sticky or too random.
-const RECENT_RECIPE_PENALTY = 0.5;
 
 // POST /api/ai/eat-this-now
 router.post('/eat-this-now', async (req, res) => {
@@ -192,7 +142,7 @@ router.post('/suggest-recipes', async (req, res) => {
     recipeBlocklistService.getBlockedKeys(req.user.householdId),
   ]);
   const suggestions = rawSuggestions.filter(
-    (s) => !blockedKeys.has(deriveRecipeKey(s))
+    (s) => !blockedKeys.has(recipeSearchService.deriveRecipeKey(s))
   );
   res.json({ suggestions });
 });
@@ -329,22 +279,18 @@ router.post(
     }
 
     if (!raw) {
-      return res
-        .status(502)
-        .json({
-          error: 'AI could not parse the recipe image. Please try again.',
-        });
+      return res.status(502).json({
+        error: 'AI could not parse the recipe image. Please try again.',
+      });
     }
 
     let validated;
     try {
       validated = parsedRecipeSchema.parse(raw);
     } catch {
-      return res
-        .status(422)
-        .json({
-          error: 'Recipe image could not be parsed into a valid recipe.',
-        });
+      return res.status(422).json({
+        error: 'Recipe image could not be parsed into a valid recipe.',
+      });
     }
 
     res.json({ recipe: validated });
@@ -396,532 +342,16 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
 
   const dietaryContext = await dietaryService.buildDietaryContext(householdId);
 
-  let recipeSuggestions = [];
-
-  const toolHandlers = {
-    add_pantry_item: async (args) => {
-      const addItemSchema = z.object({
-        name: z.string().min(1).max(200),
-        quantity: z.coerce.number().positive().default(1),
-        unit: z.string().min(1).max(50).default('item'),
-        category: z
-          .enum([
-            'Produce',
-            'Dairy',
-            'Meat',
-            'Seafood',
-            'Bakery',
-            'Frozen',
-            'Pantry',
-            'Beverages',
-            'Condiments',
-            'Other',
-          ])
-          .default('Other'),
-        shelfLifeDays: z.coerce.number().int().nonnegative().optional(),
-        storageLocation: z
-          .enum(['pantry', 'refrigerator', 'freezer'])
-          .nullable()
-          .optional(),
-        notes: z.string().max(500).nullable().optional(),
-      });
-
-      let parsed;
-      try {
-        parsed = addItemSchema.parse(args);
-      } catch (e) {
-        return { ok: false, error: `Invalid item data: ${e.message}` };
-      }
-
-      let expiryDate = null;
-      if (parsed.shelfLifeDays != null) {
-        const expiry = new Date();
-        expiry.setUTCHours(0, 0, 0, 0);
-        expiry.setUTCDate(expiry.getUTCDate() + parsed.shelfLifeDays);
-        expiryDate = expiry.toISOString();
-      }
-
-      try {
-        const item = await pantryService.create(
-          householdId,
-          {
-            name: parsed.name,
-            quantity: parsed.quantity,
-            unit: parsed.unit,
-            category: parsed.category,
-            purchaseDate: new Date().toISOString(),
-            expiryDate,
-            storageLocation:
-              parsed.storageLocation ??
-              getDefaultStorageLocation(parsed.category),
-            notes: parsed.notes ?? null,
-          },
-          'ai_estimate'
-        ); // shelfLifeDays is AI-reasoned, not human-typed — subject to FoodKeeper override
-        return { ok: true, item };
-      } catch {
-        return { ok: false, error: 'Failed to save item to pantry.' };
-      }
-    },
-
-    update_pantry_item: async (args) => {
-      const updateSchema = z.object({
-        id: z.coerce.number().int().positive(),
-        name: z.string().min(1).max(200).optional(),
-        quantity: z.coerce.number().min(0).optional(),
-        unit: z.string().min(1).max(50).optional(),
-        category: z
-          .enum([
-            'Produce',
-            'Dairy',
-            'Meat',
-            'Seafood',
-            'Bakery',
-            'Frozen',
-            'Pantry',
-            'Beverages',
-            'Condiments',
-            'Other',
-          ])
-          .optional(),
-        expiryDate: z.string().datetime().optional(),
-        notes: z.string().max(500).nullable().optional(),
-      });
-
-      let parsed;
-      try {
-        parsed = updateSchema.parse(args);
-      } catch (e) {
-        return { ok: false, error: `Invalid data: ${e.message}` };
-      }
-
-      const { id, ...fields } = parsed;
-      try {
-        const item = await pantryService.update(householdId, id, fields);
-        return { ok: true, item };
-      } catch {
-        return { ok: false, error: 'Item not found or update failed.' };
-      }
-    },
-
-    remove_pantry_item: async (args) => {
-      const removeSchema = z.object({ id: z.coerce.number().int().positive() });
-
-      let parsed;
-      try {
-        parsed = removeSchema.parse(args);
-      } catch (e) {
-        return { ok: false, error: `Invalid data: ${e.message}` };
-      }
-
-      try {
-        await pantryService.remove(householdId, parsed.id);
-        return { ok: true };
-      } catch {
-        return { ok: false, error: 'Item not found or could not be removed.' };
-      }
-    },
-
-    consume_pantry_item: async (args) => {
-      const consumeSchema = z.object({
-        itemName: z.string().min(1),
-        amountConsumed: z.number().positive().optional(),
-        unit: z.string().optional(),
-        fullyConsumed: z.boolean().optional(),
-        skipDeduction: z.boolean().optional(),
-      });
-
-      let parsed;
-      try {
-        parsed = consumeSchema.parse(args);
-      } catch (e) {
-        return { ok: false, error: `Invalid data: ${e.message}` };
-      }
-
-      const { itemName, amountConsumed, unit, fullyConsumed, skipDeduction } =
-        parsed;
-
-      const lowerTarget = itemName.toLowerCase();
-
-      const exactMatches = allItems.filter(
-        (i) => i.name.toLowerCase() === lowerTarget
-      );
-      let item;
-      if (exactMatches.length > 1) {
-        return {
-          ok: false,
-          error: `Ambiguous: ${exactMatches.map((i) => i.name).join(', ')}. Ask user to clarify.`,
-        };
-      } else if (exactMatches.length === 1) {
-        item = exactMatches[0];
-      } else {
-        const bMatches =
-          lowerTarget.length >= 4
-            ? allItems.filter((i) => i.name.toLowerCase().includes(lowerTarget))
-            : [];
-        const cMatches = allItems.filter(
-          (i) =>
-            i.name.length >= 4 && lowerTarget.includes(i.name.toLowerCase())
-        );
-        const combined = [...new Set([...bMatches, ...cMatches])];
-
-        if (combined.length === 0)
-          return {
-            ok: false,
-            error: 'Item not found. Ask user which item they mean.',
-          };
-        if (combined.length > 1)
-          return {
-            ok: false,
-            error: `Ambiguous: ${combined.map((i) => i.name).join(', ')}. Ask user to clarify.`,
-          };
-        item = combined[0];
-      }
-
-      const normalizedInputUnit = unit ? normalizeUnit(unit) : '';
-      const normalizedPantryUnit = item.unit ? normalizeUnit(item.unit) : '';
-      const unitMismatch = !!(
-        normalizedInputUnit &&
-        normalizedPantryUnit &&
-        normalizedInputUnit !== normalizedPantryUnit
-      );
-
-      const serverSkip =
-        item.category === 'Condiments' && fullyConsumed !== true;
-      const effectiveSkip =
-        serverSkip ||
-        unitMismatch ||
-        (skipDeduction === true && !serverSkip && !unitMismatch);
-      const skipReason = effectiveSkip
-        ? unitMismatch
-          ? 'unit_mismatch'
-          : serverSkip
-            ? 'condiment'
-            : 'advisory'
-        : null;
-
-      let remaining;
-      if (fullyConsumed) {
-        remaining = 0;
-      } else {
-        remaining = item.quantity - (amountConsumed ?? 0);
-        remaining = Math.max(0, remaining);
-      }
-
-      if (!effectiveSkip) {
-        if (remaining === 0) {
-          await pantryService.markUsed(householdId, item.id);
-        } else {
-          await pantryService.update(householdId, item.id, {
-            quantity: remaining,
-          });
-        }
-      }
-
-      const status = getExpiryStatus(item.expiryDate);
-      const wasExpiring = ['warning', 'critical', 'expired'].includes(status);
-
-      await mealLogService.create({
-        householdId,
-        pantryItemId: item.id,
-        itemName: item.name,
-        category: item.category,
-        purineLevel: getPurineLevel(item.name, item.category),
-        wasExpiring,
-        quantityBefore: item.quantity,
-        quantityAfter: effectiveSkip ? item.quantity : remaining,
-        source: 'agent',
-      });
-
-      return {
-        ok: true,
-        item: {
-          id: item.id,
-          name: item.name,
-          remaining,
-          skipApplied: effectiveSkip,
-          skipReason,
-          quantityBefore: item.quantity,
-        },
-      };
-    },
-
-    suggest_recipes: async (args) => {
-      const requestedStrategy = args.strategy ?? 'any';
-      const targetIngredients = Array.isArray(args.targetIngredients)
-        ? args.targetIngredients.filter(
-            (s) => typeof s === 'string' && s.trim().length > 0
-          )
-        : [];
-
-      // Keys for recipes already shown in this session — soft recency penalty now (Part B),
-      // no longer a hard filter.
-      const shownKeys = extractSuggestedRecipeKeys(history);
-
-      // Count of PRIOR assistant messages in `history` whose metadata.recipeSuggestions is
-      // non-empty — i.e. how many suggestion rounds have already happened in this session.
-      // Deliberately NOT a count of all assistant messages: an unrelated question asked in
-      // between two recipe requests must not shift rotation.
-      const priorSuggestionRounds = history.filter(
-        (m) => m.metadata?.recipeSuggestions?.length > 0
-      ).length;
-
-      const [dietaryProfile, blockedKeys] = await Promise.all([
-        dietaryService.getProfile(householdId),
-        recipeBlocklistService.getBlockedKeys(householdId),
-      ]);
-      const dp = dietaryProfile ?? { conditions: [], allergies: [] };
-
-      // Step 1: Saved recipe candidates — tag with suggestion origin.
-      // Overrides the DB `source` field (which tracks save method) with suggestion origin.
-      const savedCandidates = allRecipes.map((r) => ({
-        ...r,
-        source: 'saved',
-        sourceId: String(r.id),
-      }));
-
-      // Step 2: API candidates — anchored on targetIngredients + rotation offset (Parts A/B).
-      // source/sourceId already added by recipeSearchService mappers.
-      const apiRaw = await aiService.suggestRecipes(allItems, expiringItems, {
-        targetIngredients,
-        rotationOffset: priorSuggestionRounds,
-      });
-
-      // Step 3+4: Merge into one pool.
-      const allCandidates = [...savedCandidates, ...apiRaw];
-
-      // Step 5: Deduplicate across the full pool before scoring (ID-first, name fallback).
-      // Hard filter — unchanged from TASK-020.
-      const seenDedupeKeys = new Set();
-      const deduplicated = allCandidates.filter((c) => {
-        const key = deriveRecipeKey(c);
-        if (seenDedupeKeys.has(key)) return false;
-        seenDedupeKeys.add(key);
-        return true;
-      });
-
-      // Step 6 (Part D): Remove blocklisted candidates. Hard, permanent — no fallback in this
-      // pipeline ever re-admits a blocklisted candidate, even if it leaves the pool empty.
-      const notBlocked = deduplicated.filter(
-        (c) => !blockedKeys.has(deriveRecipeKey(c))
-      );
-
-      // Determine effective strategy (unchanged logic — needs recent meal log).
-      let effectiveStrategy = requestedStrategy;
-      if (requestedStrategy === 'any') {
-        const cutoff72h = new Date(
-          Date.now() - 72 * 60 * 60 * 1000
-        ).toISOString();
-        const recent72h = await mealLogService.getRecentSince(
-          householdId,
-          cutoff72h
-        );
-        const highCount = recent72h.filter(
-          (m) => m.purineLevel === 'high'
-        ).length;
-        const medCount = recent72h.filter(
-          (m) => m.purineLevel === 'medium'
-        ).length;
-        const isHighPurine = highCount >= 2 || highCount + medCount >= 4;
-        if (isHighPurine) effectiveStrategy = 'dietary_safe';
-        else if (expiringItems.length > 0) effectiveStrategy = 'expiring_first';
-        else effectiveStrategy = 'pantry_overlap';
-      }
-
-      const expiringNames = new Set(
-        expiringItems.map((i) => i.name.toLowerCase())
-      );
-
-      // Step 7 (Part B): Score candidates — saved-source ranking bonus, minus a soft penalty
-      // for recipes already shown this session. Saved recipes must meet overlap >= 0.25 AND
-      // at least 1 matched ingredient to qualify. API candidates always pass through.
-      function scoreCandidates(pool) {
-        return pool
-          .map((c) => {
-            const { overlapScore, matchedIngredients, unmatchedIngredients } =
-              recipeScorer.score(c, allItems);
-            const { allergyNote, healthNote } = recipeScorer.annotateHealth(
-              c,
-              dp
-            );
-            if (
-              c.source === 'saved' &&
-              (overlapScore < 0.25 || matchedIngredients.length < 1)
-            )
-              return null;
-            const recentPenalty = shownKeys.has(deriveRecipeKey(c))
-              ? RECENT_RECIPE_PENALTY
-              : 0;
-            const effectiveScore =
-              overlapScore + (c.source === 'saved' ? 0.2 : 0) - recentPenalty;
-            return {
-              ...c,
-              overlapScore,
-              effectiveScore,
-              matchedIngredients,
-              unmatchedIngredients,
-              allergyNote,
-              healthNote,
-            };
-          })
-          .filter(Boolean);
-      }
-
-      // Step 8 (Part A): Partition into Tier 1 (contains a target ingredient) / Tier 2 — only
-      // when targetIngredients is non-empty; a partition (reorders by group), not a scoring step.
-      // Zero Tier-1 matches (Decision A4) is not an error: tier1 is simply empty and tier2 fills
-      // the result, which is exactly the same as if targetIngredients were empty.
-      function partitionByTarget(pool) {
-        if (targetIngredients.length === 0) return [pool, []];
-        const tier1 = [];
-        const tier2 = [];
-        for (const c of pool) {
-          (candidateContainsTarget(c, targetIngredients) ? tier1 : tier2).push(
-            c
-          );
-        }
-        return [tier1, tier2];
-      }
-
-      // Step 9: Sort by effective strategy (applied within each tier).
-      function applyStrategySort(pool) {
-        return [...pool].sort((a, b) => {
-          if (effectiveStrategy === 'expiring_first') {
-            const aExp = (a.matchedIngredients || []).some((n) =>
-              expiringNames.has(n.toLowerCase())
-            );
-            const bExp = (b.matchedIngredients || []).some((n) =>
-              expiringNames.has(n.toLowerCase())
-            );
-            if (aExp && !bExp) return -1;
-            if (!aExp && bExp) return 1;
-          }
-          if (effectiveStrategy === 'dietary_safe') {
-            const aScore =
-              (a.allergyNote ? -10 : 0) +
-              (a.healthNote ? -2 : 0) +
-              (a.effectiveScore ?? 0);
-            const bScore =
-              (b.allergyNote ? -10 : 0) +
-              (b.healthNote ? -2 : 0) +
-              (b.effectiveScore ?? 0);
-            return bScore - aScore;
-          }
-          return (b.effectiveScore ?? 0) - (a.effectiveScore ?? 0);
-        });
-      }
-
-      // Steps 8-10: score, partition into tiers, strategy-sort within each tier, take top 5
-      // (Tier 1 first in full, then Tier 2 — never interleaved).
-      const [tier1, tier2] = partitionByTarget(scoreCandidates(notBlocked));
-      const topN = [
-        ...applyStrategySort(tier1),
-        ...applyStrategySort(tier2),
-      ].slice(0, 5);
-
-      // Build pantry lookup map once — O(1) per ingredient vs. find() in a loop.
-      const pantryMap = new Map(
-        allItems.map((item) => [normalizeFood(item.name), item])
-      );
-
-      // Annotate each ingredient with pantry status. Produces API DTOs from scorer output
-      // (scorer domain model is never mutated). unmatchedIngredients is dropped from the DTO.
-      // NOTE: annotation uses normalized exact lookup only — not foodsMatch() fuzzy fallback.
-      // A scorer fuzzy match may not reflect in the highlight color (intentional v1 constraint).
-      const annotated = topN.map((recipe) => {
-        const annotatedIngredients = (recipe.ingredients ?? []).map((ing) => {
-          let pantryStatus = 'missing';
-          let needToBuy;
-          try {
-            const key = normalizeFood(stripIngredientPrefix(ing.name));
-            const pantryItem = pantryMap.get(key);
-            if (pantryItem) {
-              if (ing.quantity == null || pantryItem.quantity == null) {
-                pantryStatus = 'have';
-              } else if (
-                normalizeUnit(ing.unit) !== normalizeUnit(pantryItem.unit)
-              ) {
-                // Unit mismatch → binary fallback. quantity > 0 guard prevents "0 oz milk" showing green.
-                pantryStatus = pantryItem.quantity > 0 ? 'have' : 'missing';
-              } else if (pantryItem.quantity < ing.quantity) {
-                pantryStatus = 'partial';
-                needToBuy = ing.quantity - pantryItem.quantity;
-              } else {
-                pantryStatus = 'have';
-              }
-            }
-          } catch (err) {
-            console.warn(
-              '[annotatePantryStatus] ingredient annotation failed:',
-              err?.message,
-              ing?.name
-            );
-          }
-          const result = { ...ing, pantryStatus };
-          if (
-            pantryStatus === 'partial' &&
-            needToBuy != null &&
-            needToBuy > 0
-          ) {
-            result.needToBuy = needToBuy;
-          }
-          return result;
-        });
-
-        const { unmatchedIngredients: _removed, ...rest } = recipe;
-        return { ...rest, ingredients: annotatedIngredients };
-      });
-
-      // Full objects saved to metadata and returned to frontend for card rendering.
-      recipeSuggestions = annotated;
-
-      // Slim objects returned to model only — model cannot reproduce card detail it never saw.
-      const slimForModel = topN.map((s) => ({
-        name: s.name,
-        shortDescription: s.description ?? '',
-        source: s.source,
-      }));
-
-      return {
-        ok: true,
-        suggestions: slimForModel,
-        strategy: effectiveStrategy,
-      };
-    },
-
-    save_recipe: async (args) => {
-      const saveSchema = z.object({
-        name: z.string().min(1).max(200),
-        description: z.string().max(500),
-      });
-
-      let parsed;
-      try {
-        parsed = saveSchema.parse(args);
-      } catch (e) {
-        return { ok: false, error: `Invalid data: ${e.message}` };
-      }
-
-      const full = await aiService.expandSuggestion(
-        parsed.name,
-        parsed.description,
-        allItems,
-        requestId
-      );
-      if (!full)
-        return {
-          ok: false,
-          error: 'AI could not expand the recipe. Try again.',
-        };
-
-      const saved = await recipeService.createOrIgnore(householdId, {
-        ...full,
-        source: 'agent_saved',
-      });
-      const name = saved?.name ?? parsed.name;
-      return { ok: true, recipe: { id: saved?.id, name } };
-    },
+  const ctx = {
+    householdId,
+    history,
+    allItems,
+    expiringItems,
+    allRecipes,
+    requestId,
+    result: { recipeSuggestions: [] },
   };
+  const toolHandlers = createToolHandlers(ctx);
 
   const aiConfig = await householdService.getAiConfig(householdId);
   const { reply, itemsAdded } = await aiService.chat(
@@ -939,11 +369,17 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
     householdId,
     message,
     reply,
-    recipeSuggestions.length > 0 ? { version: 1, recipeSuggestions } : null
+    ctx.result.recipeSuggestions.length > 0
+      ? { version: 1, recipeSuggestions: ctx.result.recipeSuggestions }
+      : null
   );
   await chatService.trimHistory(householdId, 50);
 
-  res.json({ reply, itemsAdded, recipeSuggestions });
+  res.json({
+    reply,
+    itemsAdded,
+    recipeSuggestions: ctx.result.recipeSuggestions,
+  });
 });
 
 export default router;
