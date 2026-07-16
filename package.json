@@ -14,7 +14,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "npm test --prefix server"
+    "test": "node --test shared/expiry.test.js shared/pantryDefaults.test.js && npm test --prefix server"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

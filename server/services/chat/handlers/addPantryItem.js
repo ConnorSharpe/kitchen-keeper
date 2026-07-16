@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import * as pantryService from '../../pantryService.js';
-import { getDefaultStorageLocation } from '../../../utils/pantryDefaults.js';
+import { getDefaultStorageLocation } from '../../../../shared/pantryDefaults.js';
 
 const addItemSchema = z.object({
   name: z.string().min(1).max(200),

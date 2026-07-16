@@ -2,7 +2,7 @@ import { z } from 'zod';
 import * as pantryService from '../../pantryService.js';
 import * as mealLogService from '../../mealLogService.js';
 import { getPurineLevel } from '../../../data/purineIndex.js';
-import { getExpiryStatus } from '../../../utils/expiry.js';
+import { getExpiryStatus } from '../../../../shared/expiry.js';
 import { normalizeUnit } from '../../../utils/foodNormalization.js';
 
 const consumeSchema = z.object({

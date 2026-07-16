@@ -13,8 +13,8 @@ import * as dietaryService from '../services/dietaryService.js';
 import * as recipeBlocklistService from '../services/recipeBlocklistService.js';
 import * as recipeSearchService from '../services/recipeSearchService.js';
 import { createToolHandlers } from '../services/chat/createToolHandlers.js';
-import { getExpiryDays, getExpiryStatus } from '../utils/expiry.js';
-import { getDefaultStorageLocation } from '../utils/pantryDefaults.js';
+import { getExpiryDays, getExpiryStatus } from '../../shared/expiry.js';
+import { getDefaultStorageLocation } from '../../shared/pantryDefaults.js';
 const router = express.Router();
 router.use(clerkAuth);
 

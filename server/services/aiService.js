@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { getExpiryDays } from '../utils/expiry.js';
+import { getExpiryDays } from '../../shared/expiry.js';
 import { resolveProvider } from './ai/resolveProvider.js';
 import { AIProviderError } from './ai/providerInterface.js';
 import { findByPantry } from './recipeSearchService.js';

@@ -1,7 +1,7 @@
 import { eq, and, isNull, isNotNull, lte, gte, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { pantryItems } from '../db/schema.js';
-import { getExpiryStatus } from '../utils/expiry.js';
+import { getExpiryStatus } from '../../shared/expiry.js';
 import { getStaticFreezeExtension } from '../utils/freezeDefaults.js';
 import { lookup } from './shelfLifeService.js';
 

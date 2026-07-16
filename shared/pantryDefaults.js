@@ -1,3 +1,6 @@
+// Pure pantry-defaults data shared by client and server (TASK-036 Part B) — no DB/Express/React
+// dependency.
+
 // Sensible default storage location per category — the initial value wherever a storage-location
 // field is presented (manual add, receipt review, chat agent). Always user-editable afterward.
 export const CATEGORY_STORAGE_DEFAULTS = {
@@ -16,3 +19,11 @@ export const CATEGORY_STORAGE_DEFAULTS = {
 export function getDefaultStorageLocation(category) {
   return CATEGORY_STORAGE_DEFAULTS[category] ?? 'pantry';
 }
+
+export const STORAGE_LOCATIONS = ['pantry', 'refrigerator', 'freezer'];
+
+export const STORAGE_LOCATION_LABELS = {
+  pantry: 'Pantry',
+  refrigerator: 'Fridge',
+  freezer: 'Freezer',
+};

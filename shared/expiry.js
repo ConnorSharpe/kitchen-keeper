@@ -1,3 +1,6 @@
+// Pure expiry-day math shared by client and server (TASK-036 Part B) — no DB/Express/React
+// dependency. UI-specific formatting (row/badge classes, labels) stays in client/src/utils/expiry.js.
+
 /**
  * Compares at UTC day granularity to avoid timezone-shift bugs.
  * Returns null if no expiry date is set.

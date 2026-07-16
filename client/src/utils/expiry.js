@@ -1,21 +1,7 @@
-// Mirror of server/utils/expiry.js — UTC day-granularity so client and server agree.
-export function getExpiryDays(expiryDateStr) {
-  if (!expiryDateStr) return null;
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
-  const expiry = new Date(expiryDateStr);
-  expiry.setUTCHours(0, 0, 0, 0);
-  return Math.round((expiry - today) / (1000 * 60 * 60 * 24));
-}
+// Client-only UI helpers layered on top of shared/expiry.js's calculation logic (TASK-036 Part B).
+import { getExpiryDays, getExpiryStatus } from '@shared/expiry.js';
 
-export function getExpiryStatus(expiryDateStr) {
-  const days = getExpiryDays(expiryDateStr);
-  if (days === null) return 'none';
-  if (days < 0) return 'expired';
-  if (days <= 2) return 'critical';
-  if (days <= 7) return 'warning';
-  return 'ok';
-}
+export { getExpiryDays, getExpiryStatus };
 
 // Returns days until readyDate. Positive = not yet ready. 0 = ready today. null = no readyDate.
 export function getRipeningDays(readyDateStr) {
