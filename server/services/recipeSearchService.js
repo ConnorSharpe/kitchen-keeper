@@ -181,10 +181,12 @@ async function themealdbSearch(ingredient) {
  * Shape: [{ name, description, sourceUrl, ingredients, prepSteps, steps, tags, prepMins, cookMins, servings }]
  *
  * options.targetIngredients: user-named ingredient strings (TASK-034 Part A). Used as-is (not
- *   resolved against pantry item names), placed first, guaranteed inclusion over pantry items.
+ *   resolved against pantry item names). When non-empty, the query uses ONLY these ingredients —
+ *   no pantry padding (TASK-035 Part B1: padding was diluting Spoonacular's results away from
+ *   the requested ingredient).
  * options.rotationOffset: TASK-034 Part B — rotates which non-expiring pantry items anchor the
- *   query (and thus the 6-hour cache key) across suggestion rounds in a session. Expiring items
- *   always keep priority regardless of rotation; targetIngredients always keep priority over both.
+ *   query (and thus the 6-hour cache key) across suggestion rounds in a session, for the generic
+ *   (no targetIngredients) case only. Expiring items always keep priority regardless of rotation.
  */
 export async function findByPantry(allItems, expiringItems, options = {}) {
   const { targetIngredients = [], rotationOffset = 0 } = options;
@@ -206,10 +208,16 @@ export async function findByPantry(allItems, expiringItems, options = {}) {
 
     const pantryOrdered = [...expiringNames, ...rotatedNonExpiring];
 
-    // targetIngredients occupy the first slots, guaranteed — not competing with pantry items.
+    // targetIngredients get absolute priority: when the user named specific ingredient(s),
+    // query using ONLY those (deduplicated, capped at 5) — do not pad with pantry items.
+    // TASK-035 Part B1: padding a targeted query with unrelated pantry anchors was diluting
+    // Spoonacular's results away from the requested ingredient. Rotation is a no-op here by
+    // design — it exists to vary pantry anchors for the generic case, and there's nothing to
+    // rotate when the user named ingredients explicitly.
+    const ingredientSource = targetIngredients.length > 0 ? targetIngredients : pantryOrdered;
     const seen = new Set();
     const combined = [];
-    for (const name of [...targetIngredients, ...pantryOrdered]) {
+    for (const name of ingredientSource) {
       const key = name.toLowerCase().trim();
       if (!key || seen.has(key)) continue;
       seen.add(key);

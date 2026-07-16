@@ -203,32 +203,41 @@ export async function buildFromRecipes(householdId, name, recipeIds) {
     needed.push(entry);
   }
 
-  // Persist list + all items atomically
-  const result = await db.transaction(async (tx) => {
-    const [list] = await tx
-      .insert(shoppingLists)
-      .values({ householdId, name, updatedAt: new Date().toISOString() })
-      .returning();
+  // Persist list, then items — no db.transaction() (drizzle-orm/neon-http has no
+  // interactive transaction support; TASK-035 Part A1). The list insert and the
+  // bulk items insert are each a single atomic Postgres statement on their own.
+  const [list] = await db
+    .insert(shoppingLists)
+    .values({ householdId, name, updatedAt: new Date().toISOString() })
+    .returning();
 
-    const items = [];
-    for (const [idx, ing] of needed.entries()) {
-      const [item] = await tx
+  let items = [];
+  if (needed.length > 0) {
+    try {
+      items = await db
         .insert(shoppingListItems)
-        .values({
+        .values(needed.map((ing, idx) => ({
           listId:          list.id,
           ingredientName:  ing.ingredientName,
           quantity:        ing.quantity,
           unit:            ing.unit,
           sortOrder:       idx,
           hasUnitMismatch: ing.hasUnitMismatch,
-        })
+        })))
         .returning();
-      items.push(item);
+    } catch (err) {
+      try {
+        await db.delete(shoppingLists).where(eq(shoppingLists.id, list.id));
+      } catch (cleanupErr) {
+        console.error(
+          `[kitchen-keeper] function=shoppingService orphaned_list_id=${list.id} reason=compensating_delete_failed`,
+          cleanupErr.message
+        );
+      }
+      return { status: 'error', error: err.message };
     }
-
-    return { list, items };
-  });
+  }
 
   const warnings = needed.filter((i) => i.hasUnitMismatch).map((i) => i.ingredientName);
-  return { status: 'ok', list: result.list, items: result.items, warnings };
+  return { status: 'ok', list, items, warnings };
 }

@@ -189,15 +189,19 @@ export async function joinByCode(clerkUserId, currentHouseholdId, code) {
     throw err;
   }
 
-  // Atomic: delete empty household H1, insert membership for H2
-  await db.transaction(async (tx) => {
-    await tx.delete(households).where(eq(households.id, currentHouseholdId));
-    await tx.insert(householdMembers).values({
-      householdId: target.id,
-      clerkUserId,
-      role: 'member',
-    });
+  // Sequential (non-transactional): drizzle-orm/neon-http has no interactive transaction
+  // support (TASK-035 Part A3). Insert-before-delete, deliberately reordered from the
+  // naive delete-then-insert: if the insert fails, the user keeps their old (empty)
+  // household as a safe fallback rather than being left with zero household membership.
+  // Safe against the unique-constraint concern because households.clerkUserId and
+  // householdMembers.clerkUserId are separate unique columns on separate tables, and
+  // Guard B above already proved this user has zero existing householdMembers rows.
+  await db.insert(householdMembers).values({
+    householdId: target.id,
+    clerkUserId,
+    role: 'member',
   });
+  await db.delete(households).where(eq(households.id, currentHouseholdId));
 
   return { householdId: target.id, householdName: target.name };
 }

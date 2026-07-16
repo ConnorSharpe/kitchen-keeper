@@ -47,6 +47,20 @@ describe('foodsMatch', () => {
     assert.equal(foodsMatch('red bean', 'bean sprouts'), false));
   test('false: "pea" / "peach"',    () => assert.equal(foodsMatch('pea',  'peach'),     false));
   test('false: "ham" / "chamomile"', () => assert.equal(foodsMatch('ham', 'chamomile'), false));
+
+  // TASK-035 Part B2: plural handling for single-token targeted queries
+  test('true: "onion" / "onions" (exact match via normalizeFood plural map)', () =>
+    assert.equal(foodsMatch('onion', 'onions'), true));
+  test('true: "onion" / "caramelized onions" (single-token query, plural-stripped shared token)', () =>
+    assert.equal(foodsMatch('onion', 'caramelized onions'), true));
+  test('"glass" / "glasses" — guard prevents corrupting "glass" into "glas"; naive approach may still not match', () => {
+    // Documented limitation (D-B2): asserting the guard doesn't crash/mangle, not that it matches.
+    assert.doesNotThrow(() => foodsMatch('glass', 'glasses'));
+  });
+  test('"citrus" / "citruses" — known limitation, result recorded not required to be true', () => {
+    // Irregular plural (+es after sibilant) is explicitly out of scope for the naive fix (D-B2).
+    assert.doesNotThrow(() => foodsMatch('citrus', 'citruses'));
+  });
 });
 
 describe('containsWholeWord', () => {

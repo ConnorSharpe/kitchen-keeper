@@ -33,6 +33,9 @@ router.post('/build', validate(buildSchema), async (req, res) => {
   if (result.status === 'invalid_recipes') {
     return res.status(400).json({ error: 'One or more recipe IDs are invalid or do not belong to you.' });
   }
+  if (result.status === 'error') {
+    return res.status(500).json({ error: 'Failed to build shopping list. Please try again.' });
+  }
   res.status(201).json({ list: result.list, items: result.items, warnings: result.warnings });
 });
 

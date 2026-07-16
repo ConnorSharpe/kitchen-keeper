@@ -31,28 +31,30 @@ router.post('/subscribe', clerkAuth, async (req, res) => {
     return res.status(422).json({ error: 'Invalid subscription object' });
   }
 
-  // Atomic: pre-delete cross-user binding + upsert in a single transaction.
-  // Without a transaction, concurrent requests could interleave the delete and insert,
-  // producing a transient ownership flip. The transaction enforces the deterministic
-  // ownership guarantee (Constraint 9).
-  await db.transaction(async (tx) => {
-    // Step 1: remove any stale cross-household binding for this endpoint.
-    await tx
-      .delete(pushSubscriptions)
-      .where(and(
-        eq(pushSubscriptions.endpoint, endpoint),
-        ne(pushSubscriptions.householdId, req.user.householdId),
-      ));
+  // Sequential (non-transactional): drizzle-orm/neon-http has no interactive transaction
+  // support (TASK-035 Part A2). Delete-then-upsert, run as two independent statements.
+  // Accepted residual risk: two concurrent subscribe calls for the identical push endpoint
+  // from two different households could interleave into a transient ownership flip — narrow
+  // enough (single-endpoint-double-subscribe, browser+device+origin-specific) to accept
+  // rather than reach for a raw-SQL CTE. No retry loop — retrying either statement would
+  // widen this same window rather than close it.
+  //
+  // Step 1: remove any stale cross-household binding for this endpoint.
+  await db
+    .delete(pushSubscriptions)
+    .where(and(
+      eq(pushSubscriptions.endpoint, endpoint),
+      ne(pushSubscriptions.householdId, req.user.householdId),
+    ));
 
-    // Step 2: upsert. On same-endpoint conflict (same household re-subscribing), update keys only.
-    await tx
-      .insert(pushSubscriptions)
-      .values({ householdId: req.user.householdId, endpoint, p256dh: keys.p256dh, auth: keys.auth, createdAt: new Date().toISOString() })
-      .onConflictDoUpdate({
-        target: pushSubscriptions.endpoint,
-        set: { p256dh: keys.p256dh, auth: keys.auth },
-      });
-  });
+  // Step 2: upsert. On same-endpoint conflict (same household re-subscribing), update keys only.
+  await db
+    .insert(pushSubscriptions)
+    .values({ householdId: req.user.householdId, endpoint, p256dh: keys.p256dh, auth: keys.auth, createdAt: new Date().toISOString() })
+    .onConflictDoUpdate({
+      target: pushSubscriptions.endpoint,
+      set: { p256dh: keys.p256dh, auth: keys.auth },
+    });
 
   res.status(201).json({ ok: true });
 });

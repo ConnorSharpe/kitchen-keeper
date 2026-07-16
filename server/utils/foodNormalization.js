@@ -119,10 +119,22 @@ export function normalizeFood(name) {
   return LOOKUP.get(n) ?? n;
 }
 
+// Strips a trailing regular-plural "s" (e.g. "onions" → "onion"). Guarded against
+// words already ending in "ss" (e.g. "glass") to avoid corrupting them into an
+// invalid stem ("glas") — this guard prevents corruption of the singular form, it
+// does NOT attempt to normalize irregular plurals like "glasses"/"citruses" down to
+// their singular (TASK-035 Part B2, deliberately naive — no stemming library).
+function stripTrailingPlural(token) {
+  if (token.length > 3 && token.endsWith('s') && !token.endsWith('ss')) {
+    return token.slice(0, -1);
+  }
+  return token;
+}
+
 // Token-based match: requires ≥2 shared tokens OR exact canonical match.
 // Prevents "red bean" matching "bean sprouts" (only 1 shared token).
 function tokenize(name) {
-  return (name || '').toLowerCase().split(/[\s,()/]+/).filter((t) => t.length > 2);
+  return (name || '').toLowerCase().split(/[\s,()/]+/).filter((t) => t.length > 2).map(stripTrailingPlural);
 }
 
 export function foodsMatch(a, b) {
@@ -130,9 +142,17 @@ export function foodsMatch(a, b) {
   const nb = normalizeFood(b);
   if (na === nb) return true;
   const tokensA = new Set(tokenize(na));
+  if (tokensA.size === 0) return false;
   const tokensB = tokenize(nb);
   const sharedCount = tokensB.filter((t) => tokensA.has(t)).length;
-  return sharedCount >= 2;
+  // A single-token query (e.g. a user-named ingredient like "onion") only ever has one
+  // token to share — requiring 2 would make it structurally unmatchable against any
+  // multi-word candidate (e.g. "caramelized onions"), which was TASK-035 Part B2's
+  // observed bug. Multi-word queries keep the original >=2 threshold — this is what
+  // preserves the TASK-011 invariant that "red bean" must not match "bean sprouts"
+  // (only 1 shared token, and "red bean" has 2 tokens of its own to require).
+  const threshold = Math.min(2, tokensA.size);
+  return sharedCount >= threshold;
 }
 
 // Light normalization for allergy detection ONLY.

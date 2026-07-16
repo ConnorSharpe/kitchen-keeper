@@ -4,7 +4,7 @@ Kitchen Keeper is an AI-powered food waste management app for households. Add pa
 
 ## Live Demo
 
-[https://kitchen-keeper-connorsharpes-projects.vercel.app](https://kitchen-keeper-connorsharpes-projects.vercel.app)
+[https://kitchenkeeper.vercel.app](https://kitchenkeeper.vercel.app)
 
 > Invite code required — unauthorized registrations are blocked to protect shared API resources. Contact Connor to request access.
 
