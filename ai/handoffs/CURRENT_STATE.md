@@ -1,11 +1,10 @@
 # Task
 
 Production smoke test of TASK-038 (recipe photo picker fix + recipe URL import), which had shipped to
-`main`/production ~2h before this session with its 18 spec verification steps never run. **Only the
-first verification step (URL import, JSON-LD happy path) was completed** before the session surfaced
-an unrelated, active production outage that took priority — see below. The remaining smoke-test steps
-(enrichment path, AI-text fallback, total-failure fallback, SSRF guard, redirect handling, size cap,
-tag dedup, rate limiting, regression) were **not yet run**.
+`main`/production ~2h before this session with its 18 spec verification steps never run. The session
+found and fixed two save-blocking bugs (below) plus an unrelated active production outage, then
+resumed and completed most of the practically-live-testable verification steps. See "Smoke Test
+Results" for the full breakdown of what was and wasn't covered.
 
 # Current Status
 
@@ -106,23 +105,42 @@ Three bugs found and fixed this session, all confirmed live on `kitchenkeeper.ki
 - Still open from prior work, unrelated: OpenAI billing not yet switched to prepaid/auto-recharge-off
   (TASK-037).
 
+# Smoke Test Results
+
+Spec verification steps (see TASK-038-spec.md's "Verification Steps"), tested live against
+`kitchenkeeper.kitchen` except where noted:
+
+| Step | Result |
+|---|---|
+| 3. JSON-LD happy path (complete data) | ✅ Pass. `budgetbytes.com/homemade-pancakes/` → `tier=json-ld`, all fields populated, saved (201), correct badge/filter. |
+| 6/7. AI-text fallback / total failure | ✅ Pass (total-failure variant). `en.wikipedia.org/wiki/Golden_Gate_Bridge` → attempted `tier=ai-text`, found nothing usable → 422 with `titleGuess: "Golden Gate Bridge - Wikipedia"`, modal opened prefilled with just that title. |
+| 8. SSRF guard, core ranges | ✅ Pass. `http://127.0.0.1/` and `http://169.254.169.254/` both rejected 400 with `"That URL is not allowed."`, no fetch attempted. |
+| 9. SSRF guard, extended IANA ranges | ✅ Covered by existing `recipeUrlImportService.test.js` unit tests (part of the 96/96 passing this session) — not independently re-tested live, per the spec's own framing (no real server exists at most of those addresses to fetch from). |
+| 10. Redirect handling | ✅ Pass. `http://budgetbytes.com/homemade-pancakes/` (no scheme upgrade, no `www`) followed through http→https and non-www→www redirects to the same recipe (200). Redirect-to-private-IP variant not tested (no controlled endpoint available to redirect *to* a private IP on demand). |
+| 13. Tag dedup | Not independently re-tested live — already covered by `recipeUrlImportService.test.js`'s dedup unit test; no live candidate page was found with overlapping `recipeCategory`/`recipeCuisine` during this session's URL sampling. |
+| 14. Saved-recipe tagging | ✅ Pass. `source: 'url_import'` + `sourceUrl` saved and displayed correctly (this is the bug this session fixed). |
+| 15. Filter dropdown | ✅ Pass. "Imported from URL" filter correctly scoped to the saved recipe. |
+| 16. Rate limiting | ✅ Confirmed by code inspection (`server/routes/ai.js:21-22` — `clerkAuth`/`aiRateLimit` mounted before all routes, `/parse-recipe-url` included, no route-level bypass). Not live-triggered (would require spamming real requests against production, not worth the disruption/cost for a smoke test). |
+| 4. Enrichment path (`json-ld+enriched`) | **Not hit.** Both real-world candidates tried (`budgetbytes.com`, `cookieandkate.com`) had complete JSON-LD (`tier=json-ld` both times) — modern recipe-SEO plugins tend to fill in all fields now. Needs a page with incomplete JSON-LD metadata to actually exercise; none found in this session's sampling. |
+| 5. Enrichment failure doesn't block import | Not tested — depends on reaching the enrichment tier at all (see #4). |
+| 6. AI-fallback path *with a usable result* | Not confirmed — the one no-JSON-LD candidate tried (Wikipedia) also failed AI extraction (correctly, it's not a recipe), so `tier=ai-text` was exercised but only the "found nothing" branch, not "found a usable recipe via AI text extraction." |
+| 11. Streaming size cap | Not tested — needs a controlled endpoint serving >5MB without a `Content-Length` header; no such endpoint available for a live smoke test. |
+| 12. Smarter truncation | Not tested — needs inspecting the actual text handed to the AI call (a temporary log/breakpoint), not just observable from the client side. |
+| 17. Regression (existing image-upload/receipt-scan flows) | Not live-tested — no test image file was available in this session. Risk is low: this session's changes only added an object entry for `url_import` and never touched the `upload`/`manual` code paths. |
+| 1/2. Photo picker (mobile vs. desktop) | Not tested — mobile camera-vs-library requires a real iPhone/Android device (capture behavior isn't reliable in devtools emulation, per the spec itself). |
+| 18. `npm test`/`lint`/`build` | ✅ Pass (96/96 tests, clean lint, clean build) — re-confirmed after this session's fixes. |
+
 # Recommended Next Action
 
-Finish TASK-038's smoke test — this session only ran the JSON-LD happy-path check (#3 in the spec's
-Verification Steps) before the production outage discovery took priority. Still untested against live
-production:
-- Enrichment path (JSON-LD present but missing servings/times/description/tags)
-- AI text-extraction fallback (no JSON-LD Recipe found)
-- Total-failure fallback (non-recipe URL → manual entry prefilled with page title)
-- SSRF guard (`http://127.0.0.1/`, `http://169.254.169.254/` rejected with 400)
-- Redirect handling (multi-hop redirect to a real recipe; redirect-to-private-IP rejected)
-- Streaming size cap on a >5MB chunked response
-- Tag dedup on a page whose `recipeCategory`/`recipeCuisine` overlap
-- Rate-limit inheritance on `/api/ai/parse-recipe-url`
-- Regression check on the existing image-upload and receipt-scan flows (unaffected by this session's
-  changes, but never explicitly re-verified live)
-- Mobile-only: real-device check of the camera-vs-library picker split (Part A) — needs an actual
-  iPhone/Android, not emulation
+The remaining gaps worth closing, roughly in priority order:
+1. Find or construct a recipe URL with incomplete JSON-LD (missing servings/prepTime/cookTime/description)
+   to actually exercise the enrichment tier (steps 4–5) — this is the one path of the three-tier design
+   never yet observed live.
+2. Do a real image-upload/receipt-scan pass with an actual photo to close out step 17 — low risk given
+   what changed, but never explicitly confirmed this session.
+3. Real-device test of the camera-vs-library picker split (Part A, steps 1–2) next time a phone is handy.
+4. Lower priority / diminishing returns for a smoke test specifically: steps 11 (streaming size cap) and
+   12 (truncation) need purpose-built test infrastructure, not just a browser session, to observe.
 
 # Context Notes
 
