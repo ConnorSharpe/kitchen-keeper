@@ -3,6 +3,7 @@ const SOURCE_BADGE = {
   ai_suggested: { label: 'AI Suggested', cls: 'bg-purple-100 text-purple-700' },
   web_suggested: { label: 'From Web', cls: 'bg-orange-100 text-orange-700' },
   manual: { label: 'Manual', cls: 'bg-gray-100 text-gray-600' },
+  url_import: { label: 'Imported from URL', cls: 'bg-teal-100 text-teal-700' },
 };
 
 export default function RecipeCard({

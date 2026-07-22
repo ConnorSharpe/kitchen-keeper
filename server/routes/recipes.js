@@ -4,6 +4,7 @@ import { clerkAuth } from '../middleware/clerkAuth.js';
 import { validate } from '../middleware/validate.js';
 import * as recipeService from '../services/recipeService.js';
 import * as recipeBlocklistService from '../services/recipeBlocklistService.js';
+import { RECIPE_SOURCES } from '../../shared/recipeSources.js';
 
 const router = express.Router();
 router.use(clerkAuth);
@@ -24,9 +25,7 @@ const sourceUrlSchema = z
 const createSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(1000).nullable().optional(),
-  source: z
-    .enum(['upload', 'ai_suggested', 'web_suggested', 'manual'])
-    .optional(),
+  source: z.enum(RECIPE_SOURCES).optional(),
   sourceUrl: sourceUrlSchema,
   imageUrl: z.string().nullable().optional(),
   ingredients: z.array(ingredientSchema).default([]),
