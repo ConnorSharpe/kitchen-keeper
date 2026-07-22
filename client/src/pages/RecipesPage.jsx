@@ -6,6 +6,7 @@ import { api } from '../api/index.js';
 import RecipeCard from '../components/recipes/RecipeCard.jsx';
 import RecipeModal from '../components/recipes/RecipeModal.jsx';
 import RecipeUpload from '../components/recipes/RecipeUpload.jsx';
+import RecipeUrlImport from '../components/recipes/RecipeUrlImport.jsx';
 import RecipeReviewModal from '../components/recipes/RecipeReviewModal.jsx';
 import BlockedRecipesModal from '../components/recipes/BlockedRecipesModal.jsx';
 
@@ -97,8 +98,10 @@ export default function RecipesPage() {
 
   const [openRecipe, setOpenRecipe] = useState(null);
   const [showUpload, setShowUpload] = useState(false);
+  const [showUrlImport, setShowUrlImport] = useState(false);
   const [reviewRecipe, setReviewRecipe] = useState(null);
   const [reviewImage, setReviewImage] = useState(null); // Blob | null
+  const [reviewSourceUrl, setReviewSourceUrl] = useState(null);
   const [favLoadingId, setFavLoadingId] = useState(null);
   const [showBlocklist, setShowBlocklist] = useState(false);
 
@@ -222,6 +225,33 @@ export default function RecipesPage() {
     setReviewImage(imageBlob ?? null);
   }
 
+  function handleUrlExtracted(recipe, url) {
+    setShowUrlImport(false);
+    setReviewRecipe(recipe);
+    setReviewImage(null);
+    setReviewSourceUrl(url);
+  }
+
+  function handleNeedsManualEntry(titleGuess, url) {
+    setShowUrlImport(false);
+    setReviewRecipe({
+      name: titleGuess ?? '',
+      description: null,
+      ingredients: [],
+      steps: [],
+      servings: null,
+      prepMins: null,
+      cookMins: null,
+      tags: [],
+    });
+    setReviewImage(null);
+    setReviewSourceUrl(url);
+    toast(
+      "Couldn't auto-extract that recipe — add the details below.",
+      { icon: 'ℹ️' }
+    );
+  }
+
   async function handleReviewSave(recipe) {
     try {
       let payload = recipe;
@@ -277,6 +307,12 @@ export default function RecipesPage() {
             className="text-sm px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
           >
             📸 Upload Recipe Image
+          </button>
+          <button
+            onClick={() => setShowUrlImport(true)}
+            className="text-sm px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            🔗 Import from URL
           </button>
           <button
             onClick={handleFindOnline}
@@ -355,6 +391,7 @@ export default function RecipesPage() {
           <option value="upload">Uploaded</option>
           <option value="ai_suggested">AI Suggested</option>
           <option value="web_suggested">From Web</option>
+          <option value="url_import">Imported from URL</option>
           <option value="manual">Manual</option>
         </select>
 
@@ -472,13 +509,24 @@ export default function RecipesPage() {
         />
       )}
 
+      {showUrlImport && (
+        <RecipeUrlImport
+          onExtracted={handleUrlExtracted}
+          onNeedsManualEntry={handleNeedsManualEntry}
+          onClose={() => setShowUrlImport(false)}
+        />
+      )}
+
       {reviewRecipe && (
         <RecipeReviewModal
           recipe={reviewRecipe}
+          source={reviewSourceUrl ? 'url_import' : 'upload'}
+          sourceUrl={reviewSourceUrl}
           onSave={handleReviewSave}
           onClose={() => {
             setReviewRecipe(null);
             setReviewImage(null);
+            setReviewSourceUrl(null);
           }}
         />
       )}

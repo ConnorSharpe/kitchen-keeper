@@ -1,83 +1,86 @@
 # Task
 
-TASK-038 — Recipe Photo Picker Fix + Recipe URL Import. **Spec-only session — no application code changed.** Spec is fully drafted and has been through two rounds of architect review; it is marked **APPROVED FOR IMPLEMENTATION** at the top of [ai/tasks/TASK-038-spec.md](../tasks/TASK-038-spec.md) (DRAFT-3). Implementation has not started.
+TASK-038 — Recipe Photo Picker Fix + Recipe URL Import. **Implemented this session**, per [ai/tasks/TASK-038-spec.md](../tasks/TASK-038-spec.md) (DRAFT-3, approved). Both Part A and Part B are code-complete and automated verification passes.
 
 # Current Status
 
-The spec covers two independent, separately-shippable parts:
+Both parts implemented exactly per spec, verbatim code blocks used:
 
-- **Part A**: fixes the iPhone/Android recipe- and receipt-photo upload controls, which currently force straight to the camera (`capture="environment"` on a single file input) with no way to pick an existing photo from the library. Fix is two explicit buttons on mobile ("Take Photo" / "Choose from Library") behind two separate hidden inputs; desktop is unaffected.
-- **Part B**: adds `POST /api/ai/parse-recipe-url` — import a recipe from a pasted URL. Three-tier extraction: schema.org JSON-LD first (free), a best-effort AI enrichment pass when JSON-LD is missing secondary metadata (servings/times/description/tags) but has usable ingredients/steps, then a full AI text-extraction fallback when no JSON-LD Recipe exists at all. Total failure opens the existing `RecipeReviewModal` with just a page-title guess, reusing 100% of existing manual-edit UI rather than building a new one.
+- **Part A**: `RecipeUpload.jsx` and `ReceiptUpload.jsx` now show two explicit buttons ("📷 Take Photo" / "🖼️ Choose from Library") behind two separate hidden file inputs on mobile; desktop dropzone unchanged.
+- **Part B**: `POST /api/ai/parse-recipe-url` added — three-tier extraction (JSON-LD → best-effort AI enrichment → full AI text-extraction fallback), SSRF-hardened fetch service, wired into `RecipeReviewModal`/`RecipesPage` with a new "🔗 Import from URL" button and `url_import` source/filter option.
 
-Both parts, all code blocks (full file contents / diffs), the new `cheerio` dependency, the SSRF-hardened URL-fetch service, and a new unit-test file are fully specified — this is implementation-ready, not a rough plan. Architect review history (both rounds' adopted/declined items, with reasoning) is captured inline in the spec's own "Architect Review History" table — do not re-litigate those decisions without new information.
+One deviation from the spec's literal code block: fixed a lint error (`no-useless-escape` on `\/` inside a character class in `parseIngredientLine`'s regex) — functionally identical, `eslint .` now passes clean.
 
 # Files Modified (this session)
 
-Only `ai/tasks/TASK-038-spec.md` (created, then revised twice in place through two review rounds). Zero application code touched.
+- `client/src/components/recipes/RecipeUpload.jsx` — two-button mobile picker
+- `client/src/components/pantry/ReceiptUpload.jsx` — two-button mobile picker
+- `client/src/components/recipes/RecipeReviewModal.jsx` — `source`/`sourceUrl` props, dynamic header subtitle
+- `client/src/pages/RecipesPage.jsx` — new state/handlers/button/modal for URL import, filter dropdown option
+- `server/routes/ai.js` — new `POST /api/ai/parse-recipe-url` route + import
+- `server/services/aiService.js` — new `parseRecipeText`, `enrichRecipeFields`, exported `RECIPE_ENRICHABLE_FIELDS`
+- `server/package.json` — added `cheerio` (`^1.2.0`, via `npm install --save`)
 
-# Files Required Next (implementation)
+# Files Created (this session)
 
-Per the spec's own "Overall Allowed Files" section:
+- `server/services/recipeUrlImportService.js` — SSRF guard, fetch-with-redirect-revalidation, JSON-LD extraction, page-text extraction
+- `server/services/recipeUrlImportService.test.js` — 11 tests, all passing
+- `client/src/components/recipes/RecipeUrlImport.jsx` — URL-paste modal
 
-- New: `server/services/recipeUrlImportService.js`, `server/services/recipeUrlImportService.test.js`, `client/src/components/recipes/RecipeUrlImport.jsx`
-- Modified: `client/src/components/recipes/RecipeUpload.jsx`, `client/src/components/pantry/ReceiptUpload.jsx`, `client/src/components/recipes/RecipeReviewModal.jsx`, `client/src/pages/RecipesPage.jsx`, `server/routes/ai.js`, `server/services/aiService.js`, `server/package.json` (add `cheerio` — run `npm install` after)
+# Files Required Next
 
-Forbidden files are listed explicitly in the spec's "Overall Forbidden Files" section (no schema/migration changes, no `resolveProvider`/BYOK changes, no chat-service changes, no rate-limit-middleware changes — the new route inherits `ai.js`'s existing router-wide `aiRateLimit` automatically).
+None for implementation — code is complete. Remaining work is verification only (see below).
 
 # Files Already Reviewed
 
-This session read (to ground the spec in actual current behavior, not assumptions): `client/src/components/recipes/RecipeUpload.jsx`, `client/src/components/pantry/ReceiptUpload.jsx`, `client/src/pages/RecipesPage.jsx`, `client/src/components/recipes/RecipeReviewModal.jsx`, `server/routes/ai.js`, `server/services/aiService.js` (imports + `parseRecipeImage`), `server/services/recipeSearchService.js` (fetch-with-timeout convention), `server/middleware/upload.js`, `server/middleware/validate.js`, `server/db/schema.js` (`recipes` table — confirmed `source`/`sourceUrl` columns already exist, no migration needed), `server/package.json`, root `package.json`.
+This session re-confirmed (before editing) that `RecipeUpload.jsx`, `ReceiptUpload.jsx`, `RecipeReviewModal.jsx`, `RecipesPage.jsx`, and `server/routes/ai.js` matched the spec's "Current Behavior" section exactly — no drift since the spec-writing session.
 
 # Dependency Chain
 
-Implementing:
-- `server/services/recipeUrlImportService.js` (new) — no dependency on any other new-this-task file
-- `server/services/aiService.js` (`parseRecipeText`, `enrichRecipeFields`, `RECIPE_ENRICHABLE_FIELDS` export) — depends on nothing new; reuses existing `OpenAI`/`wrapAIError`/`safeParseJSON`/`AIProviderError` already imported there
-- `server/routes/ai.js` (new route) — depends on both of the above, plus the existing `parsedRecipeSchema` already defined in that file (from `parse-recipe-image`)
-- `client/src/components/recipes/RecipeUrlImport.jsx` (new) — depends on nothing else new
-- `client/src/components/recipes/RecipeReviewModal.jsx`, `client/src/pages/RecipesPage.jsx` — wire the above together
-
-Irrelevant (per spec's Overall Forbidden Files, do not touch): any migration file, `server/services/ai/resolveProvider.js`/`providerInterface.js`/`openaiProvider.js`, `server/services/chat/**`, `server/middleware/aiRateLimit*.js`, `server/services/platformSettingsService.js`, `ai/tasks/archive/`.
+No longer relevant — all planned files are now implemented. Any follow-up work should treat this as a normal codebase, not a scoped dependency chain.
 
 # Architecture Notes
 
-- New dependency: `cheerio` (HTML/JSON-LD parsing) — not yet installed; add to `server/package.json` and run `npm install` as the first implementation step.
-- The new route follows this codebase's existing "utility AI call" convention (direct `process.env.OPENAI_API_KEY`, not `resolveProvider`/BYOK) — matches its closest sibling, `parseRecipeImage`. This is a deliberate, spec'd decision (D-6), not an oversight to fix.
-- SSRF guard (`recipeUrlImportService.js`) blocks a comprehensive, explicit list of IANA special-purpose IPv4 ranges plus the standard IPv6 special ranges, re-validated on every redirect hop. Two residual gaps are deliberately accepted and documented in the spec's Known Risks (DNS-rebinding TOCTOU, IPv4-mapped IPv6 addresses) — both judged acceptable given this endpoint's authenticated + rate-limited trust boundary. Do not silently "fix" these without re-reading that reasoning first.
-- `recipes.source`/`recipes.source_url` columns already exist (used today by the web-suggestion save path) — this task reuses them via new `source`/`sourceUrl` props on `RecipeReviewModal`, no schema change.
+Carried forward from the spec, now reflected in code:
+- New dependency `cheerio` installed and used only in `recipeUrlImportService.js`.
+- The new route follows the existing "utility AI call" convention (direct `process.env.OPENAI_API_KEY`), not `resolveProvider`/BYOK — matches `parseRecipeImage`.
+- `recipes.source`/`recipes.source_url` columns (pre-existing) are now also written by the URL-import and manual-fallback paths via `RecipeReviewModal`'s new props.
 
 # Decisions Made
 
-All decisions (D-1 through D-22) are recorded directly in the spec, most with an explicit "why" and several documenting what was *declined* and why (e.g., no headless browser, no Redis caching, no `robots.txt` handling, no BYOK integration for this call). Do not re-derive these from scratch — read the spec's "Decisions" subsections (end of Part A, end of Part B) and its "Architect Review History" table first.
+All D-1 through D-22 from the spec were implemented as specified — no new decisions this session. One micro-fix not in the spec: regex escape cleanup for lint (see Current Status).
 
 # Remaining Work
 
-1. Implement Part A (photo picker fix) — small, self-contained, no server changes, good first slice.
-2. Implement Part B (URL import) — `npm install` for `cheerio` first, then the new service file, the two `aiService.js` additions, the new route, then the client-side component + wiring.
-3. Run the spec's own Verification Steps (18 steps, covering both parts, SSRF edge cases, the enrichment tier, streaming size cap, tag dedup, and regression checks on the existing photo-upload/receipt-scan flows) — not yet run, since no code has been written.
-4. Run `npm test` (root), `npm run lint`, `npm run build` — not yet run this session.
+1. **Manual verification** — the spec's 18 Verification Steps were not run this session. Automated ones (steps 9, 18) are confirmed passing (see below). The rest require either a real mobile device (steps 1, camera vs. picker behavior isn't reliable in devtools emulation) or a logged-in session against real recipe URLs (steps 3–7, 10–17) — this session could not log in (Clerk-gated, no credentials available/appropriate to enter).
+2. Recommend the user runs through Verification Steps 1–8, 10–17 by hand against the running dev servers (left running at `http://localhost:5183` client / `:3001` server).
 
 # Known Risks
 
-Carried forward from the spec (see its own "Known Risks" section for full reasoning, not repeated here): DNS-rebinding TOCTOU gap in the SSRF guard; IPv4-mapped IPv6 addresses not unwrapped for the SSRF check; AI enrichment/fallback tiers cost real (small, `gpt-4o-mini`) OpenAI tokens per non-fully-JSON-LD import, backstopped only by the existing app-wide rate limit; JS-only-rendered recipe sites will fail both extraction tiers and land on the manual-fallback path (no headless browser, by design); non-UTF-8 page encodings aren't decoded correctly (cosmetic, not data-loss, since the review modal is always the backstop).
+Unchanged from the spec — DNS-rebinding TOCTOU gap, IPv4-mapped-IPv6 not unwrapped, AI-fallback token cost, JSON-LD quality variance, JS-only-rendered sites, non-UTF-8 encodings. All accepted/documented in the spec, nothing new introduced this session.
 
-Separately, still open from prior work (not part of this task, just still true): **OpenAI billing has not yet been switched to prepaid credits with auto-recharge off** — the one remaining item from TASK-037's Deployment Prerequisites, blocking `public_ai_access_enabled` from ever being safely flipped to `true` in production. Non-code, outside this repo.
+Separately, still open from prior work: **OpenAI billing has not yet been switched to prepaid credits with auto-recharge off** (carried from TASK-037, unrelated to this task).
 
 # Verification Results
 
-None — no implementation was done this session. The spec's Verification Steps section defines what "done" looks like for the next implementation session.
+- `npm test` (root: shared tests + server `node --test`) — **82/82 pass**, including all 11 new `recipeUrlImportService.test.js` tests (covers spec Verification Step 9 in full).
+- `npm run lint` (`eslint .`) — **pass** (after the one regex fix noted above).
+- `npm run build` (`vite build`) — **pass**, no new warnings beyond the pre-existing chunk-size notice.
+- Dev servers (`server` :3001, `client` :5183) started cleanly, zero console/server errors on initial load. UI could not be exercised past Clerk's sign-in screen without credentials.
+- Spec Verification Steps 1–8, 10–17 — **not run** (require real device or logged-in manual testing per above).
 
 # Recommended Next Action
 
-Implement TASK-038 per [ai/tasks/TASK-038-spec.md](../tasks/TASK-038-spec.md) (DRAFT-3, approved). Suggested order: Part A first (small, isolated, immediately testable in a mobile browser), then Part B (`npm install cheerio` → `recipeUrlImportService.js` + its test file → `aiService.js` additions → the new route → client-side component + `RecipesPage.jsx`/`RecipeReviewModal.jsx` wiring), then work through the spec's 18 Verification Steps in order.
+Log into the running dev server (`http://localhost:5183`) and manually work through TASK-038-spec.md's Verification Steps 1–8 and 10–17 — particularly step 14 (confirm `source`/`sourceUrl` save correctly for all three paths: JSON-LD import, manual-fallback import, and existing image-upload with no regression) and step 16 (rate-limit inheritance). Step 1 (camera vs. library picker) needs a real iPhone/Android device, not devtools emulation.
 
 # Forbidden Exploration
 
 - `ai/tasks/archive/` — not relevant
-- Everything listed under TASK-038-spec.md's own "Overall Forbidden Files" and "Out of Scope" sections — already explicitly scoped out by the spec itself (headless browser rendering, `robots.txt` handling, response caching, BYOK integration for this call, schema/migration changes), not gaps to fill in
+- Everything under TASK-038-spec.md's "Overall Forbidden Files"/"Out of Scope" — unchanged, still not touched this session (confirmed no schema/migration files, no `resolveProvider`/BYOK, no chat-service, no rate-limit-middleware files were edited)
 
 # Context Notes
 
 - branch: main
 - worktree: none
-- This was a spec-writing/review session only — no dev server was run, no code was written or tested. The next session should start by reading the spec in full before writing any code.
+- Dev servers left running (server :3001, client :5183) for the user's manual verification pass — stop with the preview tooling or `Ctrl+C` when done.
+- No commit made this session — implementation is uncommitted on `main`. User should review the diff and commit when satisfied with manual verification.

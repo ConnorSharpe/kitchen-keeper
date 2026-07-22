@@ -33,7 +33,13 @@ const TAGS = [
   'freezer-friendly',
 ];
 
-export default function RecipeReviewModal({ recipe, onSave, onClose }) {
+export default function RecipeReviewModal({
+  recipe,
+  source = 'upload',
+  sourceUrl = null,
+  onSave,
+  onClose,
+}) {
   const [name, setName] = useState(recipe.name ?? '');
   const [description, setDescription] = useState(recipe.description ?? '');
   const [ingredients, setIngredients] = useState(
@@ -109,7 +115,8 @@ export default function RecipeReviewModal({ recipe, onSave, onClose }) {
       prepMins: prepMins === '' ? null : Number(prepMins),
       cookMins: cookMins === '' ? null : Number(cookMins),
       tags,
-      source: 'upload',
+      source,
+      sourceUrl,
     };
     onSave(payload);
   }
@@ -129,7 +136,9 @@ export default function RecipeReviewModal({ recipe, onSave, onClose }) {
               Review Extracted Recipe
             </h2>
             <p className="text-xs text-orange-600 mt-0.5">
-              AI extracted this — please review before saving
+              {sourceUrl
+                ? `Imported from ${sourceUrl} — please review before saving`
+                : 'AI extracted this — please review before saving'}
             </p>
           </div>
           <button

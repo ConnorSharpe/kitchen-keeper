@@ -124,10 +124,16 @@ export default function RecipeUpload({ onExtracted, onClose }) {
   const [phase, setPhase] = useState('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useRef(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const cameraInputRef = useRef(null);
+  const libraryInputRef = useRef(null);
   const abortRef = useRef(null);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  useEffect(() => {
+    setIsMobile(window.matchMedia('(hover: none) and (pointer: coarse)').matches);
+  }, []);
 
   async function uploadFile(file) {
     if (!file.type.startsWith('image/')) {
@@ -244,32 +250,70 @@ export default function RecipeUpload({ onExtracted, onClose }) {
 
         {/* Phase: idle */}
         {phase === 'idle' && (
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOver(true);
-            }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors ${
-              dragOver
-                ? 'border-orange-400 bg-orange-50'
-                : 'border-gray-300 hover:border-orange-300 hover:bg-gray-50'
-            }`}
-          >
-            <p className="text-5xl mb-4">📸</p>
-            <p className="text-sm font-medium text-gray-700">
-              Take a photo or upload a recipe image
-            </p>
-            <p className="text-xs text-gray-400 mt-1">
-              JPEG, PNG, WebP or HEIC — max 10 MB
-            </p>
+          <div>
+            {!isMobile && (
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => libraryInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors ${
+                  dragOver
+                    ? 'border-orange-400 bg-orange-50'
+                    : 'border-gray-300 hover:border-orange-300 hover:bg-gray-50'
+                }`}
+              >
+                <p className="text-5xl mb-4">📸</p>
+                <p className="text-sm font-medium text-gray-700">
+                  Take a photo or upload a recipe image
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  JPEG, PNG, WebP or HEIC — max 10 MB
+                </p>
+              </div>
+            )}
+
+            {isMobile && (
+              <div className="flex flex-col items-center py-8 gap-4">
+                <p className="text-5xl">📸</p>
+                <p className="text-sm font-medium text-gray-700 text-center">
+                  Add a recipe photo
+                </p>
+                <div className="flex gap-3 w-full">
+                  <button
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="flex-1 py-2.5 px-3 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    📷 Take Photo
+                  </button>
+                  <button
+                    onClick={() => libraryInputRef.current?.click()}
+                    className="flex-1 py-2.5 px-3 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    🖼️ Choose from Library
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400">
+                  JPEG, PNG, WebP or HEIC — max 10 MB
+                </p>
+              </div>
+            )}
+
             <input
-              ref={fileInputRef}
+              ref={cameraInputRef}
               type="file"
               accept="image/*"
               capture="environment"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <input
+              ref={libraryInputRef}
+              type="file"
+              accept="image/*"
               onChange={handleFileChange}
               className="hidden"
             />

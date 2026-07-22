@@ -12,6 +12,7 @@ import * as aiService from '../services/aiService.js';
 import * as dietaryService from '../services/dietaryService.js';
 import * as recipeBlocklistService from '../services/recipeBlocklistService.js';
 import * as recipeSearchService from '../services/recipeSearchService.js';
+import * as recipeUrlImportService from '../services/recipeUrlImportService.js';
 import { createToolHandlers } from '../services/chat/createToolHandlers.js';
 import { getExpiryDays, getExpiryStatus } from '../../shared/expiry.js';
 import { getDefaultStorageLocation } from '../../shared/pantryDefaults.js';
@@ -296,6 +297,98 @@ router.post(
     }
 
     res.json({ recipe: validated });
+  }
+);
+
+// POST /api/ai/parse-recipe-url
+// Imports a recipe from a URL. Tries schema.org JSON-LD first (free, no AI
+// call — most recipe blogs already publish it for Google's rich-snippet
+// treatment); if found but missing servings/times/description/tags, a cheap
+// best-effort AI enrichment call fills in just those fields (never touches
+// name/ingredients/steps). Falls back to a full AI text-extraction pass over
+// the page's visible text if no JSON-LD Recipe is found at all. Returns
+// { recipe: validated } on success. On total failure (nothing produced a
+// usable recipe), responds 422 with { error, titleGuess } so the client can
+// fall back to a manual paste/edit review, prefilled with the page's <title>.
+
+const urlImportSchema = z.object({
+  url: z.string().url().max(2000),
+});
+
+router.post(
+  '/parse-recipe-url',
+  validate(urlImportSchema),
+  async (req, res) => {
+    const requestId = randomUUID().split('-')[0];
+
+    let html;
+    try {
+      html = await recipeUrlImportService.fetchRecipePage(req.body.url);
+    } catch (err) {
+      return res.status(err.status || 502).json({ error: err.message });
+    }
+
+    let raw = recipeUrlImportService.extractJsonLdRecipe(html);
+    let tier = 'json-ld';
+    const jsonLdUsable = raw && (raw.ingredients?.length || raw.steps?.length);
+
+    if (jsonLdUsable) {
+      // Tier 1b: JSON-LD succeeded but may be missing secondary metadata
+      // fields it doesn't always include. Best-effort AI fill-in — never
+      // touches name/ingredients/steps (architect review round 1).
+      const missingFields = aiService.RECIPE_ENRICHABLE_FIELDS.filter((f) =>
+        Array.isArray(raw[f]) ? raw[f].length === 0 : raw[f] == null
+      );
+      if (missingFields.length > 0) {
+        const pageText = recipeUrlImportService.extractPageText(html);
+        const enrichment = await aiService.enrichRecipeFields(
+          raw,
+          missingFields,
+          pageText,
+          req.body.url,
+          requestId
+        );
+        if (enrichment) {
+          raw = {
+            ...raw,
+            servings: raw.servings ?? enrichment.servings ?? null,
+            prepMins: raw.prepMins ?? enrichment.prepMins ?? null,
+            cookMins: raw.cookMins ?? enrichment.cookMins ?? null,
+            description: raw.description ?? enrichment.description ?? null,
+            tags: raw.tags?.length ? raw.tags : (enrichment.tags ?? []),
+          };
+          tier = 'json-ld+enriched';
+        }
+      }
+    } else {
+      const pageText = recipeUrlImportService.extractPageText(html);
+      raw = await aiService.parseRecipeText(pageText, req.body.url, requestId);
+      tier = 'ai-text';
+    }
+
+    const usable = raw && (raw.ingredients?.length || raw.steps?.length);
+    let validated = null;
+    if (usable) {
+      try {
+        validated = parsedRecipeSchema.parse(raw);
+      } catch {
+        validated = null;
+      }
+    }
+
+    if (!validated) {
+      const titleGuess = recipeUrlImportService.extractPageTitle(html);
+      return res.status(422).json({
+        error:
+          "Couldn't automatically find a recipe on that page. You can add the details manually.",
+        titleGuess,
+      });
+    }
+
+    console.log(
+      `[kitchen-keeper] request_id=${requestId} function=parseRecipeUrl tier=${tier}`
+    );
+    res.json({ recipe: validated, sourceUrl: req.body.url });
   }
 );
 

@@ -524,6 +524,136 @@ export async function parseRecipeImage(
 }
 
 /**
+ * Parses recipe data out of a page's plain text — the Tier 2 fallback when a
+ * URL import finds no schema.org JSON-LD. Mirrors parseRecipeImage's JSON
+ * contract, but is a text-only chat completion (cheaper, no vision needed)
+ * since the input is already plain text.
+ * Returns a structured recipe object, or null if AI returns malformed JSON
+ * or an unusable result (no name, no ingredients, no steps).
+ */
+export async function parseRecipeText(pageText, sourceUrl, requestId = 'n/a') {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const model = 'gpt-4o-mini';
+
+  const requestOptions = {
+    model,
+    messages: [
+      {
+        role: 'user',
+        content:
+          `The following is the extracted text of a recipe web page (${sourceUrl}). ` +
+          'Find the actual recipe content and ignore navigation, ads, comments, ' +
+          'related-post links, and other boilerplate. Prefer content under or near ' +
+          'headings like "Ingredients" and "Instructions"/"Directions"/"Method" over ' +
+          'prose elsewhere on the page (e.g. a blog post preamble). ' +
+          'Return JSON: { "name": string, "description": string, ' +
+          '"ingredients": [{"name": string, "quantity": number|string|null, "unit": string|null}], ' +
+          '"steps": [string], "servings": number|null, "prepMins": number|null, ' +
+          '"cookMins": number|null, "tags": [string] }. ' +
+          'If this page does not contain a recipe at all, return ' +
+          '{ "name": "", "ingredients": [], "steps": [] }. ' +
+          'Return ONLY a raw JSON object. No markdown, no explanation.\n\n' +
+          `PAGE TEXT:\n${pageText}`,
+      },
+    ],
+    max_tokens: 2000,
+  };
+
+  let text;
+  try {
+    const response = await openai.chat.completions.create(requestOptions);
+    text = response.choices[0].message.content ?? 'null';
+  } catch (err) {
+    throw wrapAIError(new AIProviderError('OpenAI text extraction error', err));
+  }
+
+  const result = safeParseJSON(text, null);
+  const usable =
+    result && (result.name || result.ingredients?.length || result.steps?.length);
+  console.log(
+    `[kitchen-keeper] request_id=${requestId} function=parseRecipeText model=${model}` +
+      ` usable=${!!usable}`
+  );
+  return usable ? result : null;
+}
+
+// Recipe fields eligible for AI enrichment when JSON-LD extraction succeeds
+// but is incomplete (Tier 1b in server/routes/ai.js). Exported so the
+// route's missing-field detection and this file's enrichment prompt/merge
+// contract can't silently drift apart if one is edited without the other
+// (architect review round 2 — previously a route-local constant).
+export const RECIPE_ENRICHABLE_FIELDS = [
+  'servings',
+  'prepMins',
+  'cookMins',
+  'description',
+  'tags',
+];
+
+/**
+ * Best-effort enrichment for a recipe already extracted from JSON-LD that's
+ * missing secondary metadata (servings/prepMins/cookMins/description/tags).
+ * Given the already-extracted recipe as grounding context, asks the model to
+ * fill in ONLY the named missing fields — never asked to touch (and the
+ * caller must never trust it for) name/ingredients/steps, which stay exactly
+ * as JSON-LD provided them. Returns a partial object with just the fields
+ * the model could find, or null on any failure — this is a nice-to-have
+ * layered on an already-successful extraction, so a failure here must never
+ * fail the overall import (architect review round 1).
+ */
+export async function enrichRecipeFields(
+  partialRecipe,
+  missingFields,
+  pageText,
+  sourceUrl,
+  requestId = 'n/a'
+) {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const model = 'gpt-4o-mini';
+
+  const requestOptions = {
+    model,
+    messages: [
+      {
+        role: 'user',
+        content:
+          `This recipe was already extracted from a web page (${sourceUrl}): ` +
+          `${JSON.stringify({ name: partialRecipe.name, ingredients: partialRecipe.ingredients, steps: partialRecipe.steps })}. ` +
+          `It is missing these fields: ${missingFields.join(', ')}. ` +
+          'Using the page text below, find ONLY those missing fields. Prefer content ' +
+          'near headings like "Ingredients"/"Instructions" for context, but you are ' +
+          'filling in metadata (servings, times, description, tags), not re-extracting ' +
+          'ingredients or steps. Do not include "name", "ingredients", or "steps" in ' +
+          'your response even if you can infer them — they are already correct. ' +
+          'Return JSON containing only whichever of these you can confidently determine: ' +
+          '{ "description": string, "servings": number, "prepMins": number, ' +
+          '"cookMins": number, "tags": [string] }. Omit any field you cannot determine ' +
+          "rather than guessing. Return ONLY a raw JSON object. No markdown, no explanation.\n\n" +
+          `PAGE TEXT:\n${pageText}`,
+      },
+    ],
+    max_tokens: 500,
+  };
+
+  try {
+    const response = await openai.chat.completions.create(requestOptions);
+    const text = response.choices[0].message.content ?? 'null';
+    const result = safeParseJSON(text, null);
+    console.log(
+      `[kitchen-keeper] request_id=${requestId} function=enrichRecipeFields model=${model}` +
+        ` found=${result ? Object.keys(result).join(',') : 'none'}`
+    );
+    return result;
+  } catch (err) {
+    console.error(
+      `[kitchen-keeper] request_id=${requestId} function=enrichRecipeFields failed:`,
+      err.message
+    );
+    return null;
+  }
+}
+
+/**
  * Recipe suggestions via Spoonacular/TheMealDB — zero LLM tokens.
  * Returns [] if no items or if all sources fail.
  * Shape: [{ name, description, sourceUrl, ingredients, prepSteps, steps, tags, prepMins, cookMins, servings }]
