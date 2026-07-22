@@ -1,0 +1,62 @@
+# Conventions
+
+Durable, cross-session conventions for this repo. Unlike `CURRENT_STATE.md` (rewritten each session as
+a handoff), this file accumulates and should be updated in place when a convention changes.
+
+## Environments (as of TASK-039)
+
+| Environment | Git branch | Neon branch | Clerk instance | URL |
+|---|---|---|---|---|
+| Production | `main` | `main` (Neon default/production branch) | Production (`pk_live_...`) | `kitchenkeeper.kitchen` |
+| Staging (Vercel Preview) | `staging` | `staging` | Development (`pk_test_d2lubmluZy1zd2lmdC03NC5jbGVyay5hY2NvdW50cy5kZXYk`) | `kitchen-keeper-git-staging-connorsharpes-projects.vercel.app` |
+| Local dev | (working tree) | `staging` | Development (same as staging) | `localhost` |
+
+`staging` is a single, static, long-lived Neon branch shared by Preview deployments and local dev — not
+a branch created per PR/deployment (that's Neon's "branch per Vercel Preview" feature, deliberately not
+enabled; see `ai/tasks/TASK-039-spec.md` Out of Scope).
+
+## Push workflow
+
+`staging` is the default day-to-day working branch — ordinary commits/pushes go there, which deploys to
+the isolated Preview environment above. `main` is release-only: promote to Production by merging
+`staging` → `main` (fast-forward preferred) only when ready to ship. There is no GitHub-enforced guard
+against an accidental direct push to `main` (private repo, free plan — branch protection needs GitHub
+Pro or a public repo); this relies on checking `git branch --show-current` before pushing.
+
+## Canonical migration order
+
+`staging`'s Neon branch is a point-in-time fork of production — it does not automatically pick up new
+Drizzle migrations applied to production. Every schema change follows this order, so there's one
+sequence instead of everyone inventing their own:
+
+1. Apply the new migration to the `staging` Neon branch first.
+2. Push/test the corresponding code on the `staging` git branch against it — this is what actually
+   exercises the new schema before it's live.
+3. Once verified, apply the same migration to production.
+4. Merge `staging` → `main`, which deploys the verified code to Production against the now-migrated
+   production database.
+
+Between step 3 and step 4 completing, production briefly runs the *previous* application version against
+the *new* schema. Prefer an expand/contract pattern for destructive changes (add → backfill → remove,
+across separate migrations) rather than a single migration that drops/renames a column, so that window
+doesn't break the still-running old code.
+
+## Staging branch runbook
+
+- **Mis-pointed env var** (Preview accidentally pointing at the wrong database): revert the affected
+  `vercel env` value back to Production's current value — a normal edit, not a rebuild.
+- **`staging` branch itself is bad** (e.g. a migration went wrong on it): re-fork `staging` fresh from
+  current production rather than hand-reversing schema changes. The branch is disposable and cheaply
+  re-creatable, not precious.
+- **Refreshing `staging` from production** (to pull in newer data) is destructive to whatever
+  staging-only data exists at the time — it replaces the branch's contents wholesale. No periodic
+  refresh is automated; do it manually if/when staging's data becomes too stale to be useful.
+
+## Known gap
+
+Only `DATABASE_URL` was repointed to the `staging` Neon branch for the Preview environment (the only
+Postgres variable this codebase reads — see `server/db/client.js`). The other ~10 Postgres-family
+variables the Neon-Vercel integration also sets (`POSTGRES_PRISMA_URL`, `PGHOST_UNPOOLED`, etc.) still
+point at production. If any future code starts reading one of those directly instead of `DATABASE_URL`,
+repoint it the same way — check via the Neon console (Connect → connection details for the `staging`
+branch) rather than guessing the format.

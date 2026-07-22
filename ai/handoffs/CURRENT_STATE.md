@@ -1,79 +1,98 @@
 # Task
 
-TASK-039 — Isolated Staging Environment (Preview DB + Stable Staging URL). **Spec only this session** — [ai/tasks/TASK-039-spec.md](../tasks/TASK-039-spec.md) is DRAFT-3, **APPROVED FOR IMPLEMENTATION** after two rounds of architect review. No implementation has started.
+TASK-039 — Isolated Staging Environment (Preview DB + Stable Staging URL). **Implemented this session.**
+[ai/tasks/TASK-039-spec.md](../tasks/TASK-039-spec.md) (DRAFT-3, approved) has been executed end to end:
+Neon `staging` branch created, Vercel Preview repointed, `staging` git branch created and pushed as the
+new default working branch, local dev repointed, and durable conventions documented in
+[ai/handoffs/CONVENTIONS.md](CONVENTIONS.md).
 
 # Current Status
 
-Raised by the user on go-live day (2026-07-22): every environment that could be used for "dev testing" — local dev, every Vercel Preview deployment, and Production — was found to share the exact same Neon database (confirmed by diffing `vercel env pull --environment=production` against `--environment=preview`: byte-identical `DATABASE_URL` host/database in both, and the same host in local `server/.env.local`). The "old Vercel URL" the user asked about is not a separate environment either — `vercel alias ls` showed it's just an alias pointing at the same latest Production deployment.
+All six Decisions Needed (D-1 through D-6) from the spec were resolved this session by direct
+inspection, not guessed:
 
-The spec fixes this and also folds in a second, related request from the same session: switch the default push workflow so day-to-day work goes to a new `staging` branch (deploying to the now-isolated Preview environment) instead of `main` (which deploys straight to Production today — confirmed via `git rev-parse --abbrev-ref @{u}` → `origin/main` on the current checkout).
-
-Two rounds of external architect review both scored highly (9.3/10 → 9.8/10, approved). All feedback was assessed critically before being applied — see the spec's own "Architect Review History" table for exactly what was adopted vs. pushed back on (e.g. declined moving investigation evidence to a separate doc, declined "take a Neon backup before branching" since Neon branching is non-destructive by design).
+- **D-1 (Clerk)**: confirmed via `clerk apps list` + the `accounts.kitchenkeeper.kitchen` custom domain
+  (Clerk custom domains require a Production instance) that Production is already live Clerk. User chose
+  Preview/staging to use the existing Development instance (`pk_test_d2lubmluZy1zd2lmdC03NC5jbGVyay5hY2NvdW50cy5kZXYk`),
+  already used by local dev — no new Clerk resource created.
+- **D-2 (Neon plan)**: confirmed Free plan via `vercel integration resource inspect neon-violet-compass`;
+  now 2/10 branches used (`main`, `staging`) — well within the free tier.
+- **D-3 (staging data)**: user chose branch-as-is (copy of production), created via the Neon console.
+- **D-4 (Vercel Production Branch)**: confirmed `main` via the Vercel dashboard's own deployment page
+  ("To update your Production Deployment, push to the `main` branch").
+- **D-5 (GitHub default branch)**: confirmed unchanged, still `main` (`gh repo view`).
+- **D-6 (non-Postgres secrets)**: audited via `vercel env ls`; left shared between Production/Preview
+  per spec's low-severity assessment — no change made.
 
 # Files Modified (this session)
 
-None — no application code touched.
+- `server/.env.local` — `DATABASE_URL` repointed from the production Neon branch to the `staging` branch
+  (`ep-holy-truth-aktxe3zj-pooler...`). Not tracked by git (gitignored), so no diff.
 
 # Files Created (this session)
 
-- `ai/tasks/TASK-039-spec.md` — the full spec, DRAFT-3, approved for implementation.
+- `ai/handoffs/CONVENTIONS.md` — durable conventions: environment table, push workflow, canonical
+  migration order (spec Design §5), staging rollback/refresh runbook, and the one known gap (below).
+
+# Infrastructure Changes (this session, not in git diff)
+
+- **Neon**: created branch `staging` (from production, full data copy) in project `jolly-snow-07827339`
+  via the Neon console (Vercel SSO link) — done by the user directly in their browser, connection string
+  relayed back into this session.
+- **Vercel env vars** (Preview environment only): `DATABASE_URL`, `VITE_CLERK_PUBLISHABLE_KEY`,
+  `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` removed and re-added pointed at `staging`/Clerk Development.
+  Verified: no native Neon↔Vercel "map environment to branch" setting exists (checked Neon console →
+  Integrations → Vercel; it only offers ephemeral branch-per-preview-deployment, which the spec
+  explicitly declined) — manual env-var repoint was the only option, matching the spec's documented
+  fallback.
+- **Git**: created `staging` branch off `main`, pushed with `git push -u origin staging` — local
+  checkout's tracking branch is now `origin/staging`, confirmed via `git rev-parse --abbrev-ref @{u}`.
 
 # Files Required Next
 
-- `ai/tasks/TASK-039-spec.md` — read in full before starting. It is an infrastructure spec (Vercel/Neon/GitHub configuration), not primarily a code-change spec — most of the "implementation" is dashboard/CLI configuration work, plus small edits to `server/.env.local` and `ai/handoffs/` conventions documentation.
+- None to *implement* — remaining items below are verification/documentation follow-ups, not blocked.
 
-# Files Already Reviewed
+# Verification Results (this session)
 
-N/A — this was a spec-drafting session, not a code session. All "current state" claims in the spec were confirmed by direct CLI inspection this session (`git`, `vercel env ls`/`env pull`, `vercel alias ls`, `gh repo view`/`gh api`), not assumed from memory or prior handoffs.
-
-# Dependency Chain
-
-Implementation should follow the spec's own Decisions Needed section first — several of these gate the rest of the work and must not be guessed:
-
-1. **D-1** (Clerk dashboard: Development vs. Production instance) and **D-2** (Neon plan's branch limits/cost) should be checked first — cheap, and their answers shape whether other steps need adjusting.
-2. Then Design §1–2 (create the Neon `staging` branch, repoint Preview's connection-target env vars — see the spec's invariant-based requirement, not a hardcoded list).
-3. Then Design §3 (create the `staging` git branch, move local tracking to it, confirm Vercel's Production Branch setting stays `main` — D-4).
-4. Then Design §4 (repoint local `server/.env.local`) and §5 (document the canonical migration order in `ai/handoffs/` conventions).
-5. D-6 (non-Postgres secrets audit) and D-3 (staging data snapshot vs. reseed) can happen in parallel with the above — they don't block the database/branch work.
-
-# Architecture Notes
-
-- The spec's core mechanism: Vercel already scopes env vars per-environment (Production/Preview/Development tags visible in `vercel env ls`) — the fix is entirely about *which* Neon branch each environment's connection-target variables resolve to, not new infrastructure.
-- Vercel auto-generates a stable per-branch preview URL already (confirmed with existing evidence: `kitchen-keeper-git-main-connorsharpes-projects.vercel.app` has been stable for 86 days across dozens of `main` deployments) — no manual `vercel alias set` step is needed for `staging`'s URL once the branch is created and deployed once.
-- This repo cannot use GitHub branch protection today (private repo, free plan — `gh api repos/.../branches/main/protection` returns 403, requires GitHub Pro or a public repo). The workflow-safety argument for `staging`-as-default rests on habit/discipline, not a GitHub-enforced rule, until/unless that changes.
-
-# Decisions Made
-
-All decisions from both architect-review rounds are recorded in the spec's own "Architect Review History" table and "Decisions Needed" (D-1 through D-6) sections — not duplicated here to avoid drift between the two documents. Notably: Neon branch named `staging` (not `development`) to match the git branch; no per-PR ephemeral branching (one static `staging` branch, appropriate for a solo maintainer); GitHub's default branch stays `main`.
-
-# Remaining Work
-
-1. Full implementation of `ai/tasks/TASK-039-spec.md` — nothing has been built yet, only specced and approved.
-2. Resolve D-1 through D-6 (see Dependency Chain) as part of implementation, not deferred further.
-3. Update `ai/handoffs/` conventions with the canonical migration order (spec Design §5) once implemented, so it's discoverable for future schema changes.
+- **Isolation, query-based** (spec Verification Step 1 & 2): wrote a throwaway marker table+row directly
+  to the `staging` Neon branch via `@neondatabase/serverless`, confirmed present on `staging` and
+  absent on production (`relation does not exist` when queried against prod) — then dropped the table.
+  This is a stronger check than comparing hostnames, per the spec's own caveat about pooled connections.
+- **Local dev DB target** (Verification Step 4): same script confirmed against the exact connection
+  string now in `server/.env.local` — local dev is on `staging`, not production.
+- **Tracking branch** (Verification Step 8): `git rev-parse --abbrev-ref @{u}` → `origin/staging`. Confirmed.
+- **Not yet run this session** (needs a real deployment, which the docs commit below will trigger):
+  - Step 1/5: confirm a Preview deployment from `staging` actually serves from the `staging` DB, and
+    that `kitchen-keeper-git-staging-connorsharpes-projects.vercel.app` appears and is stable.
+  - Step 6: confirm the daily cron does not fire on the Preview/staging deployment.
+  - Step 7: `vercel env pull` diff between production/preview to confirm the full picture post-repoint.
+  - Step 9: push a second trivial commit to `staging`, confirm it deploys to Preview not Production.
+  - Step 10: first real `staging` → `main` merge, confirm *that* triggers the Production deploy — left
+    for the next actual feature/fix that ships, not forced as an empty merge.
 
 # Known Risks
 
-Carried from the spec, unchanged — see its own Known Risks section in full. Highlights: no GitHub-enforced guardrail against an accidental direct push to `main`; shared single `staging` branch means concurrent test sessions could clobber each other (acceptable for a solo maintainer today); data/schema drift on `staging` over time if the migration order or a periodic refresh isn't followed; possible shared billing/quota exposure on AI API keys pending D-6.
+Carried from the spec (see `ai/tasks/TASK-039-spec.md` Known Risks and `ai/handoffs/CONVENTIONS.md`
+Runbook section), plus one new item from this session:
 
-Separately, still open from prior sessions (unrelated to this task): OpenAI billing has not yet been switched to prepaid credits with auto-recharge off (carried from TASK-037); Clerk key type (test vs. live) could not be confirmed via CLI this session — `vercel env pull` returns `CLERK_SECRET_KEY=""` for both environments (appears marked "Sensitive" in Vercel, blocking plaintext retrieval) — this is exactly D-1, needs manual confirmation in the Clerk dashboard.
-
-# Verification Results
-
-N/A this session — no code was written or tested. The spec itself was validated through two rounds of external architect review (9.3/10, then 9.8/10 after revisions), not automated tests.
+- **Only `DATABASE_URL` was repointed for Preview**, not the other ~10 Postgres-family variables the
+  Neon-Vercel integration also manages (`POSTGRES_PRISMA_URL`, `PGHOST_UNPOOLED`, etc.) — this app's
+  code only reads `DATABASE_URL` (confirmed via `grep` of `server/`), so there's no live risk today, but
+  if future code reads one of the others directly it would silently hit production. Documented in
+  `CONVENTIONS.md`'s "Known gap" section so it isn't forgotten.
+- No GitHub-enforced guardrail against an accidental direct push to `main` (private repo, free plan).
+- Still open from prior sessions (unrelated): OpenAI billing not yet switched to prepaid/auto-recharge-off
+  (TASK-037).
 
 # Recommended Next Action
 
-Start implementing `ai/tasks/TASK-039-spec.md`, beginning with D-1 and D-2 (cheap dashboard checks that shape the rest), then Design §1–2 (Neon `staging` branch + Preview env var repoint), verified via the spec's own Verification Steps 1 and 7 (query-based DB confirmation, and an env-var diff against the integration's current output — not a fixed variable-name checklist).
-
-# Forbidden Exploration
-
-- `ai/tasks/archive/` — not relevant.
-- No application code (`client/`, `server/` route/component logic) should need to change for this task — it's infrastructure/config, per the spec's Design section. If an agent finds itself editing application logic to implement this, stop and re-check against the spec.
+Make a small, real doc/commit on `staging` (this session's `CONVENTIONS.md` + this handoff) to trigger
+the first actual Preview deployment, then run the remaining verification steps (1, 5, 6, 7, 9) against
+it before considering the task fully closed out.
 
 # Context Notes
 
-- branch: `main` (current checkout still tracks `origin/main` — Design §3's branch-workflow change has not been executed yet; that's part of the remaining work, not done)
+- branch: `staging` (tracking `origin/staging` — switched this session per Design §3)
 - worktree: none
-- No dev servers were started this session (spec/docs work only).
-- This session's only change is documentation (`ai/tasks/TASK-039-spec.md`, this file) — safe to commit/push directly to `main` under the current (still-unchanged) workflow.
+- No dev servers were started this session (DB-level verification only, via a throwaway Node script —
+  not committed).
