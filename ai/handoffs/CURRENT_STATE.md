@@ -1,93 +1,119 @@
 # Task
 
-Spec-drafting session for TASK-041 — tour expansion to page-level buttons, side-effect-free onboarding-tour
-replay from the Household page, mobile hamburger/title overlap fix, iOS redundant camera-picker fix, a Chat
-capabilities info icon, and a dead-code sweep closing out `task_8893cd9f`. Raised by the user directly in
-conversation as a follow-up to TASK-040. No implementation this session — planning/spec only.
+Implementation session for TASK-041 — 12-step tour expansion to page-level action buttons, side-effect-free
+onboarding-tour replay from the Household page, mobile hamburger/title overlap fix, iOS redundant
+camera-picker fix, a Chat capabilities info icon, and a dead-code sweep closing out `task_8893cd9f`. Built
+from `ai/tasks/TASK-041-spec.md` DRAFT-3 (approved for implementation, written in the prior session), Design
+Parts A–F in order, per that spec's own Recommended Next Action. Followed by two small user-requested
+follow-ups after hands-on verification.
 
 # Current Status
 
-**`ai/tasks/TASK-041-spec.md` is written, has been through two rounds of architect review, and is DRAFT-3 —
-APPROVED FOR IMPLEMENTATION.** No code has been touched yet; this session was spec drafting and review only.
+**Implemented, hands-on verified against the user's own real account (not just lint/test/build), and
+deployed to both `staging` and `main`/production.** All six spec parts are done and match the spec's file
+list exactly:
 
-- DRAFT-1: initial draft, grounded in the actual code (not assumed) for all six parts, plus targeted web
-  research for the two genuinely uncertain technical questions (iOS file-input/camera-picker behavior,
-  cross-route driver.js tour continuation — neither has a known library-level solution). Three decisions were
-  resolved by the user before drafting: full 12-step interleaved tour (not 6, not two separate tours);
-  side-effect-free Household-page preview (no server mutation, ever); extract a shared `PageHeader` component
-  rather than patching six pages individually.
-- DRAFT-2 (round 1 review, 9.2/10 → approve after revision on Parts A/B): split the onboarding-tour replay
-  into its own `OnboardingPreview` component instead of overloading `OnboardingGate` with a preview mode;
-  replaced internal `previewMode` branching in `WelcomeStep`/`StaplesChecklist` with injected callback props
-  (`onSaveHouseholdName`, `onAddItems`) so the real vs. no-op behavior lives at the call site, not inside the
-  presentational components; collapsed Part A's tour-advancement logic from 12 separate per-step handlers
-  into one shared `advanceTo()`; swapped a `requestAnimationFrame` polling loop for a cancellable
-  `MutationObserver`-based `waitForElement()`; established that a Back-button press mid-tour reuses the
-  existing `onDestroyed`-is-truth rule from TASK-040 (no new state needed) rather than special-casing it.
-  Declined, with reasoning recorded in the spec's own Architect Review History table: a page-level
-  `useEffect`-based tour-readiness coordinator (would make `RecipesPage`/`PantryPage` tour-aware — exactly
-  the coupling `OnboardingGate` exists to avoid, and unnecessary since every tour-target button in this app
-  renders synchronously, confirmed by reading the code, not assumed); a formal tour state-machine
-  abstraction (reviewer itself called it non-mandatory, doesn't fit this codebase's repeated preference
-  against introducing abstractions at this scale); re-testing mobile orientation changes mid-tour (already
-  raised and explicitly declined in TASK-040 itself).
-- DRAFT-3 (round 2 review, 9.8/10 → approved): two small polish items, both adopted — `waitForElement`'s
-  timeout now has a defined failure path (`driver.destroy()`, reusing the same early-exit path as every other
-  way the tour can end) instead of leaving a partially-active overlay undefined; `onSaveHouseholdName`/
-  `onAddItems` are now explicitly documented as promise-returning contracts so a future "simplify the no-op"
-  edit can't silently change `await`-dependent timing behavior in their callers.
+- Part A (12-step interleaved tour, cross-route advancement) ✅
+- Part B (Household-page replay preview) ✅
+- Part C (shared `PageHeader`, mobile offset) ✅
+- Part D (iOS camera-picker fix) ✅
+- Part E (Chat info icon) ✅
+- Part F (dead-code sweep) ✅
 
-**Full design is locked; nothing in the six parts is still open.** See the spec's own "Decisions (resolved
-by user, 2026-07-22)", "Out of Scope", and "Known Risks" sections for the complete picture — not
-re-summarized here to avoid drift between this handoff and the spec itself.
+`npm run lint`, `npm test` (96/96 passing), and `npm run build` all pass clean.
+
+**Real bug found and fixed during hands-on verification** (not something lint/build/tests could catch):
+`OnboardingPreview` was originally mounted inside `HouseholdPage`, per the spec's own file list. Since the
+tour it drives navigates across routes, the first cross-route step unmounted `HouseholdPage` (and
+`OnboardingPreview` with it) — the tour's completion callback (advancing Welcome → Tour → Checklist) then
+fired against a stale, unmounted component instance, so the staples checklist silently never appeared after
+the last tour step. Fixed by lifting `OnboardingPreview` to `AppLayout` (a sibling of `<Outlet/>`, exactly
+where `OnboardingGate` already lives, for the same reason) — `previewFlow` state moved there too, passed
+down to `HouseholdPage` via `useOutletContext`. Re-verified the full 12-step tour end-to-end afterward; the
+checklist now appears correctly.
+
+**Two follow-up fixes, requested by the user after the above verification pass**:
+1. Household naming is now explicitly skippable during tour replay. `WelcomeStep.jsx` gained a new
+   `allowNaming` prop (default `true`); `OnboardingPreview.jsx` passes `allowNaming={false}` so replaying the
+   tour never shows a rename field for a name that deliberately never saves (robust — an explicit flag, not
+   inferred from `flow` or from which callback was injected).
+2. Removed the barcode-scanning feature entirely, at the user's explicit request after asking whether it
+   actually worked. It did (real camera scan via `html5-qrcode` + a live Open Food Facts lookup), but wasn't
+   judged worth keeping. Removed: the button and its state/handlers in `PantryPage.jsx`, the
+   `scan-barcode` tour step (tour is now **11 steps**, not 12), `BarcodeScanner.jsx` and `openFoodFacts.js`
+   (deleted outright, zero other importers), and the `html5-qrcode` dependency (`npm uninstall` — also
+   dropped the 335KB lazy-loaded chunk it shipped in).
 
 # Files Created / Changed (this session)
 
-- **New**: `ai/tasks/TASK-041-spec.md` (the spec itself, DRAFT-3/approved).
-- **Modified**: `ai/handoffs/CURRENT_STATE.md` (this file).
+Matches `TASK-041-spec.md`'s Design Parts A–F file list, plus the two follow-ups above:
 
-No application code touched this session.
+- **New**: `client/src/components/layout/PageHeader.jsx`, `client/src/components/onboarding/OnboardingPreview.jsx`.
+- **Modified**: `client/src/components/onboarding/productTour.js` (12→11 steps after barcode removal),
+  `OnboardingGate.jsx`, `WelcomeStep.jsx` (`allowNaming` prop), `StaplesChecklist.jsx`,
+  `client/src/components/layout/AppLayout.jsx` (owns `previewFlow` now, not `HouseholdPage`), `Sidebar.jsx`
+  (paired comment), `client/src/pages/PantryPage.jsx` (new `data-tour` attrs, barcode code removed),
+  `RecipesPage.jsx` (new `data-tour` attrs), `ShoppingPage.jsx`, `DashboardPage.jsx`, `HouseholdPage.jsx`
+  (preview section + `useOutletContext`), `ChatPage.jsx` (info icon + modal),
+  `client/src/components/recipes/RecipeUpload.jsx` (label-based inputs + `/sign-in` fix),
+  `client/src/components/pantry/ReceiptUpload.jsx` (same), `client/src/components/recipes/RecipeUrlImport.jsx`
+  (`/sign-in` fix only), `client/package.json`/`package-lock.json` (dropped `html5-qrcode`).
+- **Deleted**: `client/src/components/layout/ProtectedRoute.jsx` (dead code, zero importers),
+  `client/src/components/pantry/BarcodeScanner.jsx`, `client/src/utils/openFoodFacts.js`.
+
+No server-side/migration changes this session — TASK-041 was entirely client-side.
+
+Committed as `390327e` on `staging`, then fast-forward merged and pushed to `main`.
 
 # Decisions Made
 
-All six parts' design decisions are recorded in `TASK-041-spec.md` itself (its own "Decisions" section plus
-its Architect Review History table for the two review rounds) — not duplicated here.
+- All six parts' design decisions were made in the prior (spec) session — see `TASK-041-spec.md`'s own
+  "Decisions" section and Architect Review History table; nothing was re-litigated this session, the spec
+  was implemented as approved.
+- **The `OnboardingPreview` mount-location fix (above) deviates from the spec's literal file list**, which
+  named `HouseholdPage.jsx` as the sole new-UI location and didn't call out `AppLayout.jsx` for this part.
+  This was a correctness bug the spec's own design didn't anticipate — surfaced only by actually running the
+  tour, not by code review — so it was fixed directly rather than left broken to match the letter of an
+  approved-but-incomplete spec.
+- **Deployed to production this session**, not held at staging — same pattern as TASK-040: no schema/migration
+  risk (client-only change), lint/test/build clean, and this time also hands-on verified against a real
+  logged-in account (a stronger bar than TASK-040's health-check-only verification, since Claude has no
+  Clerk credentials of its own and relied on the user signing in this session).
 
-# Known Risks
+# Known Risks (carried forward from the spec; not re-verified this session)
 
-Carried forward from the spec, not re-litigated this session — see `TASK-041-spec.md`'s own "Known Risks"
-section. Highest-risk item flagged there: Part A's cross-route tour-continuation logic is genuinely bespoke
-(no driver.js API for it), and worth prototyping first during implementation rather than last.
+- Part D's iOS camera-picker fix is based on published guidance and matches the user's original screenshot,
+  but needs an actual iPhone check — not done this session (no physical device available).
+- Tour cancellation mid-navigation-wait, and browser-Back-button divergence mid-tour, were implemented per
+  spec but not explicitly exercised this session (the 12-step interleaved tour's normal forward/backward
+  path was; the two "abnormal exit" verification steps were not).
+- Mobile viewport for the full tour (steps 1–11, sidebar open/close transitions) was checked for the header
+  offset only (Part C), not walked step-by-step on a mobile viewport.
+- Mobile orientation changes mid-tour remain unsupported, unchanged from TASK-040's own accepted risk.
+
+# Separately flagged (not part of TASK-041, unrelated pre-existing issue)
+
+`GET /api/household/members` returned a transient 500 during this session's local dev verification (reproduced
+once, then succeeded on retry with no code changes). Not investigated — this endpoint is untouched by
+TASK-041. Worth a look if it recurs on production.
 
 # Files Required Next
 
-Implementation of `TASK-041-spec.md`'s six Design parts, in the file lists each part already specifies:
-
-- **Part A** (tour → page buttons): `productTour.js`, `OnboardingGate.jsx`, `RecipesPage.jsx`,
-  `PantryPage.jsx` (new `data-tour` attributes).
-- **Part B** (Household-page replay preview): new `OnboardingPreview.jsx`; `WelcomeStep.jsx`,
-  `StaplesChecklist.jsx` (new callback props), `HouseholdPage.jsx` (new UI section), `AppLayout.jsx`
-  (`useOutletContext` for `setMobileNavOpen`), `OnboardingGate.jsx` (supply the two new callbacks).
-- **Part C** (mobile header fix): new `PageHeader.jsx`; adopted in `PantryPage.jsx`, `RecipesPage.jsx`,
-  `ShoppingPage.jsx`, `DashboardPage.jsx`, `HouseholdPage.jsx`, `ChatPage.jsx`; paired comment in
-  `Sidebar.jsx`.
-- **Part D** (iOS camera-picker fix): `RecipeUpload.jsx`, `ReceiptUpload.jsx`.
-- **Part E** (Chat info icon): `ChatPage.jsx` (new modal + `PageHeader` `actions` slot).
-- **Part F** (dead-code sweep): `RecipeUpload.jsx`, `ReceiptUpload.jsx`, `RecipeUrlImport.jsx` (`/login` →
-  `/sign-in` fix); delete `client/src/components/layout/ProtectedRoute.jsx`.
+None for TASK-041 itself — implementation, hands-on verification, and production deploy are all complete.
+Remaining risks (above) are lower-priority spot-checks, not blockers.
 
 # Recommended Next Action
 
-Start an implementation session against `TASK-041-spec.md` directly — Design Parts A–F in order, per the
-spec's own file lists above. Per the spec's own Known Risks, prototype Part A (cross-route tour continuation)
-early rather than last, since it's the one genuinely novel piece with no library-level precedent to lean on.
-Verification Steps are already written in the spec (11 steps) — run through all of them before considering
-this task done, same discipline as TASK-040.
+None outstanding. If the iPhone camera-picker check (Part D) or the abnormal-tour-exit paths surface anything
+on production, triage as a fix commit on `staging` first, per the usual staging-then-production order.
 
 # Context Notes
 
-- branch: `staging`
-- worktree: none
-- `.claude/settings.local.json` has pre-existing local uncommitted changes (permission-prompt settings),
+- branch: `staging` (working branch restored here after the `main` merge/push completed).
+- `main` and `staging` are both at `390327e` as of this session — in sync, no drift.
+- Production (`kitchenkeeper.kitchen`) confirmed live and healthy post-deploy (`/` and `/api/health` both
+  return 200).
+- worktree: none.
+- `.claude/settings.local.json` has pre-existing local uncommitted changes (permission-prompt settings)
   unrelated to this session's work — left as-is, not part of any commit this session (same as noted in the
   TASK-040 handoff).
