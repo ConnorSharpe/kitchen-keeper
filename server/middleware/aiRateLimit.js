@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import { createRateLimiter } from './createRateLimiter.js';
 import { getPlatformSettings } from '../services/platformSettingsService.js';
 import { aiRateLimitKeyGenerator } from './aiRateLimitKeyGenerator.js';
 
@@ -9,16 +9,9 @@ import { aiRateLimitKeyGenerator } from './aiRateLimitKeyGenerator.js';
 // cap can be tuned from the admin UI without a redeploy.
 //
 // Abuse deterrence, not spend protection — see Known Risks.
-export const aiRateLimit = rateLimit({
+export const aiRateLimit = createRateLimiter({
   windowMs: 15 * 60 * 1000,
-  limit: async () => {
-    const { aiRateLimitMax } = await getPlatformSettings();
-    return aiRateLimitMax;
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
+  limit: async () => (await getPlatformSettings()).aiRateLimitMax,
   keyGenerator: aiRateLimitKeyGenerator,
-  message: {
-    error: 'Too many AI requests. Please wait a few minutes and try again.',
-  },
+  message: 'Too many AI requests. Please wait a few minutes and try again.',
 });

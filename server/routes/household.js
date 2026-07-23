@@ -1,8 +1,10 @@
+import { randomUUID } from 'crypto';
 import express from 'express';
 import { z } from 'zod';
 import * as householdService from '../services/householdService.js';
 import { clerkAuth } from '../middleware/clerkAuth.js';
 import { validate } from '../middleware/validate.js';
+import { joinRateLimit } from '../middleware/joinRateLimit.js';
 import { sendHouseholdInvite } from '../services/emailService.js';
 import { maskKey } from '../utils/keyEncryption.js';
 
@@ -61,8 +63,21 @@ router.patch('/ai-key', validate(aiKeySchema), async (req, res) => {
 
 // GET /api/household/members — all users in this household
 router.get('/members', async (req, res) => {
-  const members = await householdService.getMembers(req.user.householdId);
-  res.json({ members });
+  const requestId = randomUUID().split('-')[0];
+  const start = Date.now();
+  try {
+    const members = await householdService.getMembers(req.user.householdId, {
+      requestId,
+    });
+    res.json({ members });
+  } catch (err) {
+    console.error(
+      `[kitchen-keeper] request_id=${requestId} function=getMembers ` +
+        `householdId=${req.user.householdId} userId=${req.user.id} ` +
+        `elapsedMs=${Date.now() - start} error=${err.message}`
+    );
+    throw err;
+  }
 });
 
 // POST /api/household/invite — send join link via email
@@ -90,7 +105,7 @@ const joinSchema = z.object({
   code: z.string().min(1),
 });
 
-router.post('/join', validate(joinSchema), async (req, res) => {
+router.post('/join', joinRateLimit, validate(joinSchema), async (req, res) => {
   const result = await householdService.joinByCode(
     req.user.id,
     req.user.householdId,

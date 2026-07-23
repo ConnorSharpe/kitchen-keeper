@@ -6,7 +6,7 @@ Kitchen Keeper is an AI-powered food waste management app for households. Add pa
 
 [https://kitchenkeeper.vercel.app](https://kitchenkeeper.vercel.app)
 
-> Invite code required — unauthorized registrations are blocked to protect shared API resources. Contact Connor to request access.
+> Sign-up is currently unrestricted — create an account via the link above.
 
 ## Tech Stack
 
@@ -17,7 +17,7 @@ Kitchen Keeper is an AI-powered food waste management app for households. Add pa
 | Database       | Neon Postgres (Drizzle ORM)                         |
 | AI             | Google Gemini 2.0 Flash                             |
 | File Storage   | Vercel Blob                                         |
-| Auth           | JWT stored in `httpOnly`, `sameSite=strict` cookies |
+| Auth           | Authentication provided by Clerk                    |
 
 ## Features
 
@@ -40,18 +40,16 @@ Kitchen Keeper is an AI-powered food waste management app for households. Add pa
 5. Deploy to [Vercel](https://vercel.com) — add all env vars from `.env.example`
    (The Neon and Vercel Blob marketplace integrations auto-provide their tokens)
 6. Run the SQL files in `server/db/migrations/` against your Neon database using the Neon SQL Editor (drizzle-kit is incompatible with the Neon HTTP driver)
-7. Visit the deployed URL and register (leave `INVITE_CODE` unset on your own instance)
+7. Visit the deployed URL and register
 
 ## Environment Variables
 
 | Variable                | Description                                               | Source                  |
 |-------------------------|-----------------------------------------------------------|-------------------------|
 | `DATABASE_URL`          | Neon Postgres connection string                           | Neon Vercel integration |
-| `JWT_SECRET`            | Secret for signing auth cookies                           | Set manually            |
 | `GEMINI_API_KEY`        | Google Gemini API key                                     | Google AI Studio        |
 | `NODE_ENV`              | `production` on Vercel                                    | Set manually            |
 | `CLIENT_ORIGIN`         | Frontend URL for CORS                                     | Set manually            |
-| `INVITE_CODE`           | Registration gate secret. Omit or leave empty to disable  | Set manually            |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob access token                                  | Vercel Blob integration |
 | `RESEND_API_KEY`        | Resend API key for household invite emails                | resend.com              |
 | `RESEND_FROM_EMAIL`     | From address for invite emails (default: onboarding@resend.dev) | Set manually      |

@@ -49,7 +49,8 @@ function resolveDisplayName(clerkUser, role) {
 // it does not abort the underlying HTTP call, which keeps running in the background
 // and is simply ignored when it eventually resolves. Not a problem here (no side
 // effects, nothing to cancel), just worth knowing this isn't true cancellation.
-async function lookupClerkUsers(ids) {
+async function lookupClerkUsers(ids, requestId = 'n/a') {
+  const start = Date.now();
   try {
     const { data } = await Promise.race([
       clerkClient.users.getUserList({ userId: ids, limit: ids.length }),
@@ -60,17 +61,24 @@ async function lookupClerkUsers(ids) {
         )
       ),
     ]);
+    console.log(
+      `[kitchen-keeper] request_id=${requestId} function=lookupClerkUsers ` +
+        `elapsedMs=${Date.now() - start} timedOut=false`
+    );
     return new Map(data.map((u) => [u.id, u]));
   } catch (err) {
+    const timedOut = err.message === 'Clerk user lookup timed out';
     console.warn(
-      `[householdService] Clerk user lookup failed, falling back for ${ids.length} household member(s):`,
-      err.message
+      `[kitchen-keeper] request_id=${requestId} function=lookupClerkUsers ` +
+        `elapsedMs=${Date.now() - start} timedOut=${timedOut} ` +
+        `fallback_count=${ids.length} error=${err.message}`
     );
     return new Map();
   }
 }
 
-export async function getMembers(householdId) {
+export async function getMembers(householdId, { requestId = 'n/a' } = {}) {
+  const neonStart = Date.now();
   const household = await getById(householdId);
   if (!household) return [];
 
@@ -83,6 +91,10 @@ export async function getMembers(householdId) {
     .from(householdMembers)
     .where(eq(householdMembers.householdId, householdId))
     .orderBy(householdMembers.joinedAt);
+  console.log(
+    `[kitchen-keeper] request_id=${requestId} function=getMembers ` +
+      `neon_query_elapsedMs=${Date.now() - neonStart}`
+  );
 
   // Owner may be null for households whose creator only ever joined via a
   // householdMembers row (see getOrCreate's resolution order) — skip if so.
@@ -98,7 +110,7 @@ export async function getMembers(householdId) {
   if (orderedRows.length === 0) return [];
 
   const ids = [...new Set(orderedRows.map((r) => r.clerkUserId))];
-  const byId = await lookupClerkUsers(ids);
+  const byId = await lookupClerkUsers(ids, requestId);
 
   return orderedRows.map((r) => ({
     clerkUserId: r.clerkUserId,

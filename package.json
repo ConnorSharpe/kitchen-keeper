@@ -25,7 +25,5 @@
     "globals": "^17.7.0",
     "prettier": "^3.9.5"
   },
-  "dependencies": {
-    "@clerk/nextjs": "^7.5.7"
-  }
+  "dependencies": {}
 }
