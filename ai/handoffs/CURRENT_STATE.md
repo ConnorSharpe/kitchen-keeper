@@ -203,17 +203,28 @@ sign-in) post-deploy. **Parts A/B/C/E/F are now live in production.**
 
 **Two things found during production verification, both pre-existing, neither caused by this deploy:**
 
-1. **PWA service worker serves a stale shell after any deploy** (`client/public/sw.js`): a returning
-   browser with the SW already active kept serving a cached `index.html` referencing a JS bundle hash from
-   the *previous* deployment. Because `vercel.json`'s catch-all rewrite (`"/(.*)" → "/index.html"`) serves
-   `index.html` content for literally any unmatched path — including a deleted old asset path — the stale
-   bundle request returns 200 with HTML instead of a 404, and the browser fails to mount React with a blank
-   white screen and no visible console error. Reproduced live on `kitchenkeeper.kitchen` in this browser
-   (fixed by unregistering the SW + clearing `caches`). **This means every future deploy can blank-screen any
-   returning visitor** (anyone with the PWA installed, or who's just visited before) until they clear site
-   data — this is the dev-session SW finding above, confirmed worse in production than first described.
-   Worth prioritizing over the dev-session's two lower-severity findings — this one is deploy-triggered, not
-   an edge case.
+1. **PWA service worker serves a stale shell after any deploy — FIXED.** (`client/public/sw.js`): a
+   returning browser with the SW already active kept serving a cached `index.html` referencing a JS bundle
+   hash from the *previous* deployment. Because `vercel.json`'s catch-all rewrite (`"/(.*)" → "/index.html"`)
+   serves `index.html` content for literally any unmatched path — including a deleted old asset path — the
+   stale bundle request returns 200 with HTML instead of a 404, and the browser fails to mount React with a
+   blank white screen and no visible console error. Reproduced live on `kitchenkeeper.kitchen` right after
+   this session's own TASK-042 deploy (fixed at the time by unregistering the SW + clearing `caches`
+   manually — that was a workaround, not the fix).
+
+   **Fix**: `sw.js`'s fetch handler now goes network-first for navigation requests (`request.mode ===
+   'navigate'`), falling back to the cached shell only when actually offline — so a returning visitor always
+   gets the current deployment's `index.html`, and therefore its real (existing) asset hashes. Non-navigation
+   requests (hashed `/assets/*` JS/CSS) keep the original cache-first-with-background-refresh strategy, which
+   is correct for content-hashed filenames (a given hash's content never changes).
+
+   **Verified locally, not just by inspection**: built the client twice (`npm run build`) with a one-line
+   source change between builds to force a different JS bundle hash, registered the SW against build A via
+   `vite preview`, then rebuilt to build B without restarting the server (simulating a deploy landing under a
+   visitor's feet) and reloaded. Confirmed build B's own `console.log` marker fired and `read_network_requests`
+   showed only the new hash was ever requested — no blank screen, no reference to the deleted old hash.
+   Deployed to production (`staging` → `main` → Vercel), confirmed live: the SW registered against
+   `kitchenkeeper.kitchen` is `activated` and serving the fixed fetch handler.
 2. **`GET /api/onboarding` 500s in production — FIXED this session.** `NeonDbError: relation
    "user_onboarding" does not exist`. Confirmed via `vercel logs` this predated this session's deploy (same
    error present in the prior production deployment from ~2 hours earlier). Root cause: `server/db/migrations/
