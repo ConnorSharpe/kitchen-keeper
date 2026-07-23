@@ -359,12 +359,34 @@ Connor directly:
    `@vercel/blob`/`drizzle-orm` major-version upgrades (both already called out as their own future task in
    the spec's Out of Scope section).
 
+# Part G Progress (2026-07-23)
+
+**Item 1 — iOS camera/photo picker: tested on Connor's real device, found a real bug, fixed and deployed.**
+Connor tested `RecipeUpload.jsx` and `ReceiptUpload.jsx` on actual iOS Safari. Finding: the plain library file
+input (`<input type="file" accept="image/*">`, no `capture` attribute) already opens iOS's native chooser with
+**Take Photo / Photo Library / Choose File all in one** — so TASK-041 Part D's dedicated "📷 Take Photo"
+button (a second input with `capture="environment"`) was pure redundancy, not a fix for anything. Connor's
+call: remove the two-button mobile split entirely, make the single library-style input (previously desktop-only,
+gated behind `!isMobile`) the one and only upload trigger on every device.
+
+**Fix**: removed the `isMobile` state/`matchMedia` detection and the entire mobile-specific two-button block
+from both `RecipeUpload.jsx` and `ReceiptUpload.jsx` — both components now render the same single upload label
+unconditionally (desktop and mobile identical). `ReceiptUpload.jsx`'s now-unused `useEffect` import was removed
+too. Verified: `npm run lint` clean, all 82 tests pass, checked both components at desktop and 375×812 mobile
+viewport in the Browser pane (both showed the single dropzone correctly, no leftover two-button UI), deployed
+(`staging` → `main` → Vercel), and reconfirmed live on `kitchenkeeper.kitchen` at mobile viewport post-deploy.
+**Item 1 closed** — this is actually a stronger result than the spec asked for: not just "confirmed working,"
+a real UX bug found via genuine device testing and shipped same-session.
+
+**Items 2 and 3 — not started.** Full 11-step tour walkthrough on real iOS Safari, and a real Android
+"Add to Home Screen" install-and-launch, still need Connor directly on those two devices — nothing to report
+yet.
+
 # Recommended Next Action
 
-Run the Testing Walkthrough above with Connor (real credentials are already in place — no blocker), then
-deploy Parts A/B/C/E/F, and separately schedule time with Connor for Part D's dashboard decisions and Part
-G's device checks — do not let those two quietly drop the way TASK-037's equivalent items did before this
-task existed specifically to catch that.
+Part D and Part G item 1 are resolved. What's left: Part D's OpenAI prepaid-billing confirmation (deliberately
+deferred by Connor), and Part G items 2–3 (iOS tour walkthrough, Android install) — both need Connor on
+physical devices, not something to chase further in an unattended session.
 
 # Context Notes
 
