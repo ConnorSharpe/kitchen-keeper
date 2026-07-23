@@ -1,157 +1,108 @@
 # Task
 
-Production smoke test of TASK-038 (recipe photo picker fix + recipe URL import), which had shipped to
-`main`/production ~2h before this session with its 18 spec verification steps never run. The session
-found and fixed two save-blocking bugs (below) plus an unrelated active production outage, then
-resumed and completed most of the practically-live-testable verification steps. See "Smoke Test
-Results" for the full breakdown of what was and wasn't covered.
+Design session (no implementation) for TASK-040 — onboarding for a brand-new household's first user and
+for a new member joining an existing household via invite. User asked for a welcome flow, a revived
+"stock your pantry" staples checklist, and a guided product tour. Spec was drafted, then run through three
+rounds of iterative architect review (the user's established workflow — see `ai/handoffs/CONVENTIONS.md`
+conventions and prior tasks' own Architect Review History tables), with each round's feedback critically
+checked against the actual codebase (the architect has no file access) before being adopted, corrected, or
+declined. No application code changed this session — this was spec-only.
 
 # Current Status
 
-Three bugs found and fixed this session, all confirmed live on `kitchenkeeper.kitchen`:
+`ai/tasks/TASK-040-spec.md` is at **DRAFT-5, APPROVED FOR IMPLEMENTATION**. Ready for the next session to
+build from Design Parts A–E, in order.
 
-1. **`POST /api/recipes` rejected every URL-imported recipe with a 400.** TASK-038 added the
-   `url_import` recipe source but never updated `server/routes/recipes.js`'s save-validation Zod enum
-   to allow it — 100% of URL imports were unsavable in production (extraction worked, save always
-   failed). Fixed by extracting `shared/recipeSources.js` (`RECIPE_SOURCES`) as the single source of
-   truth, imported into the server's enum.
-2. **Same missing-`url_import` bug, second location**: `RecipeCard.jsx`/`RecipeModal.jsx`'s
-   `SOURCE_BADGE` maps also lacked a `url_import` entry, silently mislabeling any URL-imported recipe
-   as "Manual". Fixed by adding the missing entry to both (still two independent literals — see Known
-   Risks below, not deduped further).
-3. **Unrelated, active production outage discovered mid-session**: Production's `DATABASE_URL` Vercel
-   env var had been *fully removed* (only a `Preview`-scoped entry existed) since TASK-039's staging
-   env-var repoint (~53 min earlier at discovery time). Every DB-backed route was failing with
-   `No database connection string was provided to neon()`. This was silent until this session's
-   redeploy — the *prior* Production deployment had the value baked in from before the env change, so
-   the outage only activated once a fresh Production build ran. Fixed by re-adding a Production-scoped
-   `DATABASE_URL` (recovered from the still-intact Production `POSTGRES_URL` value) and triggering
-   `vercel redeploy` so the restored var actually took effect (Vercel snapshots env vars at deploy
-   time — a dashboard edit alone does not update an already-running deployment).
-
-# Files Modified (this session)
-
-- `server/routes/recipes.js` — `source` field now `z.enum(RECIPE_SOURCES)`, imported from new shared file
-- `client/src/components/recipes/RecipeCard.jsx` — added `url_import` to `SOURCE_BADGE`
-- `client/src/components/recipes/RecipeModal.jsx` — added `url_import` to `SOURCE_BADGE`
-- `package.json` — root `test` script now also runs `shared/recipeSources.test.js`
+Investigation during this session found the app's existing onboarding surface was fully broken, not just
+missing — see the spec's own "Current State" section for the full trace (`StaplesChecklist` gated on a
+Clerk-user field that never exists; `completeOnboarding()` was a no-op stub; `LoginPage.jsx`/`users` table
+are dead pre-Clerk-migration leftovers). TASK-040 fixes all of this as part of building the new flow.
 
 # Files Created (this session)
 
-- `shared/recipeSources.js` — `RECIPE_SOURCES`, the canonical list of valid `recipes.source` values
-- `shared/recipeSources.test.js` — asserts all five known source values are present
-
-# Infrastructure Changes (this session, not in git diff)
-
-- **Vercel env var**: `DATABASE_URL` re-added with `Production` scope (previously present only for
-  `Preview`), value recovered from Production's still-correct `POSTGRES_URL`.
-- **Vercel**: `vercel redeploy` run against the current Production deployment to pick up the restored
-  env var (aliased back to `kitchenkeeper.kitchen`); this was necessary in addition to the env var
-  fix, since Vercel bakes env vars in at deploy time.
-
-# Verification Results (this session)
-
-- `npm test` (root: `shared/*.test.js` + server `node --test`) — **96/96 pass** (14 shared incl. new
-  `recipeSources.test.js`, 82 server).
-- `npm run lint` (`eslint .`) — pass.
-- `npm run build` (`vite build`) — pass, no new warnings.
-- **Live on `kitchenkeeper.kitchen`, post-fix**: imported `https://www.budgetbytes.com/homemade-pancakes/`
-  (confirmed complete JSON-LD ahead of time) — extraction gave `tier=json-ld` in prod logs (no AI calls,
-  as expected for complete data), all fields populated correctly (name, description, servings=4,
-  prep=10, cook=20). `POST /api/recipes` → **201** (previously 400). Recipe rendered with the correct
-  "Imported from URL" badge and `sourceUrl` link; the "Imported from URL" filter option correctly
-  scoped to it. Test recipe deleted afterward to leave the account clean (back to 0 saved recipes).
-- **Outage verification**: confirmed via `vercel env ls` that `DATABASE_URL` had zero `Production`
-  entries before the fix; confirmed via `vercel logs` that `/api/pantry` and `/api/recipes` were both
-  throwing the `neon()` connection-string error; confirmed via a fresh Recipes-page load (no error
-  banner, "0 saved recipes" instead of "Request failed (500)") that the redeploy resolved it.
-
-# Files Required Next
-
-- None to *implement*. Remaining work is finishing the smoke test (see Remaining Work) — no code
-  changes are anticipated unless that testing turns up something new.
+- `ai/tasks/TASK-040-spec.md` — the spec, DRAFT-1 through DRAFT-5 (three architect review rounds + one
+  round of user-directed scope decisions, all preserved in-file via the Architect Review History table and
+  the "Decisions (resolved by user, ...)" section, matching this repo's established spec convention).
 
 # Decisions Made
 
-- Given the fix was a pure application-code change (no DB/schema migration) already covered by a full
-  passing test suite, lint, and build, chose to merge `staging` → `main` and verify directly on
-  production rather than fight Vercel's Preview-deployment login wall (a separate auth gate from the
-  app's own Clerk auth, out of scope to bypass) or risk colliding with another session's already-running
-  local dev server on the same ports. User explicitly chose this path when offered the alternative
-  (logging into the gated Preview URL themselves) via an explicit tool-mediated choice.
-- Extracted `RECIPE_SOURCES` to `shared/` rather than inline-patching the one enum literal, because the
-  investigation found the *identical* missing-value bug already present in a second location
-  (`RecipeCard`/`RecipeModal`'s badge maps) — evidence-justified, not speculative future-proofing.
-  Mirrors this codebase's own precedent (TASK-038's `RECIPE_ENRICHABLE_FIELDS` extraction, for the same
-  reason: prevent drift between two places that must agree on a set of valid values).
+- **Clerk Organizations declined** in favor of the lighter-weight approach this spec takes (discussed with
+  the user directly; Clerk Organizations would have meant migrating `households`/`householdMembers`/the
+  join-code system onto Clerk's own org/invitation model — real infrastructure change, not just onboarding
+  UI, and not needed for the actual ask).
+- **Onboarding state**: new `user_onboarding` table keyed by Clerk user ID (not household ID — household
+  owners and members live in two different existing tables, a per-user table avoids that asymmetry).
+  Row-absence means "predates this feature, already onboarded" (no retroactive onboarding), matching this
+  codebase's existing convention from `0003_onboarding_complete.sql`.
+- **Flow ordering**: Welcome → Tour → Checklist (checklist only for the `new_household` flow). This
+  ordering is also what makes the "don't mark onboarding complete until the tour actually finishes" fix
+  fall out naturally — driver.js's `onDestroyed` callback is the transition to the next step, not a
+  separate completion call racing `drive()`'s immediate return.
+- **Household naming**: included in v1 (user's explicit call, reversing the spec's own initial
+  recommendation to skip it) — folded into the existing Welcome step rather than adding a new state.
+- **Any household member may rename the household** (not owner-only) — decided by surveying this
+  codebase's actual permission model (no household mutation anywhere is gated by household-owner role;
+  the only "owner" check in the app, `viewerIsOwner`, is the single global *platform* administrator, an
+  unrelated concept), not by analogy to any one endpoint.
+- **Full guided tour on mobile**, not desktop-only — user's explicit call ("this app will most likely be
+  used on the phone"), reversing the spec's initial desktop-only recommendation. This required lifting the
+  sidebar's `mobileOpen` state out of `Sidebar.jsx` into `AppLayout.jsx` so the tour can hold it open
+  across all six nav steps.
+- **Dead-code cleanup bundled into this task**: `LoginPage.jsx`, the vestigial `users` table (pre-Clerk,
+  has `passwordHash`), and the dead `login`/`register` `AuthContext` stubs are deleted as part of TASK-040
+  rather than filed separately — confirmed via `grep` this session that nothing else references any of them.
+- **One-time tour only** for v1 — no "replay tour" affordance built.
 
-# Known Risks
+# Known Risks (recorded in TASK-040-spec.md; none resolved this session, all for the implementing session to carry forward)
 
-- **`RecipeCard.jsx` and `RecipeModal.jsx`'s `SOURCE_BADGE` objects are still independently duplicated**
-  (identical 5-entry literal in both files) — today's fix added the missing entry to both by hand
-  rather than deduping them into one shared definition. `shared/recipeSources.js` only holds the bare
-  list of valid keys (needed for server validation); it does not hold labels/Tailwind classes, which
-  felt like a step too far past this bug's actual scope. If a sixth source value is ever added, both
-  badge maps must be updated by hand again — same class of bug as this session's finding #2, just not
-  yet root-caused away entirely.
-- **Root cause of the Production `DATABASE_URL` removal was not investigated** — only *that* it was
-  missing and needed restoring, not *how* the TASK-039 session's "removed and re-added" Preview env var
-  edit apparently also wiped the Production-scoped entry. If that was a Vercel dashboard UI mistake
-  (e.g. an environment checkbox left unselected) rather than something reproducible, it's worth being
-  careful next time any `DATABASE_URL` edit touches the Preview environment specifically.
-- Carried forward, unchanged: TASK-038's own Known Risks (DNS-rebinding TOCTOU, IPv4-mapped-IPv6, AI
-  fallback token cost, JSON-LD quality variance, JS-only-rendered sites, non-UTF-8 encodings) — none
-  newly introduced or newly tested this session beyond the one JSON-LD path.
-- Still open from prior work, unrelated: OpenAI billing not yet switched to prepaid/auto-recharge-off
-  (TASK-037).
+- **Pre-existing, unrelated to TASK-040**: `server/db/migrations/0017_platform_settings.sql` exists on disk
+  but has no entry in `server/db/migrations/meta/_journal.json` — discovered while checking TASK-040's own
+  migration numbering (which is why TASK-040's new migration is `0018`, not `0017`). Not investigated
+  further or fixed this session — worth checking directly (Neon console, or query for the table) before
+  TASK-040 ships, since it's unclear whether `drizzle-kit migrate` would ever (re-)apply it from the journal.
+- Whether a driver.js-highlighted nav item remains tappable mid-tour was not verified against driver.js's
+  actual behavior (unlike `onDestroyed`, which was checked directly) — worth confirming during
+  implementation, since tapping a highlighted item on mobile could navigate away mid-tour.
+- Mobile orientation changes mid-tour are explicitly unsupported (accepted, not engineered around).
+- A narrow, accepted edge case around household-rename propagation to already-mounted client state — see
+  spec's Design Part B for the full reasoning on why this wasn't built out further.
 
-# Smoke Test Results
+# Files Required Next
 
-Spec verification steps (see TASK-038-spec.md's "Verification Steps"), tested live against
-`kitchenkeeper.kitchen` except where noted:
+Everything in `TASK-040-spec.md`'s Design, Parts A–E — implementation hasn't started:
 
-| Step | Result |
-|---|---|
-| 3. JSON-LD happy path (complete data) | ✅ Pass. `budgetbytes.com/homemade-pancakes/` → `tier=json-ld`, all fields populated, saved (201), correct badge/filter. |
-| 6/7. AI-text fallback / total failure | ✅ Pass (total-failure variant). `en.wikipedia.org/wiki/Golden_Gate_Bridge` → attempted `tier=ai-text`, found nothing usable → 422 with `titleGuess: "Golden Gate Bridge - Wikipedia"`, modal opened prefilled with just that title. |
-| 8. SSRF guard, core ranges | ✅ Pass. `http://127.0.0.1/` and `http://169.254.169.254/` both rejected 400 with `"That URL is not allowed."`, no fetch attempted. |
-| 9. SSRF guard, extended IANA ranges | ✅ Covered by existing `recipeUrlImportService.test.js` unit tests (part of the 96/96 passing this session) — not independently re-tested live, per the spec's own framing (no real server exists at most of those addresses to fetch from). |
-| 10. Redirect handling | ✅ Pass. `http://budgetbytes.com/homemade-pancakes/` (no scheme upgrade, no `www`) followed through http→https and non-www→www redirects to the same recipe (200). Redirect-to-private-IP variant not tested (no controlled endpoint available to redirect *to* a private IP on demand). |
-| 13. Tag dedup | Not independently re-tested live — already covered by `recipeUrlImportService.test.js`'s dedup unit test; no live candidate page was found with overlapping `recipeCategory`/`recipeCuisine` during this session's URL sampling. |
-| 14. Saved-recipe tagging | ✅ Pass. `source: 'url_import'` + `sourceUrl` saved and displayed correctly (this is the bug this session fixed). |
-| 15. Filter dropdown | ✅ Pass. "Imported from URL" filter correctly scoped to the saved recipe. |
-| 16. Rate limiting | ✅ Confirmed by code inspection (`server/routes/ai.js:21-22` — `clerkAuth`/`aiRateLimit` mounted before all routes, `/parse-recipe-url` included, no route-level bypass). Not live-triggered (would require spamming real requests against production, not worth the disruption/cost for a smoke test). |
-| 4. Enrichment path (`json-ld+enriched`) | **Not hit.** Both real-world candidates tried (`budgetbytes.com`, `cookieandkate.com`) had complete JSON-LD (`tier=json-ld` both times) — modern recipe-SEO plugins tend to fill in all fields now. Needs a page with incomplete JSON-LD metadata to actually exercise; none found in this session's sampling. |
-| 5. Enrichment failure doesn't block import | Not tested — depends on reaching the enrichment tier at all (see #4). |
-| 6. AI-fallback path *with a usable result* | Not confirmed — the one no-JSON-LD candidate tried (Wikipedia) also failed AI extraction (correctly, it's not a recipe), so `tier=ai-text` was exercised but only the "found nothing" branch, not "found a usable recipe via AI text extraction." |
-| 11. Streaming size cap | Not tested — needs a controlled endpoint serving >5MB without a `Content-Length` header; no such endpoint available for a live smoke test. |
-| 12. Smarter truncation | Not tested — needs inspecting the actual text handed to the AI call (a temporary log/breakpoint), not just observable from the client side. |
-| 17. Regression (existing image-upload/receipt-scan flows) | Not live-tested — no test image file was available in this session. Risk is low: this session's changes only added an object entry for `url_import` and never touched the `upload`/`manual` code paths. |
-| 1/2. Photo picker (mobile vs. desktop) | ✅ Pass, real device (user's phone, `kitchenkeeper.kitchen` directly — not the stale `.vercel.app` link they'd had bookmarked). Both `RecipeUpload.jsx` (Recipes tab) and `ReceiptUpload.jsx` (Pantry tab) show the two-button "📷 Take Photo" / "🖼️ Choose from Library" split; Take Photo opens the camera directly, Choose from Library opens the native Photos picker. User confirmed "both work" for both upload locations. |
-| 18. `npm test`/`lint`/`build` | ✅ Pass (96/96 tests, clean lint, clean build) — re-confirmed after this session's fixes. |
+- **Part A** (backend plumbing): `server/db/migrations/0018_user_onboarding.sql`, `server/db/schema.js`
+  (`userOnboarding` table + `onboardingFlowEnum`), new `server/services/onboardingService.js`, two call
+  sites added to `server/services/householdService.js`, new `server/routes/onboarding.js` + mount in
+  `server/app.js`.
+- **Part B** (client gate + household naming): `client/src/context/AuthContext.jsx` rewrite, new
+  `client/src/components/onboarding/OnboardingGate.jsx` and `WelcomeStep.jsx`, `AppLayout.jsx` and
+  `Sidebar.jsx` changes (lifted `mobileOpen` state), `PantryPage.jsx` cleanup, new `PATCH /api/household`
+  route + `householdService.updateName`.
+- **Part C**: one-line change to the already-built `StaplesChecklist.jsx` (remove its own
+  `completeOnboarding()` call).
+- **Part D** (tour): add `driver.js` dependency, new `client/src/components/onboarding/productTour.js`,
+  `data-tour` attributes on `Sidebar.jsx` nav links.
+- **Part E** (cleanup): delete `LoginPage.jsx`, new `server/db/migrations/0019_drop_users.sql`, remove
+  `users` export from `schema.js`.
+
+Implementation should follow the spec's own Verification Steps (13 of them) closely — several encode
+non-obvious behavior (exact completion timing, which dismiss paths do/don't persist, mobile sidebar
+lifecycle around the tour) that would be easy to get subtly wrong without them.
 
 # Recommended Next Action
 
-The remaining gaps worth closing, roughly in priority order:
-1. Find or construct a recipe URL with incomplete JSON-LD (missing servings/prepTime/cookTime/description)
-   to actually exercise the enrichment tier (steps 4–5) — this is the one path of the three-tier design
-   never yet observed live.
-2. Do a real image-upload/receipt-scan pass with an actual photo to close out step 17 — low risk given
-   what changed, but never explicitly confirmed this session. (Steps 1/2, the picker-choice UI itself,
-   is now confirmed — this is specifically about the underlying extraction/save flow, not the button split.)
-3. Lower priority / diminishing returns for a smoke test specifically: steps 11 (streaming size cap) and
-   12 (truncation) need purpose-built test infrastructure, not just a browser session, to observe.
-
-With steps 1/2 now confirmed on a real device, the only functionally-untested gap left with real
-practical value is the enrichment tier (#1 above) — everything else remaining is either low-risk,
-already covered by unit tests, or needs infrastructure beyond a live smoke test's reach.
+Implement TASK-040 per the spec. Part A has no dependents outside itself and is the natural starting point;
+Parts B–D depend on it (the client fetches `/api/onboarding`, which needs Part A's route to exist). Part E
+is independent and can go first, last, or interleaved. Follow `CONVENTIONS.md`'s canonical migration order
+(apply `0018`/`0019` to the `staging` Neon branch first, verify there, then production, then merge to
+`main`). Run `npm test` / `npm run lint` / `npm run build` before considering it done — none were run this
+session since no code changed.
 
 # Context Notes
 
-- branch: `staging` (this session's fix commit `f060e02` was fast-forward-merged into `main` and is
-  live in production; `staging` and `main` are even as of this commit)
+- branch: `staging` (this session's only change — `ai/tasks/TASK-040-spec.md` — was authored and will be
+  committed directly on `staging`, no code changes, nothing to build/test/lint this session)
 - worktree: none
-- Another session's local dev server was running on ports 3001/5183 for the entire duration of this
-  session — not touched, left running.
-- Production log tailing was done via `vercel logs <url> -f` (5-minute hard limit per invocation,
-  re-run as needed) rather than `--environment production` (incompatible with `-f`, per the CLI).
+- `.claude/settings.local.json` has local uncommitted changes (permission-prompt settings) unrelated to
+  this session's work — left as-is, not part of this commit.
