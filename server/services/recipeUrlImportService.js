@@ -170,6 +170,7 @@ export async function fetchRecipePage(urlString) {
     } catch {
       const err = new Error('Could not reach that URL.');
       err.status = 502;
+      err.expose = true;
       throw err;
     } finally {
       clearTimeout(timer);

@@ -27,6 +27,7 @@ function wrapAIError(err) {
   console.error('[AI] provider error:', err.cause ?? err);
   const wrapped = new Error('AI service unavailable. Please try again later.');
   wrapped.status = 503;
+  wrapped.expose = true;
   return wrapped;
 }
 

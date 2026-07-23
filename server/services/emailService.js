@@ -18,6 +18,7 @@ export async function sendHouseholdInvite({
       'Email service is not configured — set RESEND_API_KEY'
     );
     err.status = 503;
+    err.expose = true;
     throw err;
   }
 
@@ -27,7 +28,7 @@ export async function sendHouseholdInvite({
     .trim();
   const joinLink = `${appUrl}/join?code=${joinCode}`;
 
-  await client.emails.send({
+  const { error } = await client.emails.send({
     from: `${APP_NAME} <${fromEmail}>`,
     to: toEmail,
     subject: `You're invited to join a ${APP_NAME} household`,
@@ -56,4 +57,11 @@ export async function sendHouseholdInvite({
       </div>
     `,
   });
+
+  if (error) {
+    const err = new Error(`Failed to send invite email: ${error.message}`);
+    err.status = 502;
+    err.expose = true;
+    throw err;
+  }
 }

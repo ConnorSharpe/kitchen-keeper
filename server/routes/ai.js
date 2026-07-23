@@ -64,6 +64,7 @@ router.post('/expand-suggestion', validate(expandSchema), async (req, res) => {
   if (!recipe) {
     const err = new Error('AI returned an invalid recipe. Please try again.');
     err.status = 502;
+    err.expose = true;
     throw err;
   }
 

@@ -69,7 +69,7 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 app.use((err, req, res, _next) => {
   console.error(err.stack);
   const status = err.status || 500;
-  const message = status < 500 ? err.message : 'Internal server error';
+  const message = (err.expose || status < 500) ? err.message : 'Internal server error';
   const body = { error: message };
   if (err.code) body.code = err.code;
   res.status(status).json(body);
