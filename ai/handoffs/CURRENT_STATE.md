@@ -160,13 +160,32 @@ on :3001, Vite on :5183), signed in as Connor Sharpe via Clerk.
 **Check 1 — Clerk sign-in without `cookie-parser` (Part B): PASS.** Session was already active on first load;
 forced a full reload and confirmed it stayed signed in on the dashboard, no redirect to sign-in.
 
-**Check 2 — join-code rate limiting (Part C): PASS** for the core behavior — 10 wrong-code submissions to
-`/api/household/join` via the real `/join` UI each returned `404 Invalid join code`; the 11th returned
-`429 Too Many Requests` with the exact spec'd message. **Not independently verified**: the "different user
-still succeeds in the same window" half of the check — no second Clerk account was available this session.
-`keyGenerator: (req) => req.user?.id ?? req.ip` in `server/middleware/joinRateLimit.js` keys per-user by
-construction, so this is a code-reading confirmation, not a live cross-user test — do that specifically if a
-second account/household becomes available.
+**Check 2 — join-code rate limiting (Part C): PASS, fully — including cross-user, closed out in a later
+session (2026-07-23).** Original pass: 10 wrong-code submissions to `/api/household/join` via the real `/join`
+UI each returned `404 Invalid join code`; the 11th returned `429 Too Many Requests` with the exact spec'd
+message.
+
+**Cross-user half, completed later same day**: no second real account was available, so used Clerk's own
+testing primitives on the **dev instance** rather than asking Connor for credentials — `clerk users create`
+(curated CLI command) made a throwaway user with a `+clerk_test` email (recognized by Clerk as a test address,
+never delivers real email), then `POST /sign_in_tokens` (Clerk Backend API, called directly with the dev
+`CLERK_SECRET_KEY` already in `server/.env.local` — the CLI's own raw `clerk api` subcommand 404's on this
+account for an unrelated reason, worth a `clerk update` at some point, 1.5.0 → 2.3.0 available) minted a
+sign-in token. Consuming it needed `window.Clerk.client.signIn.create({ strategy: 'ticket', ticket })` called
+directly via the browser's JS console — the automatic `?__clerk_ticket=` URL handling didn't fire because
+Clerk's dev-instance cross-origin session sync kept restoring Connor's already-active session first; had to
+`Clerk.signOut()` immediately before the ticket call each time. No password was ever created, stored, typed,
+or seen for the test account. Signed in as the test user, submitted the real household join code
+(`57B5C5F1`) at `/join` — **not rate-limited** (no `429`; the request reached `joinByCode`'s DB call, which
+only happens after `joinRateLimit` lets it through) — confirms `keyGenerator: (req) => req.user?.id ?? req.ip`
+really does key per-user, not globally or per-household. The join itself then hit an unrelated `500`
+(`NeonDbError: password authentication failed` / `endpoint could not be found` from the local dev server's
+staging Neon connection — looks like `server/.env.local`'s staging branch endpoint has gone stale, possibly
+from a staging DB refresh per TASK-039's own documented caveat that refreshing staging is destructive to
+whatever was pointing at the old branch). **Not investigated further — separate from TASK-042, a local dev
+environment issue, not a code bug**; worth Connor checking `server/.env.local`'s Neon connection details
+against the current `staging` branch next time local dev is touched. Test user deleted afterward
+(`clerk api /users/... -X DELETE`) — nothing left behind in Clerk's user list.
 
 **Check 3 — `household/members` diagnostics (Part F): PASS.** Temporarily broke the Neon query (bogus column
 via a raw `sql` fragment in `getMembers`'s `householdMembers` select), hit `GET /api/household/members` through
