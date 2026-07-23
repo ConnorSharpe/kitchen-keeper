@@ -29,6 +29,19 @@ router.get('/', async (req, res) => {
   });
 });
 
+// PATCH /api/household — rename the household. No role check beyond the router's
+// existing clerkAuth: any authenticated member may rename it (collaborative metadata,
+// not owner-managed configuration — see TASK-040 spec Part B for the full survey of
+// this app's permission model backing that decision).
+const updateNameSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+});
+
+router.patch('/', validate(updateNameSchema), async (req, res) => {
+  await householdService.updateName(req.user.householdId, req.body.name);
+  res.json({ ok: true });
+});
+
 // PATCH /api/household/ai-key — set or remove BYOK OpenAI key
 const aiKeySchema = z.object({
   key: z.string().min(1).nullable(),

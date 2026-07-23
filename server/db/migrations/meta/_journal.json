@@ -120,6 +120,20 @@
       "when": 1745799360000,
       "tag": "0016_recipe_blocklist",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1753142400000,
+      "tag": "0018_user_onboarding",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1753142460000,
+      "tag": "0019_drop_users",
+      "breakpoints": true
     }
   ]
 }

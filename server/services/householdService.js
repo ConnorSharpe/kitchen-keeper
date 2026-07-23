@@ -6,12 +6,20 @@ import { households, householdMembers, pantryItems } from '../db/schema.js';
 import { encrypt, decrypt } from '../utils/encryption.js';
 import { maskKey } from '../utils/keyEncryption.js';
 import * as platformSettingsService from './platformSettingsService.js';
+import * as onboardingService from './onboardingService.js';
 
 const JOIN_CODE_CONSTRAINT = 'households_join_code_unique';
 const CLERK_LOOKUP_TIMEOUT_MS = 5000;
 
 function generateJoinCode() {
   return randomBytes(4).toString('hex').toUpperCase();
+}
+
+export async function updateName(householdId, name) {
+  await db
+    .update(households)
+    .set({ name })
+    .where(eq(households.id, householdId));
 }
 
 export async function getById(householdId) {
@@ -142,6 +150,7 @@ async function createHousehold(clerkUserId) {
           joinCode: generateJoinCode(),
         })
         .returning();
+      await onboardingService.upsertFlow(clerkUserId, 'new_household');
       return row;
     } catch (err) {
       const isJoinCodeCollision =
@@ -209,6 +218,8 @@ export async function joinByCode(clerkUserId, currentHouseholdId, code) {
     err.status = 409;
     throw err;
   }
+
+  await onboardingService.upsertFlow(clerkUserId, 'joined');
 
   // Sequential (non-transactional): drizzle-orm/neon-http has no interactive transaction
   // support (TASK-035 Part A3). Insert-before-delete, deliberately reordered from the

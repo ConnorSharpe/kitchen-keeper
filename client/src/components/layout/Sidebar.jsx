@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { usePantryContext } from '../../context/PantryContext.jsx';
@@ -10,11 +9,10 @@ const navClass = ({ isActive }) =>
       : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
   }`;
 
-export default function Sidebar() {
+export default function Sidebar({ mobileOpen, setMobileOpen }) {
   const { user, logout } = useAuth();
   const { expiringItems } = usePantryContext();
   const expiringCount = expiringItems.length;
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   const sidebarContent = (
     <>
@@ -37,6 +35,7 @@ export default function Sidebar() {
           end
           className={navClass}
           onClick={() => setMobileOpen(false)}
+          data-tour="nav-chat"
         >
           <span aria-hidden>💬</span>
           Chat
@@ -46,6 +45,7 @@ export default function Sidebar() {
           to="/dashboard"
           className={navClass}
           onClick={() => setMobileOpen(false)}
+          data-tour="nav-dashboard"
         >
           <span aria-hidden>🏠</span>
           Dashboard
@@ -55,6 +55,7 @@ export default function Sidebar() {
           to="/pantry"
           className={navClass}
           onClick={() => setMobileOpen(false)}
+          data-tour="nav-pantry"
         >
           <span aria-hidden>🥦</span>
           Pantry
@@ -72,6 +73,7 @@ export default function Sidebar() {
           to="/recipes"
           className={navClass}
           onClick={() => setMobileOpen(false)}
+          data-tour="nav-recipes"
         >
           <span aria-hidden>📖</span>
           Recipes
@@ -81,6 +83,7 @@ export default function Sidebar() {
           to="/shopping"
           className={navClass}
           onClick={() => setMobileOpen(false)}
+          data-tour="nav-shopping"
         >
           <span aria-hidden>🛒</span>
           Shopping
@@ -91,6 +94,7 @@ export default function Sidebar() {
         <NavLink
           to="/household"
           onClick={() => setMobileOpen(false)}
+          data-tour="nav-household"
           className={({ isActive }) =>
             `flex items-center gap-2 px-3 py-2 rounded-md text-xs font-medium transition-colors ${
               isActive

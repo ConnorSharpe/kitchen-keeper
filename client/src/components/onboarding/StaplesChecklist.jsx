@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useAuth } from '../../context/AuthContext.jsx';
 import { api } from '../../api/index.js';
 
 const STAPLES = [
@@ -45,7 +44,6 @@ const ALL_STAPLES = STAPLES.flatMap(({ category, items }) =>
 );
 
 export default function StaplesChecklist({ onComplete, onDismiss }) {
-  const { completeOnboarding } = useAuth();
   const [selected, setSelected] = useState(new Set());
   const [submitting, setSubmitting] = useState(false);
   // 'idle' | 'error' — explicit state machine; session-scoped dismissal lives in PantryPage
@@ -69,8 +67,7 @@ export default function StaplesChecklist({ onComplete, onDismiss }) {
         const items = ALL_STAPLES.filter(({ name }) => selected.has(name));
         await api.post('/api/pantry/bulk', { items });
       }
-      await completeOnboarding(); // Persistence Rule: only path that commits onboardingComplete
-      onComplete(); // triggers PantryPage.refresh()
+      await onComplete(); // OnboardingGate.handleFinish — commits onboarding complete server-side
     } catch {
       setOnboardingState('error');
       setErrorMessage('Something went wrong. Please try again.');
@@ -84,8 +81,7 @@ export default function StaplesChecklist({ onComplete, onDismiss }) {
     setOnboardingState('idle');
     setErrorMessage(null);
     try {
-      await completeOnboarding(); // Persistence Rule
-      onComplete();
+      await onComplete(); // OnboardingGate.handleFinish — commits onboarding complete server-side
     } catch {
       setOnboardingState('error');
       setErrorMessage('Could not save. Please try again.');

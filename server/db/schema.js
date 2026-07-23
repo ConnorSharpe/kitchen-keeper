@@ -6,6 +6,7 @@ import {
   boolean,
   serial,
   jsonb,
+  pgEnum,
 } from 'drizzle-orm/pg-core';
 
 export const households = pgTable('households', {
@@ -22,23 +23,6 @@ export const households = pgTable('households', {
   aiApiKey: text('ai_api_key'), // deprecated — kept for schema compat; unused after TASK-016B
   clerkUserId: text('clerk_user_id').unique(),
   openaiApiKey: text('openai_api_key'), // AES-256-GCM ciphertext: iv:authTag:encrypted
-});
-
-export const users = pgTable('users', {
-  id: serial('id').primaryKey(),
-  householdId: integer('household_id')
-    .notNull()
-    .references(() => households.id),
-  email: text('email').notNull().unique(),
-  passwordHash: text('password_hash').notNull(),
-  name: text('name').notNull(),
-  onboardingComplete: boolean('onboarding_complete').notNull().default(true),
-  createdAt: text('created_at')
-    .notNull()
-    .$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at')
-    .notNull()
-    .$defaultFn(() => new Date().toISOString()),
 });
 
 export const pantryItems = pgTable('pantry_items', {
@@ -147,6 +131,21 @@ export const householdMembers = pgTable('household_members', {
   joinedAt: text('joined_at')
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
+});
+
+export const onboardingFlowEnum = pgEnum('onboarding_flow', [
+  'new_household',
+  'joined',
+]);
+
+export const userOnboarding = pgTable('user_onboarding', {
+  clerkUserId: text('clerk_user_id').primaryKey(),
+  flow: onboardingFlowEnum('flow').notNull(),
+  complete: boolean('complete').notNull().default(false),
+  createdAt: text('created_at')
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+  completedAt: text('completed_at'),
 });
 
 export const chatMessages = pgTable('chat_messages', {
