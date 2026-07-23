@@ -214,17 +214,22 @@ sign-in) post-deploy. **Parts A/B/C/E/F are now live in production.**
    data — this is the dev-session SW finding above, confirmed worse in production than first described.
    Worth prioritizing over the dev-session's two lower-severity findings — this one is deploy-triggered, not
    an edge case.
-2. **`GET /api/onboarding` 500s in production**: `NeonDbError: relation "user_onboarding" does not exist`.
-   Confirmed via `vercel logs` this predates this session's deploy (same error present in the prior production
-   deployment from ~2 hours earlier). Root cause: `server/db/migrations/0018_user_onboarding.sql` (from
-   TASK-040) appears to have never been run against the **production** Neon branch — README.md's own
-   deployment instructions say migrations are applied manually via the Neon SQL Editor, so this is a
-   plausible one-time miss, not a code bug. Masked in the UI because `AuthContext`'s onboarding fetch fails
-   open (`{ complete: true, flow: null }` after one retry) — meaning **new users signing up on production
-   today silently skip the onboarding tour** rather than seeing an error. Did not attempt to fix — running a
-   migration against the live production database wasn't part of what this session was authorized to do.
-   Connor should run `0018_user_onboarding.sql` (and confirm `0019_drop_users.sql` too, same risk) against
-   production via the Neon SQL Editor.
+2. **`GET /api/onboarding` 500s in production — FIXED this session.** `NeonDbError: relation
+   "user_onboarding" does not exist`. Confirmed via `vercel logs` this predated this session's deploy (same
+   error present in the prior production deployment from ~2 hours earlier). Root cause: `server/db/migrations/
+   0018_user_onboarding.sql` (from TASK-040) had never been run against the **production** Neon branch —
+   README.md's own deployment instructions say migrations are applied manually via the Neon SQL Editor, so
+   this was a one-time miss, not a code bug. Masked in the UI because `AuthContext`'s onboarding fetch fails
+   open (`{ complete: true, flow: null }` after one retry) — meaning new users signing up on production had
+   been silently skipping the onboarding tour rather than seeing an error, since whenever TASK-040 shipped.
+   **Fix**: Connor ran `0018_user_onboarding.sql`'s `CREATE TYPE`/`CREATE TABLE` statements directly against
+   production via the Neon SQL Editor (Claude walked through it but did not touch production credentials or
+   run the SQL itself — `DATABASE_URL` is marked Sensitive in Vercel and returns empty via `vercel env pull`,
+   so there was no CLI path to it anyway). Verified fixed: `GET /api/onboarding` now returns `200
+   {"complete":true,"flow":null}` live on `kitchenkeeper.kitchen`, and `vercel logs` shows a clean `200` with
+   no `NeonDbError`. **`0019_drop_users.sql` (drops the legacy `users` table) was deliberately left undone** —
+   it's destructive and nobody has confirmed the production `users` table is actually empty; needs its own
+   row-count check before running, not bundled into this fix.
 
 # Testing Walkthrough (next session — do this interactively with Connor)
 
