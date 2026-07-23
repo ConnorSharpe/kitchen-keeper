@@ -26,11 +26,6 @@ export default function HouseholdPage() {
   const [inviteStatus, setInviteStatus] = useState(null); // 'sent' | 'error'
   const [inviteError, setInviteError] = useState('');
 
-  const [aiKey, setAiKey] = useState('');
-  const [aiSaving, setAiSaving] = useState(false);
-  const [aiStatus, setAiStatus] = useState(null); // 'saved' | 'removed' | 'error'
-  const [aiError, setAiError] = useState('');
-
   const [viewerIsOwner, setViewerIsOwner] = useState(false);
   const [platformSettings, setPlatformSettings] = useState(null); // { publicAiAccessEnabled, aiRateLimitMax, updatedAt, updatedByClerkId } | null
   const [platformSettingsLoading, setPlatformSettingsLoading] = useState(false);
@@ -90,41 +85,6 @@ export default function HouseholdPage() {
     await navigator.clipboard.writeText(household.joinCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }
-
-  async function handleSaveAiKey(e) {
-    e.preventDefault();
-    setAiSaving(true);
-    setAiStatus(null);
-    setAiError('');
-    try {
-      const result = await api.patch('/api/household/ai-key', { key: aiKey });
-      setHousehold((prev) => ({ ...prev, maskedKey: result.maskedKey }));
-      setAiKey('');
-      setAiStatus('saved');
-    } catch (err) {
-      setAiStatus('error');
-      setAiError(err.message);
-    } finally {
-      setAiSaving(false);
-    }
-  }
-
-  async function handleRemoveAiKey() {
-    setAiSaving(true);
-    setAiStatus(null);
-    setAiError('');
-    try {
-      await api.patch('/api/household/ai-key', { key: null });
-      setHousehold((prev) => ({ ...prev, maskedKey: null }));
-      setAiKey('');
-      setAiStatus('removed');
-    } catch (err) {
-      setAiStatus('error');
-      setAiError(err.message);
-    } finally {
-      setAiSaving(false);
-    }
   }
 
   async function patchPlatformSettings(patch) {
@@ -330,82 +290,6 @@ export default function HouseholdPage() {
           personalise meal suggestions.
         </p>
         <DietaryProfileForm />
-      </section>
-
-      {/* OpenAI API key */}
-      <section className="bg-white border border-gray-200 rounded-2xl p-6">
-        <h2 className="text-base font-semibold text-gray-800 mb-1">
-          OpenAI API key
-        </h2>
-        <p className="text-xs text-gray-500 mb-4">
-          Required to use AI features. Your key is encrypted at rest and never
-          logged. Get one at{' '}
-          <a
-            href="https://platform.openai.com/api-keys"
-            target="_blank"
-            rel="noreferrer"
-            className="text-orange-600 hover:underline"
-          >
-            platform.openai.com
-          </a>
-          .
-        </p>
-
-        {household?.maskedKey && (
-          <p className="text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2 mb-4 font-mono">
-            Current key:{' '}
-            <span className="font-semibold">{household.maskedKey}</span>
-          </p>
-        )}
-
-        <form onSubmit={handleSaveAiKey} className="space-y-3">
-          <input
-            type="password"
-            value={aiKey}
-            onChange={(e) => setAiKey(e.target.value)}
-            placeholder={
-              household?.maskedKey
-                ? `Current: ${household.maskedKey} — paste to replace`
-                : 'sk-...'
-            }
-            className="w-full rounded-lg border-gray-300 shadow-sm focus:border-orange-400 focus:ring-orange-400 text-sm font-mono"
-          />
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={aiSaving || !aiKey}
-              className="flex-1 py-2 px-4 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors text-sm"
-            >
-              {aiSaving ? 'Saving…' : 'Save key'}
-            </button>
-            {household?.maskedKey && (
-              <button
-                type="button"
-                onClick={handleRemoveAiKey}
-                disabled={aiSaving}
-                className="flex-1 py-2 px-4 border border-gray-300 hover:bg-gray-50 disabled:opacity-50 text-gray-700 font-medium rounded-lg transition-colors text-sm"
-              >
-                Remove key
-              </button>
-            )}
-          </div>
-        </form>
-
-        {aiStatus === 'saved' && (
-          <p className="mt-3 text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">
-            Key saved. AI features are now active.
-          </p>
-        )}
-        {aiStatus === 'removed' && (
-          <p className="mt-3 text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">
-            Key removed.
-          </p>
-        )}
-        {aiStatus === 'error' && (
-          <p className="mt-3 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
-            {aiError}
-          </p>
-        )}
       </section>
 
       {/* Platform AI settings (owner only) */}
