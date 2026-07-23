@@ -152,6 +152,48 @@ Carried forward + new:
 - New, small, out-of-scope finding: root-level `shell-quote` high-severity advisory via `concurrently` (dev
   dependency only, not shipped to production) — not part of this task, noted above.
 
+# Testing Walkthrough Results (2026-07-23, done)
+
+All three checks passed against real credentials (`server/.env.local`), local dev server (`node server/index.js`
+on :3001, Vite on :5183), signed in as Connor Sharpe via Clerk.
+
+**Check 1 — Clerk sign-in without `cookie-parser` (Part B): PASS.** Session was already active on first load;
+forced a full reload and confirmed it stayed signed in on the dashboard, no redirect to sign-in.
+
+**Check 2 — join-code rate limiting (Part C): PASS** for the core behavior — 10 wrong-code submissions to
+`/api/household/join` via the real `/join` UI each returned `404 Invalid join code`; the 11th returned
+`429 Too Many Requests` with the exact spec'd message. **Not independently verified**: the "different user
+still succeeds in the same window" half of the check — no second Clerk account was available this session.
+`keyGenerator: (req) => req.user?.id ?? req.ip` in `server/middleware/joinRateLimit.js` keys per-user by
+construction, so this is a code-reading confirmation, not a live cross-user test — do that specifically if a
+second account/household becomes available.
+
+**Check 3 — `household/members` diagnostics (Part F): PASS.** Temporarily broke the Neon query (bogus column
+via a raw `sql` fragment in `getMembers`'s `householdMembers` select), hit `GET /api/household/members` through
+the real Household page, confirmed the server log:
+`[kitchen-keeper] request_id=43ac5d8f function=getMembers householdId=1 userId=user_3FVuvJJGq9W65mQ1SrVwLaz48wS
+elapsedMs=128 error=column "household_id_bogus_column_xyz" does not exist` — while the client only ever saw a
+generic "Internal server error" (500), confirming no detail leak. Reverted the breakage immediately after
+(`git diff` confirmed clean); restarted the server and reconfirmed the members list renders normally again.
+
+**Two unrelated things surfaced during this session, not part of TASK-042, not investigated further:**
+
+1. **PWA service worker (`client/public/sw.js`) navigation-cache bug**: once the SW is active (2nd+ visit),
+   a full-page navigation straight to `/join` (e.g., a real invite-link click) sometimes lands the address bar
+   back on `/` instead of showing the join form — looks like the classic SW gotcha where a cached response's
+   internal `.url` differing from the request causes the browser to rewrite the address bar. Only reproduced
+   with the SW active; unregistering it fixed it immediately. Worth a real test on a device with the PWA
+   actually installed (ties into Part G's device-verification gap) since this would break real invite links,
+   not just an artifact of this session's tooling.
+2. **Clerk token hydration race right after a full page load**: submitting a form within ~1s of a hard
+   navigation (before `window.Clerk.session` fully hydrates) got a real `401` from `clerkAuth`, which redirects
+   to `/sign-in`. A manual `fetch` a moment later with a freshly-fetched token succeeded fine. Likely not a
+   real user-facing issue (humans don't submit forms that fast after a page load) but flagging since it's a
+   genuine 401, not a test artifact — happened consistently, not once.
+
+Both are candidates for their own follow-up tickets if Connor wants them looked at; neither touches any
+TASK-042 code path.
+
 # Testing Walkthrough (next session — do this interactively with Connor)
 
 Prerequisite already satisfied: `server/.env.local` and `client/.env.local` exist with real Clerk/OpenAI/
