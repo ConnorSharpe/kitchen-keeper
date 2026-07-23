@@ -194,6 +194,38 @@ generic "Internal server error" (500), confirming no detail leak. Reverted the b
 Both are candidates for their own follow-up tickets if Connor wants them looked at; neither touches any
 TASK-042 code path.
 
+# Deployed to Production (2026-07-23)
+
+Committed the testing-walkthrough results, merged `staging` → `main` (fast-forward), pushed. Vercel deployed
+clean (`kitchen-keeper-4kaplu4g5-...`, Ready in 29s). Verified via `curl` that the server is serving the
+correct new `index.html`/bundle, and confirmed the live app renders and functions correctly (Chat, Household,
+sign-in) post-deploy. **Parts A/B/C/E/F are now live in production.**
+
+**Two things found during production verification, both pre-existing, neither caused by this deploy:**
+
+1. **PWA service worker serves a stale shell after any deploy** (`client/public/sw.js`): a returning
+   browser with the SW already active kept serving a cached `index.html` referencing a JS bundle hash from
+   the *previous* deployment. Because `vercel.json`'s catch-all rewrite (`"/(.*)" → "/index.html"`) serves
+   `index.html` content for literally any unmatched path — including a deleted old asset path — the stale
+   bundle request returns 200 with HTML instead of a 404, and the browser fails to mount React with a blank
+   white screen and no visible console error. Reproduced live on `kitchenkeeper.kitchen` in this browser
+   (fixed by unregistering the SW + clearing `caches`). **This means every future deploy can blank-screen any
+   returning visitor** (anyone with the PWA installed, or who's just visited before) until they clear site
+   data — this is the dev-session SW finding above, confirmed worse in production than first described.
+   Worth prioritizing over the dev-session's two lower-severity findings — this one is deploy-triggered, not
+   an edge case.
+2. **`GET /api/onboarding` 500s in production**: `NeonDbError: relation "user_onboarding" does not exist`.
+   Confirmed via `vercel logs` this predates this session's deploy (same error present in the prior production
+   deployment from ~2 hours earlier). Root cause: `server/db/migrations/0018_user_onboarding.sql` (from
+   TASK-040) appears to have never been run against the **production** Neon branch — README.md's own
+   deployment instructions say migrations are applied manually via the Neon SQL Editor, so this is a
+   plausible one-time miss, not a code bug. Masked in the UI because `AuthContext`'s onboarding fetch fails
+   open (`{ complete: true, flow: null }` after one retry) — meaning **new users signing up on production
+   today silently skip the onboarding tour** rather than seeing an error. Did not attempt to fix — running a
+   migration against the live production database wasn't part of what this session was authorized to do.
+   Connor should run `0018_user_onboarding.sql` (and confirm `0019_drop_users.sql` too, same risk) against
+   production via the Neon SQL Editor.
+
 # Testing Walkthrough (next session — do this interactively with Connor)
 
 Prerequisite already satisfied: `server/.env.local` and `client/.env.local` exist with real Clerk/OpenAI/
