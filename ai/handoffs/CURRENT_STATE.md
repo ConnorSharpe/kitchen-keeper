@@ -227,9 +227,16 @@ sign-in) post-deploy. **Parts A/B/C/E/F are now live in production.**
    run the SQL itself — `DATABASE_URL` is marked Sensitive in Vercel and returns empty via `vercel env pull`,
    so there was no CLI path to it anyway). Verified fixed: `GET /api/onboarding` now returns `200
    {"complete":true,"flow":null}` live on `kitchenkeeper.kitchen`, and `vercel logs` shows a clean `200` with
-   no `NeonDbError`. **`0019_drop_users.sql` (drops the legacy `users` table) was deliberately left undone** —
-   it's destructive and nobody has confirmed the production `users` table is actually empty; needs its own
-   row-count check before running, not bundled into this fix.
+   no `NeonDbError`.
+
+   **Follow-up, same session: `0019_drop_users.sql` also run.** `SELECT COUNT(*) FROM users;` returned `1`
+   (not 0), so this wasn't run blind — Connor checked `SELECT id, email, name, created_at FROM users;` and
+   confirmed the single row was his own pre-Clerk leftover account, not anything unexpected. With that
+   confirmed, Connor ran `DROP TABLE "users";` against production via the Neon SQL Editor. Verified afterward:
+   live site reload shows zero console errors, every API route (`pantry`, `recipes`, `onboarding`,
+   `ai/chat/history`, `household`) returns `200`, and `vercel logs` shows nothing referencing `users` — matches
+   the migration's own claim of zero code references. **Both TASK-042-adjacent production migrations
+   (0018, 0019) are now applied; production schema is caught up with what staging already had.**
 
 # Testing Walkthrough (next session — do this interactively with Connor)
 
