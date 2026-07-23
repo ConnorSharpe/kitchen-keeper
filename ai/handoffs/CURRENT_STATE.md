@@ -127,7 +127,7 @@ Spec verification steps (see TASK-038-spec.md's "Verification Steps"), tested li
 | 11. Streaming size cap | Not tested — needs a controlled endpoint serving >5MB without a `Content-Length` header; no such endpoint available for a live smoke test. |
 | 12. Smarter truncation | Not tested — needs inspecting the actual text handed to the AI call (a temporary log/breakpoint), not just observable from the client side. |
 | 17. Regression (existing image-upload/receipt-scan flows) | Not live-tested — no test image file was available in this session. Risk is low: this session's changes only added an object entry for `url_import` and never touched the `upload`/`manual` code paths. |
-| 1/2. Photo picker (mobile vs. desktop) | Not tested — mobile camera-vs-library requires a real iPhone/Android device (capture behavior isn't reliable in devtools emulation, per the spec itself). |
+| 1/2. Photo picker (mobile vs. desktop) | ✅ Pass, real device (user's phone, `kitchenkeeper.kitchen` directly — not the stale `.vercel.app` link they'd had bookmarked). Both `RecipeUpload.jsx` (Recipes tab) and `ReceiptUpload.jsx` (Pantry tab) show the two-button "📷 Take Photo" / "🖼️ Choose from Library" split; Take Photo opens the camera directly, Choose from Library opens the native Photos picker. User confirmed "both work" for both upload locations. |
 | 18. `npm test`/`lint`/`build` | ✅ Pass (96/96 tests, clean lint, clean build) — re-confirmed after this session's fixes. |
 
 # Recommended Next Action
@@ -137,10 +137,14 @@ The remaining gaps worth closing, roughly in priority order:
    to actually exercise the enrichment tier (steps 4–5) — this is the one path of the three-tier design
    never yet observed live.
 2. Do a real image-upload/receipt-scan pass with an actual photo to close out step 17 — low risk given
-   what changed, but never explicitly confirmed this session.
-3. Real-device test of the camera-vs-library picker split (Part A, steps 1–2) next time a phone is handy.
-4. Lower priority / diminishing returns for a smoke test specifically: steps 11 (streaming size cap) and
+   what changed, but never explicitly confirmed this session. (Steps 1/2, the picker-choice UI itself,
+   is now confirmed — this is specifically about the underlying extraction/save flow, not the button split.)
+3. Lower priority / diminishing returns for a smoke test specifically: steps 11 (streaming size cap) and
    12 (truncation) need purpose-built test infrastructure, not just a browser session, to observe.
+
+With steps 1/2 now confirmed on a real device, the only functionally-untested gap left with real
+practical value is the enrichment tier (#1 above) — everything else remaining is either low-risk,
+already covered by unit tests, or needs infrastructure beyond a live smoke test's reach.
 
 # Context Notes
 
