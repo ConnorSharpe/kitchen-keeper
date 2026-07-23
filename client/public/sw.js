@@ -57,6 +57,25 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/uploads/'))
     return;
 
+  // Navigations always prefer the network so a returning visitor gets the
+  // current deployment's index.html (and therefore its real asset hashes),
+  // not a cached shell pointing at JS/CSS files a later deploy deleted.
+  // Falls back to the cached shell only when actually offline.
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const toCache = response.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(request, toCache));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request).then((cached) => cached || caches.match('/index.html')))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(request).then((cached) => {
       const networkFetch = fetch(request).then((response) => {
