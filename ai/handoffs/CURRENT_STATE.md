@@ -238,6 +238,40 @@ sign-in) post-deploy. **Parts A/B/C/E/F are now live in production.**
    the migration's own claim of zero code references. **Both TASK-042-adjacent production migrations
    (0018, 0019) are now applied; production schema is caught up with what staging already had.**
 
+# Part D Progress (2026-07-23)
+
+**Decision 1 — Clerk sign-up posture: leave as-is.** Pulled the actual production instance config via
+`clerk config pull --instance <prod instance id>` (the `clerk link`'s cached "prod" alias doesn't resolve —
+this repo's CLI link only has the dev instance cached; had to pass the real instance ID from `clerk apps
+list`). Production `auth_access_control.sign_up_mode` is `"public"`, but it's not unprotected: email
+verification is required at sign-up (`auth_email.verify_at_sign_up: true`), bot/CAPTCHA protection is
+enabled (`auth_attack_protection.bot_protection.captcha_enabled: true`, `captcha_widget_type: "smart"`),
+enumeration protection is on (`"bulk"`), and account lockout is enabled (100 attempts / 60 min). This is
+meaningfully better than TASK-042's spec assumed — the spec's audit only checked for the app-level
+`INVITE_CODE` gate (confirmed dead) and never checked Clerk's own instance-level protections. Connor's
+decision: keep this posture, no Clerk config change needed. **Decision 1 of Part D closed.**
+
+**Bug found + fixed while checking Decision 2 — `OWNER_CLERK_ID` mismatch in production.** Checking
+`publicAiAccessEnabled` (the actual OpenAI-spend gate) requires the `/api/admin/platform-settings` route,
+which requires `req.user.id === process.env.OWNER_CLERK_ID`. Testing this via Connor's live production
+session returned `403 Owner access required`, and `GET /api/household`'s `viewerIsOwner` field confirmed
+`false`. Production and dev/staging are separate Clerk instances with separate user IDs for the same person
+(`user_3GqNHSFKpSVGdJbOn6XghbtxKU8` in prod vs. `user_3FVuvJJGq9W65mQ1SrVwLaz48wS` in dev/staging) —
+production's `OWNER_CLERK_ID` env var had the wrong (dev/staging) ID, so Connor's real production account was
+never recognized as the owner. Confirmed via `vercel env pull` that `OWNER_CLERK_ID` is also Sensitive-flagged
+(returns empty), so this had to be fixed via `vercel env add OWNER_CLERK_ID production --value
+user_3GqNHSFKpSVGdJbOn6XghbtxKU8 --sensitive --force --yes`, then `vercel redeploy <latest> --target
+production` (env var changes don't apply to already-built deployments). Verified fixed: `viewerIsOwner: true`
+and `/api/admin/platform-settings` now returns `200` for Connor's real production session.
+
+**Decision 2 — OpenAI billing: publicAiAccessEnabled confirmed false in production, prepaid/auto-recharge
+status still unconfirmed.** Now that the owner route is reachable, confirmed live: `{"publicAiAccessEnabled":
+false, "aiRateLimitMax": 20}` — the safety-critical flag is correctly off. **Still open**: TASK-037's original
+requirement was switching the OpenAI org to prepaid credits with auto-recharge off, *confirmed* (not just
+recommended) before this flag is ever set to `true`. That's an OpenAI dashboard setting outside any tool
+available this session — needs Connor to check directly and report back. Do not flip `publicAiAccessEnabled`
+to `true` in production until that's confirmed.
+
 # Testing Walkthrough (next session — do this interactively with Connor)
 
 Prerequisite already satisfied: `server/.env.local` and `client/.env.local` exist with real Clerk/OpenAI/
