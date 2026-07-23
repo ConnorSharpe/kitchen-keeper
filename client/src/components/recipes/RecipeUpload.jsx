@@ -124,14 +124,9 @@ export default function RecipeUpload({ onExtracted, onClose }) {
   const [phase, setPhase] = useState('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [dragOver, setDragOver] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
   const abortRef = useRef(null);
 
   useEffect(() => () => abortRef.current?.abort(), []);
-
-  useEffect(() => {
-    setIsMobile(window.matchMedia('(hover: none) and (pointer: coarse)').matches);
-  }, []);
 
   async function uploadFile(file) {
     if (!file.type.startsWith('image/')) {
@@ -251,78 +246,35 @@ export default function RecipeUpload({ onExtracted, onClose }) {
         {/* Phase: idle */}
         {phase === 'idle' && (
           <div>
-            {!isMobile && (
-              <label
-                htmlFor="recipe-upload-library-input"
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOver(true);
-                }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={handleDrop}
-                className={`block border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors ${
-                  dragOver
-                    ? 'border-orange-400 bg-orange-50'
-                    : 'border-gray-300 hover:border-orange-300 hover:bg-gray-50'
-                }`}
-              >
-                <p className="text-5xl mb-4">📸</p>
-                <p className="text-sm font-medium text-gray-700">
-                  Take a photo or upload a recipe image
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  JPEG, PNG, WebP or HEIC — max 10 MB
-                </p>
-                <input
-                  id="recipe-upload-library-input"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  className="sr-only"
-                />
-              </label>
-            )}
-
-            {isMobile && (
-              <div className="flex flex-col items-center py-8 gap-4">
-                <p className="text-5xl">📸</p>
-                <p className="text-sm font-medium text-gray-700 text-center">
-                  Add a recipe photo
-                </p>
-                <div className="flex gap-3 w-full">
-                  <input
-                    id="recipe-upload-camera-input"
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleFileChange}
-                    className="sr-only"
-                  />
-                  <label
-                    htmlFor="recipe-upload-camera-input"
-                    className="flex-1 py-2.5 px-3 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors text-center cursor-pointer"
-                  >
-                    📷 Take Photo
-                  </label>
-                  <input
-                    id="recipe-upload-library-input"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="sr-only"
-                  />
-                  <label
-                    htmlFor="recipe-upload-library-input"
-                    className="flex-1 py-2.5 px-3 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors text-center cursor-pointer"
-                  >
-                    🖼️ Choose from Library
-                  </label>
-                </div>
-                <p className="text-xs text-gray-400">
-                  JPEG, PNG, WebP or HEIC — max 10 MB
-                </p>
-              </div>
-            )}
+            <label
+              htmlFor="recipe-upload-library-input"
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+              className={`block border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors ${
+                dragOver
+                  ? 'border-orange-400 bg-orange-50'
+                  : 'border-gray-300 hover:border-orange-300 hover:bg-gray-50'
+              }`}
+            >
+              <p className="text-5xl mb-4">📸</p>
+              <p className="text-sm font-medium text-gray-700">
+                Take a photo or upload a recipe image
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                JPEG, PNG, WebP or HEIC — max 10 MB
+              </p>
+              <input
+                id="recipe-upload-library-input"
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="sr-only"
+              />
+            </label>
           </div>
         )}
 

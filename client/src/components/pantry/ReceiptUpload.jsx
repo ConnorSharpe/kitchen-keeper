@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   STORAGE_LOCATIONS,
@@ -19,13 +19,6 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
   const [checked, setChecked] = useState({});
   const [skipped, setSkipped] = useState(0);
   const [dragOver, setDragOver] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    setIsMobile(
-      window.matchMedia('(hover: none) and (pointer: coarse)').matches
-    );
-  }, []);
 
   async function scanFile(file) {
     setPhase('scanning');
@@ -163,78 +156,35 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
         {/* Phase: upload */}
         {phase === 'upload' && (
           <div>
-            {!isMobile && (
-              <label
-                htmlFor="receipt-upload-library-input"
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOver(true);
-                }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={handleDrop}
-                className={`block border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors ${
-                  dragOver
-                    ? 'border-orange-400 bg-orange-50'
-                    : 'border-gray-300 hover:border-orange-300 hover:bg-gray-50'
-                }`}
-              >
-                <p className="text-5xl mb-4">📷</p>
-                <p className="text-sm font-medium text-gray-700">
-                  Drop a receipt photo here, or click to upload
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  JPEG, PNG, WebP or HEIC — max 10 MB
-                </p>
-                <input
-                  id="receipt-upload-library-input"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  className="sr-only"
-                />
-              </label>
-            )}
-
-            {isMobile && (
-              <div className="flex flex-col items-center py-8 gap-4">
-                <p className="text-5xl">📷</p>
-                <p className="text-sm font-medium text-gray-700 text-center">
-                  Add a receipt photo
-                </p>
-                <div className="flex gap-3 w-full">
-                  <input
-                    id="receipt-upload-camera-input"
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleFileChange}
-                    className="sr-only"
-                  />
-                  <label
-                    htmlFor="receipt-upload-camera-input"
-                    className="flex-1 py-2.5 px-3 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors text-center cursor-pointer"
-                  >
-                    📷 Take Photo
-                  </label>
-                  <input
-                    id="receipt-upload-library-input"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="sr-only"
-                  />
-                  <label
-                    htmlFor="receipt-upload-library-input"
-                    className="flex-1 py-2.5 px-3 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors text-center cursor-pointer"
-                  >
-                    🖼️ Choose from Library
-                  </label>
-                </div>
-                <p className="text-xs text-gray-400">
-                  JPEG, PNG, WebP or HEIC — max 10 MB
-                </p>
-              </div>
-            )}
+            <label
+              htmlFor="receipt-upload-library-input"
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+              className={`block border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors ${
+                dragOver
+                  ? 'border-orange-400 bg-orange-50'
+                  : 'border-gray-300 hover:border-orange-300 hover:bg-gray-50'
+              }`}
+            >
+              <p className="text-5xl mb-4">📷</p>
+              <p className="text-sm font-medium text-gray-700">
+                Drop a receipt photo here, or click to upload
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                JPEG, PNG, WebP or HEIC — max 10 MB
+              </p>
+              <input
+                id="receipt-upload-library-input"
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="sr-only"
+              />
+            </label>
           </div>
         )}
 
