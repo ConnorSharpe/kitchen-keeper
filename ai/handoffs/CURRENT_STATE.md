@@ -1,108 +1,106 @@
 # Task
 
-Design session (no implementation) for TASK-040 — onboarding for a brand-new household's first user and
-for a new member joining an existing household via invite. User asked for a welcome flow, a revived
-"stock your pantry" staples checklist, and a guided product tour. Spec was drafted, then run through three
-rounds of iterative architect review (the user's established workflow — see `ai/handoffs/CONVENTIONS.md`
-conventions and prior tasks' own Architect Review History tables), with each round's feedback critically
-checked against the actual codebase (the architect has no file access) before being adopted, corrected, or
-declined. No application code changed this session — this was spec-only.
+Implementation session for TASK-040 — onboarding for a brand-new household's first user and for a new
+member joining an existing household via invite (Welcome step + household naming, 6-step guided product
+tour via driver.js, revived "stock your pantry" staples checklist). Built from `ai/tasks/TASK-040-spec.md`
+DRAFT-5 (approved for implementation, written in the prior session), Design Parts A–E in order, per that
+spec's own Recommended Next Action.
 
 # Current Status
 
-`ai/tasks/TASK-040-spec.md` is at **DRAFT-5, APPROVED FOR IMPLEMENTATION**. Ready for the next session to
-build from Design Parts A–E, in order.
+**Implemented, verified (lint/test/build + staging DB migration), and deployed to both `staging` and
+`main`/production.** All 5 spec parts are done and match the spec's file list exactly:
 
-Investigation during this session found the app's existing onboarding surface was fully broken, not just
-missing — see the spec's own "Current State" section for the full trace (`StaplesChecklist` gated on a
-Clerk-user field that never exists; `completeOnboarding()` was a no-op stub; `LoginPage.jsx`/`users` table
-are dead pre-Clerk-migration leftovers). TASK-040 fixes all of this as part of building the new flow.
+- Part A (backend plumbing) ✅
+- Part B (client gate + household naming) ✅
+- Part C (StaplesChecklist reconnected) ✅
+- Part D (guided tour) ✅
+- Part E (dead-code cleanup: `LoginPage.jsx`, `users` table) ✅
 
-# Files Created (this session)
+`npm run lint`, `npm test` (82/82 passing), and `npm run build` all pass clean. Migrations
+`0018_user_onboarding.sql` and `0019_drop_users.sql` applied successfully to the `staging` Neon branch
+(server boots clean; `GET /api/onboarding` correctly mounted and 401-gated) and — as of this session's
+`staging` → `main` merge and push — to production as well, via `server/db/migrate.js`'s auto-run-on-boot.
 
-- `ai/tasks/TASK-040-spec.md` — the spec, DRAFT-1 through DRAFT-5 (three architect review rounds + one
-  round of user-directed scope decisions, all preserved in-file via the Architect Review History table and
-  the "Decisions (resolved by user, ...)" section, matching this repo's established spec convention).
+**Not yet done: interactive verification of the actual onboarding flow on production.** I have no Clerk
+credentials for this app, so I could not click through Welcome → Tour → Checklist myself on either staging
+or production — only route-mounting/health-check-level verification. The user is doing that pass themselves
+on production now that the deploy is complete, against the spec's own 13 Verification Steps.
+
+# Files Created / Changed (this session)
+
+Exactly the file list `TASK-040-spec.md`'s Design Parts A–E called for:
+
+- **New**: `server/db/migrations/0018_user_onboarding.sql`, `server/db/migrations/0019_drop_users.sql`,
+  `server/services/onboardingService.js`, `server/routes/onboarding.js`,
+  `client/src/components/onboarding/OnboardingGate.jsx`, `.../WelcomeStep.jsx`, `.../productTour.js`.
+- **Modified**: `server/db/schema.js` (added `userOnboarding`/`onboardingFlowEnum`, removed `users`),
+  `server/db/migrations/meta/_journal.json` (idx 17/18), `server/services/householdService.js` (two
+  `upsertFlow` call sites + new `updateName`), `server/routes/household.js` (new `PATCH /`), `server/app.js`
+  (mount `onboardingRouter`), `client/src/context/AuthContext.jsx` (real fetch + `completeOnboarding`),
+  `client/src/components/onboarding/StaplesChecklist.jsx` (delegate completion to `onComplete` prop),
+  `client/src/components/layout/AppLayout.jsx` (lifted `mobileNavOpen`, mounts `OnboardingGate`),
+  `client/src/components/layout/Sidebar.jsx` (controlled-component conversion + `data-tour` attrs),
+  `client/src/pages/PantryPage.jsx` (removed superseded onboarding gating), `client/package.json` (added
+  `driver.js`).
+- **Deleted**: `client/src/pages/LoginPage.jsx`.
+
+Committed as `c10afba` on `staging`, then fast-forward merged and pushed to `main`.
 
 # Decisions Made
 
-- **Clerk Organizations declined** in favor of the lighter-weight approach this spec takes (discussed with
-  the user directly; Clerk Organizations would have meant migrating `households`/`householdMembers`/the
-  join-code system onto Clerk's own org/invitation model — real infrastructure change, not just onboarding
-  UI, and not needed for the actual ask).
-- **Onboarding state**: new `user_onboarding` table keyed by Clerk user ID (not household ID — household
-  owners and members live in two different existing tables, a per-user table avoids that asymmetry).
-  Row-absence means "predates this feature, already onboarded" (no retroactive onboarding), matching this
-  codebase's existing convention from `0003_onboarding_complete.sql`.
-- **Flow ordering**: Welcome → Tour → Checklist (checklist only for the `new_household` flow). This
-  ordering is also what makes the "don't mark onboarding complete until the tour actually finishes" fix
-  fall out naturally — driver.js's `onDestroyed` callback is the transition to the next step, not a
-  separate completion call racing `drive()`'s immediate return.
-- **Household naming**: included in v1 (user's explicit call, reversing the spec's own initial
-  recommendation to skip it) — folded into the existing Welcome step rather than adding a new state.
-- **Any household member may rename the household** (not owner-only) — decided by surveying this
-  codebase's actual permission model (no household mutation anywhere is gated by household-owner role;
-  the only "owner" check in the app, `viewerIsOwner`, is the single global *platform* administrator, an
-  unrelated concept), not by analogy to any one endpoint.
-- **Full guided tour on mobile**, not desktop-only — user's explicit call ("this app will most likely be
-  used on the phone"), reversing the spec's initial desktop-only recommendation. This required lifting the
-  sidebar's `mobileOpen` state out of `Sidebar.jsx` into `AppLayout.jsx` so the tour can hold it open
-  across all six nav steps.
-- **Dead-code cleanup bundled into this task**: `LoginPage.jsx`, the vestigial `users` table (pre-Clerk,
-  has `passwordHash`), and the dead `login`/`register` `AuthContext` stubs are deleted as part of TASK-040
-  rather than filed separately — confirmed via `grep` this session that nothing else references any of them.
-- **One-time tour only** for v1 — no "replay tour" affordance built.
+- All design decisions were made in the prior (spec) session — see that entry's own "Decisions Made" if
+  needed; nothing was re-litigated this session, the spec was implemented as approved.
+- **Found and fixed a real bug in the spec's own SQL** while applying `0018_user_onboarding.sql` to
+  staging: Neon's HTTP driver (`drizzle-orm/neon-http/migrator`) cannot run multiple SQL statements in one
+  call, and the migration's four statements (`CREATE TYPE` / `CREATE TABLE` / two `COMMENT ON`s) had no
+  `--> statement-breakpoint` separators between them — the spec's SQL block, copied verbatim, crashed the
+  server on boot (`NeonDbError: cannot insert multiple commands into a prepared statement`). Fixed by adding
+  breakpoints between each statement, matching the existing convention already used in
+  `0016_recipe_blocklist.sql`. The parse failure happens before execution, so nothing was partially applied;
+  safe to fix and retry.
+- **Deployed to production this session**, not held at staging — user's explicit call after reviewing what
+  the migration would do (confirmed understanding that `0019_drop_users.sql` is an irreversible `DROP TABLE`
+  against the live database, empty/unused table, already grep-confirmed zero references).
 
-# Known Risks (recorded in TASK-040-spec.md; none resolved this session, all for the implementing session to carry forward)
+# Known Risks (carried forward from the spec; still unverified — none resolved this session)
 
-- **Pre-existing, unrelated to TASK-040**: `server/db/migrations/0017_platform_settings.sql` exists on disk
-  but has no entry in `server/db/migrations/meta/_journal.json` — discovered while checking TASK-040's own
-  migration numbering (which is why TASK-040's new migration is `0018`, not `0017`). Not investigated
-  further or fixed this session — worth checking directly (Neon console, or query for the table) before
-  TASK-040 ships, since it's unclear whether `drizzle-kit migrate` would ever (re-)apply it from the journal.
 - Whether a driver.js-highlighted nav item remains tappable mid-tour was not verified against driver.js's
-  actual behavior (unlike `onDestroyed`, which was checked directly) — worth confirming during
-  implementation, since tapping a highlighted item on mobile could navigate away mid-tour.
+  actual behavior — worth checking during the user's production walkthrough, since tapping a highlighted
+  item on mobile could navigate away mid-tour.
 - Mobile orientation changes mid-tour are explicitly unsupported (accepted, not engineered around).
 - A narrow, accepted edge case around household-rename propagation to already-mounted client state — see
-  spec's Design Part B for the full reasoning on why this wasn't built out further.
+  spec's Design Part B.
+- `server/db/migrations/0017_platform_settings.sql`'s pre-existing, unrelated journal gap (flagged in the
+  spec) — not investigated or fixed this session either; still worth checking directly against Neon before
+  it causes confusion in some future migration.
+
+# Separately flagged (not part of TASK-040, spun off this session)
+
+Three components (`client/src/components/pantry/ReceiptUpload.jsx`,
+`client/src/components/recipes/RecipeUrlImport.jsx`, `.../RecipeUpload.jsx`) redirect to `/login` on a
+401 — a route that has never existed post-Clerk-migration (should be `/sign-in`, matching
+`client/src/api/index.js`'s own 401 handler). A fourth file, `client/src/components/layout/ProtectedRoute.jsx`,
+has the same bug but is entirely dead code (zero importers). Pre-existing, unrelated to this session's
+`LoginPage.jsx` deletion (these reference the URL string, not the component) — spun off as its own
+background task (`task_8893cd9f`) rather than fixed inline, to avoid scope creep into TASK-040.
 
 # Files Required Next
 
-Everything in `TASK-040-spec.md`'s Design, Parts A–E — implementation hasn't started:
-
-- **Part A** (backend plumbing): `server/db/migrations/0018_user_onboarding.sql`, `server/db/schema.js`
-  (`userOnboarding` table + `onboardingFlowEnum`), new `server/services/onboardingService.js`, two call
-  sites added to `server/services/householdService.js`, new `server/routes/onboarding.js` + mount in
-  `server/app.js`.
-- **Part B** (client gate + household naming): `client/src/context/AuthContext.jsx` rewrite, new
-  `client/src/components/onboarding/OnboardingGate.jsx` and `WelcomeStep.jsx`, `AppLayout.jsx` and
-  `Sidebar.jsx` changes (lifted `mobileOpen` state), `PantryPage.jsx` cleanup, new `PATCH /api/household`
-  route + `householdService.updateName`.
-- **Part C**: one-line change to the already-built `StaplesChecklist.jsx` (remove its own
-  `completeOnboarding()` call).
-- **Part D** (tour): add `driver.js` dependency, new `client/src/components/onboarding/productTour.js`,
-  `data-tour` attributes on `Sidebar.jsx` nav links.
-- **Part E** (cleanup): delete `LoginPage.jsx`, new `server/db/migrations/0019_drop_users.sql`, remove
-  `users` export from `schema.js`.
-
-Implementation should follow the spec's own Verification Steps (13 of them) closely — several encode
-non-obvious behavior (exact completion timing, which dismiss paths do/don't persist, mobile sidebar
-lifecycle around the tour) that would be easy to get subtly wrong without them.
+None for TASK-040 itself — implementation is complete. Only remaining step is the user's own interactive
+verification pass on production (spec's 13 Verification Steps), which requires their own Clerk sign-in.
 
 # Recommended Next Action
 
-Implement TASK-040 per the spec. Part A has no dependents outside itself and is the natural starting point;
-Parts B–D depend on it (the client fetches `/api/onboarding`, which needs Part A's route to exist). Part E
-is independent and can go first, last, or interleaved. Follow `CONVENTIONS.md`'s canonical migration order
-(apply `0018`/`0019` to the `staging` Neon branch first, verify there, then production, then merge to
-`main`). Run `npm test` / `npm run lint` / `npm run build` before considering it done — none were run this
-session since no code changed.
+Once the user's production walkthrough confirms the flow works end-to-end, TASK-040 can be considered fully
+closed — no further action needed beyond that confirmation. If the walkthrough surfaces anything (e.g. the
+mobile-tappable-nav-item risk above), triage as a fix commit on `staging` first, per the usual
+staging-then-production order.
 
 # Context Notes
 
-- branch: `staging` (this session's only change — `ai/tasks/TASK-040-spec.md` — was authored and will be
-  committed directly on `staging`, no code changes, nothing to build/test/lint this session)
+- branch: `staging` (working branch restored here after the `main` merge/push completed)
+- `main` and `staging` are both at `c10afba` as of this session — in sync, no drift.
 - worktree: none
 - `.claude/settings.local.json` has local uncommitted changes (permission-prompt settings) unrelated to
-  this session's work — left as-is, not part of this commit.
+  this session's work — left as-is, not part of any commit this session.
