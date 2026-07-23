@@ -1,16 +1,12 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { usePantry } from '../hooks/usePantry.js';
 import PantryTable from '../components/pantry/PantryTable.jsx';
 import AddItemModal from '../components/pantry/AddItemModal.jsx';
 import SplitItemModal from '../components/pantry/SplitItemModal.jsx';
 import ReceiptUpload from '../components/pantry/ReceiptUpload.jsx';
-import { fetchProductByBarcode } from '../utils/openFoodFacts.js';
 import PushNotificationBanner from '../components/push/PushNotificationBanner.jsx';
-
-const BarcodeScanner = lazy(
-  () => import('../components/pantry/BarcodeScanner.jsx')
-);
+import PageHeader from '../components/layout/PageHeader.jsx';
 
 export default function PantryPage() {
   const {
@@ -27,45 +23,6 @@ export default function PantryPage() {
   const [modalItem, setModalItem] = useState(undefined); // undefined = closed, null = add, item = edit
   const [splitModalItem, setSplitModalItem] = useState(null); // null = closed, item = open
   const [showReceiptUpload, setShowReceiptUpload] = useState(false);
-  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
-  const [barcodePrefill, setBarcodePrefill] = useState(null);
-  const fetchAbortRef = useRef(null);
-
-  useEffect(() => {
-    return () => fetchAbortRef.current?.abort();
-  }, []);
-
-  const handleBarcodeDetected = async (barcode) => {
-    setShowBarcodeScanner(false);
-
-    const controller = new AbortController();
-    fetchAbortRef.current = controller;
-
-    try {
-      const product = await fetchProductByBarcode(barcode, {
-        signal: controller.signal,
-      });
-      if (!product) {
-        toast('Product not found — enter details manually', { icon: '⚠️' });
-        setBarcodePrefill(null);
-      } else {
-        setBarcodePrefill({ name: product.name, category: product.category });
-      }
-      setModalItem(null);
-    } catch (err) {
-      if (err.name === 'AbortError') return;
-      toast.error('Could not look up product — enter details manually');
-      setBarcodePrefill(null);
-      setModalItem(null);
-    } finally {
-      fetchAbortRef.current = null;
-    }
-  };
-
-  const handleScannerError = () => {
-    setShowBarcodeScanner(false);
-    toast.error('Camera access denied — check browser permissions');
-  };
 
   const handleSave = async (body) => {
     if (modalItem) {
@@ -120,34 +77,29 @@ export default function PantryPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Pantry</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {items.length} {items.length === 1 ? 'item' : 'items'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowReceiptUpload(true)}
-            className="px-4 py-2 bg-white text-orange-600 text-sm font-medium rounded-md border border-orange-300 hover:bg-orange-50 transition-colors shadow-sm"
-          >
-            📷 Scan receipt
-          </button>
-          <button
-            onClick={() => setShowBarcodeScanner(true)}
-            className="px-4 py-2 bg-white text-orange-600 text-sm font-medium rounded-md border border-orange-300 hover:bg-orange-50 transition-colors shadow-sm"
-          >
-            Scan barcode
-          </button>
-          <button
-            onClick={() => setModalItem(null)}
-            className="px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-md hover:bg-orange-600 transition-colors shadow-sm"
-          >
-            + Add item
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Pantry"
+        subtitle={`${items.length} ${items.length === 1 ? 'item' : 'items'}`}
+        className="mb-6"
+        actions={
+          <>
+            <button
+              onClick={() => setShowReceiptUpload(true)}
+              data-tour="scan-receipt"
+              className="px-4 py-2 bg-white text-orange-600 text-sm font-medium rounded-md border border-orange-300 hover:bg-orange-50 transition-colors shadow-sm"
+            >
+              📷 Scan receipt
+            </button>
+            <button
+              onClick={() => setModalItem(null)}
+              data-tour="add-item"
+              className="px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-md hover:bg-orange-600 transition-colors shadow-sm"
+            >
+              + Add item
+            </button>
+          </>
+        }
+      />
 
       <PushNotificationBanner />
 
@@ -229,23 +181,9 @@ export default function PantryPage() {
       {modalItem !== undefined && (
         <AddItemModal
           item={modalItem || undefined}
-          prefill={modalItem === null ? barcodePrefill : undefined}
-          onClose={() => {
-            setModalItem(undefined);
-            setBarcodePrefill(null);
-          }}
+          onClose={() => setModalItem(undefined)}
           onSave={handleSave}
         />
-      )}
-
-      {showBarcodeScanner && (
-        <Suspense fallback={null}>
-          <BarcodeScanner
-            onDetected={handleBarcodeDetected}
-            onClose={() => setShowBarcodeScanner(false)}
-            onError={handleScannerError}
-          />
-        </Suspense>
       )}
 
       {showReceiptUpload && (

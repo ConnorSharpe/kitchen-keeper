@@ -5,6 +5,7 @@ import { api } from '../api/index.js';
 import toast from 'react-hot-toast';
 import { useSpeechInput } from '../hooks/useSpeechInput.js';
 import { useRecipeBlocklist } from '../hooks/useRecipeBlocklist.js';
+import PageHeader from '../components/layout/PageHeader.jsx';
 
 // Round to max 2 decimal places, strip trailing zeros
 function formatQty(n) {
@@ -28,6 +29,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [savedRecipeNames, setSavedRecipeNames] = useState(new Set());
+  const [showCapabilities, setShowCapabilities] = useState(false);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
   const { addBlock } = useRecipeBlocklist();
@@ -162,11 +164,60 @@ export default function ChatPage() {
     <div className="h-screen flex flex-col">
       {/* ── Header ── */}
       <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 bg-white">
-        <h1 className="text-lg font-semibold text-gray-800">Kitchen Keeper</h1>
-        <p className="text-xs text-gray-500 mt-0.5">
-          Ask anything about your kitchen, ingredients, or recipes.
-        </p>
+        <PageHeader
+          title="Kitchen Keeper"
+          subtitle="Ask anything about your kitchen, ingredients, or recipes."
+          actions={
+            <button
+              onClick={() => setShowCapabilities(true)}
+              className="w-7 h-7 rounded-full border border-gray-200 text-gray-400 hover:text-gray-700 hover:border-gray-300 flex items-center justify-center text-sm transition-colors"
+              aria-label="What can the assistant do?"
+              title="What can the assistant do?"
+            >
+              ⓘ
+            </button>
+          }
+        />
       </div>
+
+      {showCapabilities && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setShowCapabilities(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <h2 className="text-lg font-semibold text-gray-900">
+                What can Kitchen Keeper do?
+              </h2>
+              <button
+                onClick={() => setShowCapabilities(false)}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Ask it to add, update, or remove pantry items just by describing
+              them in plain language, or to log what you&apos;ve eaten or used
+              up. Ask what to cook and it&apos;ll suggest recipes from what&apos;s
+              already in your pantry — prioritizing what&apos;s expiring soon —
+              and you can save any suggestion straight to your recipe book.
+              Suggestions always account for your household&apos;s dietary
+              profile and flag allergy conflicts.
+            </p>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Receipt scanning, recipe-photo import, and importing recipes
+              from a URL are separate tools elsewhere in the app — the chat
+              assistant itself can&apos;t do those.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Message list ── */}
       {/* min-h-0 is required: flex children default to min-height:auto which

@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { useShopping } from '../hooks/useShopping.js';
 import BuildListModal from '../components/shopping/BuildListModal.jsx';
 import ShoppingList from '../components/shopping/ShoppingList.jsx';
+import PageHeader from '../components/layout/PageHeader.jsx';
 
 export default function ShoppingPage() {
   const { lists, loading, fetchLists, buildList, removeList } = useShopping();
@@ -47,20 +48,19 @@ export default function ShoppingPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Page header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Shopping Lists</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Built from your saved recipes, cross-referenced with your pantry.
-          </p>
-        </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 shadow-sm"
-        >
-          <span aria-hidden>+</span> Build List
-        </button>
-      </div>
+      <PageHeader
+        title="Shopping Lists"
+        subtitle="Built from your saved recipes, cross-referenced with your pantry."
+        className="mb-6"
+        actions={
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 shadow-sm"
+          >
+            <span aria-hidden>+</span> Build List
+          </button>
+        }
+      />
 
       {loading ? (
         <div className="space-y-2 animate-pulse">

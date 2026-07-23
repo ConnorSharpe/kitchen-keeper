@@ -1,10 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { api } from '../api/index.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import DietaryProfileForm from '../components/settings/DietaryProfileForm.jsx';
+import PageHeader from '../components/layout/PageHeader.jsx';
 
 export default function HouseholdPage() {
   const { user } = useAuth();
+  // OnboardingPreview itself is mounted at AppLayout (not here) — the tour it
+  // drives navigates across routes, which would unmount a page-rooted
+  // instance mid-tour. setPreviewFlow lives there too; this page just
+  // triggers it.
+  const { setPreviewFlow } = useOutletContext();
   const [household, setHousehold] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -187,7 +194,7 @@ export default function HouseholdPage() {
 
   return (
     <div className="max-w-lg mx-auto px-4 py-8 space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">{household?.name}</h1>
+      <PageHeader title={household?.name} />
 
       {/* Join code card */}
       <section className="bg-orange-50 border border-orange-200 rounded-2xl p-6">
@@ -247,6 +254,35 @@ export default function HouseholdPage() {
             ))}
           </ul>
         )}
+      </section>
+
+      {/* Preview onboarding — side-effect-free replay of the Welcome/Tour/
+          Checklist flow, for testing only. Never touches user_onboarding,
+          never renames the household for real, never inserts real pantry
+          items. Visible to any member, matching this app's fully-shared
+          household model. */}
+      <section className="bg-white border border-gray-200 rounded-2xl p-6">
+        <h2 className="text-base font-semibold text-gray-800 mb-1">
+          Preview onboarding
+        </h2>
+        <p className="text-xs text-gray-500 mb-4">
+          Replay the first-run tour without affecting your real household,
+          pantry, or onboarding status.
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setPreviewFlow('new_household')}
+            className="flex-1 py-2 px-4 border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium rounded-lg transition-colors text-sm"
+          >
+            Preview: new household
+          </button>
+          <button
+            onClick={() => setPreviewFlow('joined')}
+            className="flex-1 py-2 px-4 border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium rounded-lg transition-colors text-sm"
+          >
+            Preview: joined household
+          </button>
+        </div>
       </section>
 
       {/* Invite by email */}

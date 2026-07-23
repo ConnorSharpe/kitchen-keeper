@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { api } from '../../api/index.js';
 
 const STAPLES = [
   {
@@ -43,7 +42,7 @@ const ALL_STAPLES = STAPLES.flatMap(({ category, items }) =>
   items.map((name) => ({ name, category }))
 );
 
-export default function StaplesChecklist({ onComplete, onDismiss }) {
+export default function StaplesChecklist({ onComplete, onDismiss, onAddItems }) {
   const [selected, setSelected] = useState(new Set());
   const [submitting, setSubmitting] = useState(false);
   // 'idle' | 'error' — explicit state machine; session-scoped dismissal lives in PantryPage
@@ -65,7 +64,7 @@ export default function StaplesChecklist({ onComplete, onDismiss }) {
     try {
       if (selected.size > 0) {
         const items = ALL_STAPLES.filter(({ name }) => selected.has(name));
-        await api.post('/api/pantry/bulk', { items });
+        await onAddItems(items);
       }
       await onComplete(); // OnboardingGate.handleFinish — commits onboarding complete server-side
     } catch {

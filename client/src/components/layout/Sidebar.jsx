@@ -125,7 +125,9 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
 
   return (
     <>
-      {/* Hamburger button — mobile only, shown when sidebar is closed */}
+      {/* Hamburger button — mobile only, shown when sidebar is closed.
+          PageHeader.jsx's `pl-12` clears this button's ~36px width — keep in
+          sync if this button's size or position ever changes. */}
       <button
         className="md:hidden fixed top-3 left-3 z-50 p-2 rounded-md bg-white border border-gray-200 shadow-sm text-gray-600 hover:text-gray-900"
         onClick={() => setMobileOpen(true)}

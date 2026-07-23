@@ -1,14 +1,17 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { api } from '../../api/index.js';
 import WelcomeStep from './WelcomeStep.jsx';
 import StaplesChecklist from './StaplesChecklist.jsx';
 import { runProductTour } from './productTour.js';
 
 // setMobileNavOpen is threaded down from AppLayout — the mobile tour needs to
-// force the slide-in sidebar open across all six nav steps, so its
-// open/closed state can no longer live only inside Sidebar.jsx.
+// force the slide-in sidebar open/closed across all twelve tour steps, so
+// its open/closed state can no longer live only inside Sidebar.jsx.
 export default function OnboardingGate({ setMobileNavOpen }) {
   const { onboarding, completeOnboarding } = useAuth();
+  const navigate = useNavigate();
   const [dismissed, setDismissed] = useState(false); // session-only
   const [step, setStep] = useState('welcome'); // 'welcome' | 'tour' | 'checklist'
 
@@ -28,6 +31,20 @@ export default function OnboardingGate({ setMobileNavOpen }) {
     }
   }
 
+  // Real save — WelcomeStep awaits this and drives its own submitting/error
+  // UI around it. OnboardingPreview (Household-page replay) supplies a NOOP
+  // instead, so the same component works for both real onboarding and a
+  // side-effect-free preview.
+  async function saveHouseholdName(trimmedName) {
+    await api.patch('/api/household', { name: trimmedName });
+  }
+
+  // Real save — StaplesChecklist awaits this the same way. OnboardingPreview
+  // supplies a NOOP.
+  async function addItems(items) {
+    await api.post('/api/pantry/bulk', { items });
+  }
+
   function startTour() {
     setStep('tour');
     runProductTour(
@@ -39,7 +56,7 @@ export default function OnboardingGate({ setMobileNavOpen }) {
           handleFinish();
         }
       },
-      { setMobileNavOpen }
+      { setMobileNavOpen, navigate }
     );
   }
 
@@ -49,13 +66,18 @@ export default function OnboardingGate({ setMobileNavOpen }) {
         flow={onboarding.flow}
         onContinue={startTour}
         onDismiss={() => setDismissed(true)}
+        onSaveHouseholdName={saveHouseholdName}
       />
     );
   }
 
   if (step === 'checklist') {
     return (
-      <StaplesChecklist onComplete={handleFinish} onDismiss={() => setDismissed(true)} />
+      <StaplesChecklist
+        onComplete={handleFinish}
+        onDismiss={() => setDismissed(true)}
+        onAddItems={addItems}
+      />
     );
   }
 

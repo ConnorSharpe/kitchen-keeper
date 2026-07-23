@@ -1,8 +1,12 @@
 import { useState, useRef } from 'react';
-import { api } from '../../api/index.js';
 
-export default function WelcomeStep({ flow, onContinue, onDismiss }) {
+// allowNaming lets a caller disable the household-naming step outright
+// (rather than relying on `flow` alone) — OnboardingPreview sets it false so
+// replaying the tour never shows a naming field for a rename that,
+// deliberately, never saves.
+export default function WelcomeStep({ flow, onContinue, onDismiss, onSaveHouseholdName, allowNaming = true }) {
   const joined = flow === 'joined';
+  const showNaming = !joined && allowNaming;
   const [name, setName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -18,14 +22,14 @@ export default function WelcomeStep({ flow, onContinue, onDismiss }) {
     startedRef.current = true;
 
     const trimmed = name.trim();
-    if (joined || !trimmed) {
-      onContinue(); // joined flow, or the name field was left blank — keep the default household name
+    if (!showNaming || !trimmed) {
+      onContinue(); // naming disabled/joined flow, or the name field was left blank — keep the default household name
       return;
     }
     setSubmitting(true);
     setError('');
     try {
-      await api.patch('/api/household', { name: trimmed });
+      await onSaveHouseholdName(trimmed);
       onContinue();
     } catch (err) {
       // Matches StaplesChecklist's own save-failure pattern: show the error
@@ -52,7 +56,7 @@ export default function WelcomeStep({ flow, onContinue, onDismiss }) {
             : 'Track your pantry, save recipes, and get AI meal suggestions from what you already have.'}
         </p>
 
-        {!joined && (
+        {showNaming && (
           <div className="text-left">
             <label className="block text-xs font-medium text-gray-500 mb-1">
               Name your household (optional)

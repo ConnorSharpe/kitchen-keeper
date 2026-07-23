@@ -34,7 +34,9 @@ export default function RecipeUrlImport({
       });
 
       if (res.status === 401) {
-        window.location.href = '/login';
+        if (!window.location.pathname.startsWith('/sign-in')) {
+          window.location.href = '/sign-in';
+        }
         return;
       }
 

@@ -125,8 +125,6 @@ export default function RecipeUpload({ onExtracted, onClose }) {
   const [errorMsg, setErrorMsg] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const cameraInputRef = useRef(null);
-  const libraryInputRef = useRef(null);
   const abortRef = useRef(null);
 
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -177,7 +175,9 @@ export default function RecipeUpload({ onExtracted, onClose }) {
       });
 
       if (res.status === 401) {
-        window.location.href = '/login';
+        if (!window.location.pathname.startsWith('/sign-in')) {
+          window.location.href = '/sign-in';
+        }
         return;
       }
 
@@ -252,15 +252,15 @@ export default function RecipeUpload({ onExtracted, onClose }) {
         {phase === 'idle' && (
           <div>
             {!isMobile && (
-              <div
+              <label
+                htmlFor="recipe-upload-library-input"
                 onDragOver={(e) => {
                   e.preventDefault();
                   setDragOver(true);
                 }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={handleDrop}
-                onClick={() => libraryInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors ${
+                className={`block border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors ${
                   dragOver
                     ? 'border-orange-400 bg-orange-50'
                     : 'border-gray-300 hover:border-orange-300 hover:bg-gray-50'
@@ -273,7 +273,14 @@ export default function RecipeUpload({ onExtracted, onClose }) {
                 <p className="text-xs text-gray-400 mt-1">
                   JPEG, PNG, WebP or HEIC — max 10 MB
                 </p>
-              </div>
+                <input
+                  id="recipe-upload-library-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="sr-only"
+                />
+              </label>
             )}
 
             {isMobile && (
@@ -283,40 +290,39 @@ export default function RecipeUpload({ onExtracted, onClose }) {
                   Add a recipe photo
                 </p>
                 <div className="flex gap-3 w-full">
-                  <button
-                    onClick={() => cameraInputRef.current?.click()}
-                    className="flex-1 py-2.5 px-3 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                  <input
+                    id="recipe-upload-camera-input"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleFileChange}
+                    className="sr-only"
+                  />
+                  <label
+                    htmlFor="recipe-upload-camera-input"
+                    className="flex-1 py-2.5 px-3 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors text-center cursor-pointer"
                   >
                     📷 Take Photo
-                  </button>
-                  <button
-                    onClick={() => libraryInputRef.current?.click()}
-                    className="flex-1 py-2.5 px-3 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                  </label>
+                  <input
+                    id="recipe-upload-library-input"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="sr-only"
+                  />
+                  <label
+                    htmlFor="recipe-upload-library-input"
+                    className="flex-1 py-2.5 px-3 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors text-center cursor-pointer"
                   >
                     🖼️ Choose from Library
-                  </button>
+                  </label>
                 </div>
                 <p className="text-xs text-gray-400">
                   JPEG, PNG, WebP or HEIC — max 10 MB
                 </p>
               </div>
             )}
-
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-            <input
-              ref={libraryInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              className="hidden"
-            />
           </div>
         )}
 

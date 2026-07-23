@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import {
   STORAGE_LOCATIONS,
@@ -20,8 +20,6 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
   const [skipped, setSkipped] = useState(0);
   const [dragOver, setDragOver] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const cameraInputRef = useRef(null);
-  const libraryInputRef = useRef(null);
 
   useEffect(() => {
     setIsMobile(
@@ -42,7 +40,9 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
       });
 
       if (res.status === 401) {
-        window.location.href = '/login';
+        if (!window.location.pathname.startsWith('/sign-in')) {
+          window.location.href = '/sign-in';
+        }
         return;
       }
 
@@ -164,15 +164,15 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
         {phase === 'upload' && (
           <div>
             {!isMobile && (
-              <div
+              <label
+                htmlFor="receipt-upload-library-input"
                 onDragOver={(e) => {
                   e.preventDefault();
                   setDragOver(true);
                 }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={handleDrop}
-                onClick={() => libraryInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors ${
+                className={`block border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors ${
                   dragOver
                     ? 'border-orange-400 bg-orange-50'
                     : 'border-gray-300 hover:border-orange-300 hover:bg-gray-50'
@@ -185,7 +185,14 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
                 <p className="text-xs text-gray-400 mt-1">
                   JPEG, PNG, WebP or HEIC — max 10 MB
                 </p>
-              </div>
+                <input
+                  id="receipt-upload-library-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="sr-only"
+                />
+              </label>
             )}
 
             {isMobile && (
@@ -195,40 +202,39 @@ export default function ReceiptUpload({ onClose, onItemsAdded }) {
                   Add a receipt photo
                 </p>
                 <div className="flex gap-3 w-full">
-                  <button
-                    onClick={() => cameraInputRef.current?.click()}
-                    className="flex-1 py-2.5 px-3 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                  <input
+                    id="receipt-upload-camera-input"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleFileChange}
+                    className="sr-only"
+                  />
+                  <label
+                    htmlFor="receipt-upload-camera-input"
+                    className="flex-1 py-2.5 px-3 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors text-center cursor-pointer"
                   >
                     📷 Take Photo
-                  </button>
-                  <button
-                    onClick={() => libraryInputRef.current?.click()}
-                    className="flex-1 py-2.5 px-3 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                  </label>
+                  <input
+                    id="receipt-upload-library-input"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="sr-only"
+                  />
+                  <label
+                    htmlFor="receipt-upload-library-input"
+                    className="flex-1 py-2.5 px-3 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors text-center cursor-pointer"
                   >
                     🖼️ Choose from Library
-                  </button>
+                  </label>
                 </div>
                 <p className="text-xs text-gray-400">
                   JPEG, PNG, WebP or HEIC — max 10 MB
                 </p>
               </div>
             )}
-
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-            <input
-              ref={libraryInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              className="hidden"
-            />
           </div>
         )}
 

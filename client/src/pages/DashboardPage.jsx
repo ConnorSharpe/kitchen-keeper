@@ -1,16 +1,15 @@
 import ExpiryStrip from '../components/dashboard/ExpiryStrip.jsx';
 import EatThisNow from '../components/dashboard/EatThisNow.jsx';
 import QuickAdd from '../components/dashboard/QuickAdd.jsx';
+import PageHeader from '../components/layout/PageHeader.jsx';
 
 export default function DashboardPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          What&apos;s expiring soon and what you can make tonight
-        </p>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        subtitle="What's expiring soon and what you can make tonight"
+      />
 
       {/* Zone 1: Items expiring within 7 days, sorted most urgent first */}
       <section aria-labelledby="expiry-heading">

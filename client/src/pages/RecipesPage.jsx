@@ -9,6 +9,7 @@ import RecipeUpload from '../components/recipes/RecipeUpload.jsx';
 import RecipeUrlImport from '../components/recipes/RecipeUrlImport.jsx';
 import RecipeReviewModal from '../components/recipes/RecipeReviewModal.jsx';
 import BlockedRecipesModal from '../components/recipes/BlockedRecipesModal.jsx';
+import PageHeader from '../components/layout/PageHeader.jsx';
 
 // Web suggestion card — ephemeral until saved by user
 function WebSuggestionCard({ suggestion, onSave, isSaving, onBlock }) {
@@ -288,66 +289,67 @@ export default function RecipesPage() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Recipes</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {recipes.length} saved recipe{recipes.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={handleOpenBlocklist}
-            className="text-sm px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            🚫 Blocked Recipes
-          </button>
-          <button
-            onClick={() => setShowUpload(true)}
-            className="text-sm px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            📸 Upload Recipe Image
-          </button>
-          <button
-            onClick={() => setShowUrlImport(true)}
-            className="text-sm px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            🔗 Import from URL
-          </button>
-          <button
-            onClick={handleFindOnline}
-            disabled={webLoading}
-            className="text-sm px-3 py-2 rounded-md bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 transition-colors flex items-center gap-2"
-          >
-            {webLoading ? (
-              <>
-                <svg
-                  className="animate-spin h-4 w-4"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8v8H4z"
-                  />
-                </svg>
-                Searching…
-              </>
-            ) : (
-              '🔍 Find Recipes Online'
-            )}
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Recipes"
+        subtitle={`${recipes.length} saved recipe${recipes.length !== 1 ? 's' : ''}`}
+        actions={
+          <>
+            <button
+              onClick={handleOpenBlocklist}
+              className="text-sm px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              🚫 Blocked Recipes
+            </button>
+            <button
+              onClick={() => setShowUpload(true)}
+              data-tour="upload-recipe-image"
+              className="text-sm px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              📸 Upload Recipe Image
+            </button>
+            <button
+              onClick={() => setShowUrlImport(true)}
+              data-tour="import-recipe-url"
+              className="text-sm px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              🔗 Import from URL
+            </button>
+            <button
+              onClick={handleFindOnline}
+              disabled={webLoading}
+              data-tour="find-recipes-online"
+              className="text-sm px-3 py-2 rounded-md bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 transition-colors flex items-center gap-2"
+            >
+              {webLoading ? (
+                <>
+                  <svg
+                    className="animate-spin h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v8H4z"
+                    />
+                  </svg>
+                  Searching…
+                </>
+              ) : (
+                '🔍 Find Recipes Online'
+              )}
+            </button>
+          </>
+        }
+      />
 
       {/* Web suggestions panel */}
       {webSuggestions.length > 0 && (
