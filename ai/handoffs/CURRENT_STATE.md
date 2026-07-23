@@ -265,12 +265,14 @@ production` (env var changes don't apply to already-built deployments). Verified
 and `/api/admin/platform-settings` now returns `200` for Connor's real production session.
 
 **Decision 2 — OpenAI billing: publicAiAccessEnabled confirmed false in production, prepaid/auto-recharge
-status still unconfirmed.** Now that the owner route is reachable, confirmed live: `{"publicAiAccessEnabled":
-false, "aiRateLimitMax": 20}` — the safety-critical flag is correctly off. **Still open**: TASK-037's original
-requirement was switching the OpenAI org to prepaid credits with auto-recharge off, *confirmed* (not just
-recommended) before this flag is ever set to `true`. That's an OpenAI dashboard setting outside any tool
-available this session — needs Connor to check directly and report back. Do not flip `publicAiAccessEnabled`
-to `true` in production until that's confirmed.
+status deliberately left open by Connor.** Now that the owner route is reachable, confirmed live:
+`{"publicAiAccessEnabled": false, "aiRateLimitMax": 20}` — the safety-critical flag is correctly off, so
+there's no live spend exposure today. **Still open, by Connor's explicit choice this session** (asked
+directly, he said "leave it open" rather than check now): TASK-037's original requirement was switching the
+OpenAI org to prepaid credits with auto-recharge off, *confirmed* (not just recommended) before this flag is
+ever set to `true`. That's an OpenAI dashboard setting outside any tool available this session. **Standing
+invariant, unchanged: do not flip `publicAiAccessEnabled` to `true` in production until the prepaid/
+auto-recharge status is actually confirmed** — this isn't a completed decision, just a deferred one.
 
 # Testing Walkthrough (next session — do this interactively with Connor)
 
