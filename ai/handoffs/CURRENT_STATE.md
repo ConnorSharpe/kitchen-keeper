@@ -1,119 +1,106 @@
 # Task
 
-Implementation session for TASK-041 — 12-step tour expansion to page-level action buttons, side-effect-free
-onboarding-tour replay from the Household page, mobile hamburger/title overlap fix, iOS redundant
-camera-picker fix, a Chat capabilities info icon, and a dead-code sweep closing out `task_8893cd9f`. Built
-from `ai/tasks/TASK-041-spec.md` DRAFT-3 (approved for implementation, written in the prior session), Design
-Parts A–F in order, per that spec's own Recommended Next Action. Followed by two small user-requested
-follow-ups after hands-on verification.
+Audit session, not an implementation session. Connor asked Claude to review the whole project for
+public-launch readiness — security flaws exploitable from either the app or the repo, friction once real
+users start using it, and whether Android users are actually shut out of installing the app (they aren't).
+Findings were verified directly (code reading, `npm audit` across all three workspaces, a full git-history
+secret scan, and a live console check against production `kitchenkeeper.kitchen`), not assumed, and backed
+by web research where relevant. Connor then asked for a spec addressing every "needs action" and "friction"
+finding, which went through two rounds of the usual GPT-architect-review workflow to approval.
 
 # Current Status
 
-**Implemented, hands-on verified against the user's own real account (not just lint/test/build), and
-deployed to both `staging` and `main`/production.** All six spec parts are done and match the spec's file
-list exactly:
+**Spec approved, zero implementation code touched this session.** `ai/tasks/TASK-042-spec.md` is at
+DRAFT-3, **APPROVED FOR IMPLEMENTATION**, after two review rounds (9.7/10 → 9.95/10). Ready for the next
+implementation session to pick up.
 
-- Part A (12-step interleaved tour, cross-route advancement) ✅
-- Part B (Household-page replay preview) ✅
-- Part C (shared `PageHeader`, mobile offset) ✅
-- Part D (iOS camera-picker fix) ✅
-- Part E (Chat info icon) ✅
-- Part F (dead-code sweep) ✅
+TASK-042 bundles seven parts, split into two completion tiers so physical-device/dashboard-access
+availability doesn't block the code-level work:
 
-`npm run lint`, `npm test` (96/96 passing), and `npm run build` all pass clean.
+- **Implementation Complete** (no hardware/dashboard dependency):
+  - Part A — pin exact dependency versions (not `npm audit fix`) via direct-dependency bumps plus a new
+    `overrides` block for transitive packages, verified against a real `npm audit fix --dry-run` run in both
+    `server/` and `client/` this session (confirmed via `git status` that the dry run touched nothing).
+  - Part B — remove six dead dependencies (`@clerk/nextjs`, `@clerk/react`, `jsonwebtoken`, `bcrypt`, `uuid`,
+    `cookie-parser`) and the deprecated `server/middleware/auth.js`, all proven dead via grep (static and
+    dynamic imports both checked).
+  - Part C — rate-limit `/api/household/join` via a new shared `createRateLimiter()` factory, refactoring
+    `aiRateLimit.js` to use it too (behavior-preserving; `aiRateLimitKeyGenerator.js` and its test untouched).
+  - Part E — README accuracy pass (stale JWT-auth description, dead `INVITE_CODE` references).
+  - Part F — structured request-ID/timing diagnostics around the intermittent `GET /api/household/members`
+    500 first flagged in TASK-041's handoff (observability only, not a speculative fix — it's never been
+    reproduced).
+- **Release Validation Complete** (needs Connor + physical hardware, tracked separately so it doesn't block
+  Implementation Complete):
+  - Part D — confirm two external prerequisites first flagged by TASK-037 and never confirmed done since:
+    Clerk Dashboard sign-up posture (email verification / bot protection / waitlist), and OpenAI org billing
+    switched to prepaid credits with auto-recharge off before `public_ai_access_enabled` is ever flipped
+    `true` in production.
+  - Part G — real-device verification: iOS camera-picker fix (TASK-041 Known Risk, still open), full
+    11-step tour walked on an actual mobile viewport (also still open from TASK-041), and an actual Android
+    "Add to Home Screen" install completed on a physical device.
 
-**Real bug found and fixed during hands-on verification** (not something lint/build/tests could catch):
-`OnboardingPreview` was originally mounted inside `HouseholdPage`, per the spec's own file list. Since the
-tour it drives navigates across routes, the first cross-route step unmounted `HouseholdPage` (and
-`OnboardingPreview` with it) — the tour's completion callback (advancing Welcome → Tour → Checklist) then
-fired against a stale, unmounted component instance, so the staples checklist silently never appeared after
-the last tour step. Fixed by lifting `OnboardingPreview` to `AppLayout` (a sibling of `<Outlet/>`, exactly
-where `OnboardingGate` already lives, for the same reason) — `previewFlow` state moved there too, passed
-down to `HouseholdPage` via `useOutletContext`. Re-verified the full 12-step tour end-to-end afterward; the
-checklist now appears correctly.
-
-**Two follow-up fixes, requested by the user after the above verification pass**:
-1. Household naming is now explicitly skippable during tour replay. `WelcomeStep.jsx` gained a new
-   `allowNaming` prop (default `true`); `OnboardingPreview.jsx` passes `allowNaming={false}` so replaying the
-   tour never shows a rename field for a name that deliberately never saves (robust — an explicit flag, not
-   inferred from `flow` or from which callback was injected).
-2. Removed the barcode-scanning feature entirely, at the user's explicit request after asking whether it
-   actually worked. It did (real camera scan via `html5-qrcode` + a live Open Food Facts lookup), but wasn't
-   judged worth keeping. Removed: the button and its state/handlers in `PantryPage.jsx`, the
-   `scan-barcode` tour step (tour is now **11 steps**, not 12), `BarcodeScanner.jsx` and `openFoodFacts.js`
-   (deleted outright, zero other importers), and the `html5-qrcode` dependency (`npm uninstall` — also
-   dropped the 335KB lazy-loaded chunk it shipped in).
+Explicitly out of scope (documented in the spec, not forgotten): upgrading `@vercel/blob` (0.27.3 → 2.6.1)
+and `drizzle-orm` (0.29.5 → 0.45.2) — both fix real vulnerabilities but are semver-major jumps into the
+storage/DB layers actively used in production, deliberately left for their own follow-up task rather than
+bundled into a dependency-cleanup task.
 
 # Files Created / Changed (this session)
 
-Matches `TASK-041-spec.md`'s Design Parts A–F file list, plus the two follow-ups above:
-
-- **New**: `client/src/components/layout/PageHeader.jsx`, `client/src/components/onboarding/OnboardingPreview.jsx`.
-- **Modified**: `client/src/components/onboarding/productTour.js` (12→11 steps after barcode removal),
-  `OnboardingGate.jsx`, `WelcomeStep.jsx` (`allowNaming` prop), `StaplesChecklist.jsx`,
-  `client/src/components/layout/AppLayout.jsx` (owns `previewFlow` now, not `HouseholdPage`), `Sidebar.jsx`
-  (paired comment), `client/src/pages/PantryPage.jsx` (new `data-tour` attrs, barcode code removed),
-  `RecipesPage.jsx` (new `data-tour` attrs), `ShoppingPage.jsx`, `DashboardPage.jsx`, `HouseholdPage.jsx`
-  (preview section + `useOutletContext`), `ChatPage.jsx` (info icon + modal),
-  `client/src/components/recipes/RecipeUpload.jsx` (label-based inputs + `/sign-in` fix),
-  `client/src/components/pantry/ReceiptUpload.jsx` (same), `client/src/components/recipes/RecipeUrlImport.jsx`
-  (`/sign-in` fix only), `client/package.json`/`package-lock.json` (dropped `html5-qrcode`).
-- **Deleted**: `client/src/components/layout/ProtectedRoute.jsx` (dead code, zero importers),
-  `client/src/components/pantry/BarcodeScanner.jsx`, `client/src/utils/openFoodFacts.js`.
-
-No server-side/migration changes this session — TASK-041 was entirely client-side.
-
-Committed as `390327e` on `staging`, then fast-forward merged and pushed to `main`.
+- **New**: `ai/tasks/TASK-042-spec.md` (DRAFT-3, approved).
+- **Modified**: `ai/handoffs/CURRENT_STATE.md` (this file).
+- No application code, dependencies, or lockfiles touched — the `npm audit fix --dry-run` runs used to
+  derive Part A's exact version targets were confirmed via `git status` to have modified nothing.
 
 # Decisions Made
 
-- All six parts' design decisions were made in the prior (spec) session — see `TASK-041-spec.md`'s own
-  "Decisions" section and Architect Review History table; nothing was re-litigated this session, the spec
-  was implemented as approved.
-- **The `OnboardingPreview` mount-location fix (above) deviates from the spec's literal file list**, which
-  named `HouseholdPage.jsx` as the sole new-UI location and didn't call out `AppLayout.jsx` for this part.
-  This was a correctness bug the spec's own design didn't anticipate — surfaced only by actually running the
-  tour, not by code review — so it was fixed directly rather than left broken to match the letter of an
-  approved-but-incomplete spec.
-- **Deployed to production this session**, not held at staging — same pattern as TASK-040: no schema/migration
-  risk (client-only change), lint/test/build clean, and this time also hands-on verified against a real
-  logged-in account (a stronger bar than TASK-040's health-check-only verification, since Claude has no
-  Clerk credentials of its own and relied on the user signing in this session).
+- Spec bundles seven parts under one task number rather than splitting into several, matching TASK-041's
+  precedent for a single session-driven audit with one shared motivation.
+- Major/breaking dependency upgrades (`@vercel/blob`, `drizzle-orm`, `drizzle-kit`, `vite`) deliberately kept
+  out of this spec's scope — see TASK-042-spec.md's own Out of Scope section for the full reasoning.
+- Two open decisions were left for Connor rather than guessed at during spec-writing (see TASK-042-spec.md's
+  "Decisions Needed From Connor"): the registration posture to configure in Clerk Dashboard (Part D), and
+  whether the join-code rate limit's starting threshold (10 attempts / 15 min / user) needs adjusting.
+- README's Live Demo line intentionally keeps stating whether sign-up is currently gated (now: "Sign-up is
+  currently unrestricted — create an account via the link above") rather than being genericized to only
+  "Authentication is provided by Clerk" — the Tech Stack table's Auth row already covers the Clerk mention;
+  the Live Demo section's job is telling a visitor whether the link actually gets them in.
 
-# Known Risks (carried forward from the spec; not re-verified this session)
+# Known Risks
 
-- Part D's iOS camera-picker fix is based on published guidance and matches the user's original screenshot,
-  but needs an actual iPhone check — not done this session (no physical device available).
-- Tour cancellation mid-navigation-wait, and browser-Back-button divergence mid-tour, were implemented per
-  spec but not explicitly exercised this session (the 12-step interleaved tour's normal forward/backward
-  path was; the two "abnormal exit" verification steps were not).
-- Mobile viewport for the full tour (steps 1–11, sidebar open/close transitions) was checked for the header
-  offset only (Part C), not walked step-by-step on a mobile viewport.
-- Mobile orientation changes mid-tour remain unsupported, unchanged from TASK-040's own accepted risk.
+Carried forward from the spec (not re-verified this session, since nothing was implemented):
 
-# Separately flagged (not part of TASK-041, unrelated pre-existing issue)
-
-`GET /api/household/members` returned a transient 500 during this session's local dev verification (reproduced
-once, then succeeded on retry with no code changes). Not investigated — this endpoint is untouched by
-TASK-041. Worth a look if it recurs on production.
+- `overrides` pin a dependency floor, not a permanent fixture — Part A documents a removal check to run the
+  next time a direct dependency naturally clears the pinned version, so these don't accumulate indefinitely.
+- Part C's refactor touches already-shipped, working code (`aiRateLimit.js`), not just additive new code —
+  low risk (mechanical extraction, no logic change), but its own verification step (AI rate-limiting behavior
+  unchanged post-refactor) needs to actually run, not be assumed from the diff looking simple.
+- Part D cannot ship unilaterally — it needs Connor's direct access to the Clerk and OpenAI dashboards.
+  "Ready to go public" as a whole claim depends on it even though it doesn't block Implementation Complete.
+- Part G's iOS camera-picker fix and full-mobile-tour walkthrough have been open since TASK-041 with no
+  physical device available in either session — still unverified.
+- Part F adds logging, not a fix, for the `household/members` 500 — if it recurs, diagnosing and fixing it
+  is separate follow-up work, not something TASK-042 itself resolves.
 
 # Files Required Next
 
-None for TASK-041 itself — implementation, hands-on verification, and production deploy are all complete.
-Remaining risks (above) are lower-priority spot-checks, not blockers.
+None beyond what TASK-042-spec.md itself specifies — an implementation session should work Parts A/B/C/E/F
+in order (each is independently verifiable per the spec's Verification Steps), then track Parts D/G
+separately per the spec's Completion Criteria split.
 
 # Recommended Next Action
 
-None outstanding. If the iPhone camera-picker check (Part D) or the abnormal-tour-exit paths surface anything
-on production, triage as a fix commit on `staging` first, per the usual staging-then-production order.
+Start an implementation session against `ai/tasks/TASK-042-spec.md`. Parts A through F have no external
+dependency and can ship in one pass; Parts D and G should be explicitly called out as still-open
+"Release Validation" items in that session's own handoff if they aren't completed alongside the code, rather
+than being silently dropped the way TASK-037's equivalent prerequisites were.
 
 # Context Notes
 
-- branch: `staging` (working branch restored here after the `main` merge/push completed).
-- `main` and `staging` are both at `390327e` as of this session — in sync, no drift.
-- Production (`kitchenkeeper.kitchen`) confirmed live and healthy post-deploy (`/` and `/api/health` both
-  return 200).
+- branch: `staging`.
 - worktree: none.
-- `.claude/settings.local.json` has pre-existing local uncommitted changes (permission-prompt settings)
-  unrelated to this session's work — left as-is, not part of any commit this session (same as noted in the
-  TASK-040 handoff).
+- `.claude/settings.local.json` continues to have pre-existing local uncommitted changes (permission-prompt
+  settings) unrelated to this or any prior session's work — left as-is, not part of this session's commit,
+  same note carried in every handoff since TASK-040.
+- Production (`kitchenkeeper.kitchen`) was read-only inspected this session (manifest/service-worker/HTTPS
+  check via browser console) — nothing was deployed or changed.
