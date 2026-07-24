@@ -15,6 +15,7 @@ import pushRouter from './routes/push.js';
 import dietaryRouter from './routes/dietary.js';
 import adminRouter from './routes/admin.js';
 import onboardingRouter from './routes/onboarding.js';
+import clientErrorsRouter from './routes/clientErrors.js';
 
 const REQUIRED_ENV = [
   'CLERK_SECRET_KEY',
@@ -63,6 +64,7 @@ app.use('/api/push', pushRouter);
 app.use('/api/dietary', dietaryRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/onboarding', onboardingRouter);
+app.use('/api/client-errors', clientErrorsRouter);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 

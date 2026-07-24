@@ -1,8 +1,17 @@
 import { randomBytes } from 'crypto';
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { clerkClient } from '@clerk/express';
 import { db } from '../db/client.js';
-import { households, householdMembers, pantryItems } from '../db/schema.js';
+import {
+  households,
+  householdMembers,
+  pantryItems,
+  recipes,
+  shoppingLists,
+  chatMessages,
+  recipeBlocklist,
+  mealLogs,
+} from '../db/schema.js';
 import { encrypt, decrypt } from '../utils/encryption.js';
 import { maskKey } from '../utils/keyEncryption.js';
 import * as platformSettingsService from './platformSettingsService.js';
@@ -172,25 +181,41 @@ async function createHousehold(clerkUserId) {
   }
 }
 
-// A household is disposable if auto-created within 5 minutes and has zero pantry items.
-// Checks pantry items only — intentional trade-off for simplicity at portfolio scale.
-// Revisit before expanding household-sharing features.
+// Every table here has a direct householdId FK and represents real user-created
+// content — this list is the complete definition of "does this household have
+// data worth protecting." Whenever a new household-owned content table is added
+// to the schema, it MUST be added here too, or joinByCode's Guard C will
+// silently fail to protect it, letting a join delete real data out from under
+// someone (TASK-044, architect review round 1). pushSubscriptions is
+// deliberately excluded — it's a device registration, not content.
+const CONTENT_TABLES = [
+  pantryItems,
+  recipes,
+  shoppingLists,
+  chatMessages,
+  recipeBlocklist,
+  mealLogs,
+];
+
+// LIMIT 1, not COUNT(*) — only presence/absence matters here, and COUNT(*)
+// forces Postgres to scan every matching row just to throw the number away
+// (TASK-044, architect review round 1).
+async function hasAnyRows(table, householdId) {
+  const rows = await db
+    .select({ id: table.id })
+    .from(table)
+    .where(eq(table.householdId, householdId))
+    .limit(1);
+  return rows.length > 0;
+}
+
+// A household is disposable if it contains zero rows across every content table —
+// no age check. Revisit before expanding household-sharing features.
 export async function isDisposableHousehold(householdId) {
-  const [row] = await db
-    .select({ createdAt: households.createdAt })
-    .from(households)
-    .where(eq(households.id, householdId));
-  if (!row) return false;
-
-  const ageMs = Date.now() - new Date(row.createdAt).getTime();
-  if (ageMs > 5 * 60 * 1000) return false;
-
-  const [{ count }] = await db
-    .select({ count: sql`COUNT(*)` })
-    .from(pantryItems)
-    .where(eq(pantryItems.householdId, householdId));
-
-  return Number(count) === 0;
+  const results = await Promise.all(
+    CONTENT_TABLES.map((table) => hasAnyRows(table, householdId))
+  );
+  return results.every((hasRows) => !hasRows);
 }
 
 // Atomically: delete the user's empty auto-created household and insert a householdMembers row.

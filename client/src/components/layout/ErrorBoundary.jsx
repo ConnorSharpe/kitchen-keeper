@@ -12,6 +12,24 @@ export default class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error('[ErrorBoundary] Uncaught error:', error, info);
+    // Fire-and-forget — reporting must never itself throw or delay the fallback
+    // UI below, so this uses a raw fetch (not the api helper, which redirects
+    // to /sign-in on a 401 and throws on non-2xx) wrapped in its own try/catch.
+    try {
+      fetch('/api/client-errors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: error.message,
+          stack: error.stack,
+          componentStack: info.componentStack,
+          url: window.location.href,
+          userAgent: navigator.userAgent,
+        }),
+      }).catch(() => {});
+    } catch {
+      /* reporting must never itself throw during a crash */
+    }
   }
 
   handleReset = () => {
