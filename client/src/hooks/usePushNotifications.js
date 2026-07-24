@@ -14,8 +14,12 @@ async function getSWRegistration() {
   return navigator.serviceWorker.register('/sw.js');
 }
 
+const hasNotificationApi = typeof Notification !== 'undefined';
+
 export function usePushNotifications() {
-  const [permission, setPermission] = useState(Notification.permission);
+  const [permission, setPermission] = useState(
+    hasNotificationApi ? Notification.permission : 'default'
+  );
   const [subscription, setSubscription] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -45,7 +49,7 @@ export function usePushNotifications() {
         applicationServerKey: urlBase64ToUint8Array(publicKey),
       });
 
-      setPermission(Notification.permission);
+      setPermission(hasNotificationApi ? Notification.permission : 'granted');
       setSubscription(sub);
 
       await api.post('/api/push/subscribe', sub.toJSON());
@@ -73,7 +77,8 @@ export function usePushNotifications() {
     }
   }
 
-  const isSupported = 'serviceWorker' in navigator && 'PushManager' in window;
+  const isSupported =
+    hasNotificationApi && 'serviceWorker' in navigator && 'PushManager' in window;
 
   return {
     isSupported,
