@@ -74,6 +74,7 @@ export function runProductTour(onFinished, { setMobileNavOpen, navigate } = {}) 
   const isMobile = !window.matchMedia('(min-width: 768px)').matches; // matches Tailwind `md:` used throughout Sidebar.jsx
   const abortController = new AbortController();
   let driverObj;
+  let isAdvancing = false;
 
   function finish() {
     abortController.abort();
@@ -99,43 +100,65 @@ export function runProductTour(onFinished, { setMobileNavOpen, navigate } = {}) 
   // including the very first one — not a separate implementation per
   // direction or for tour startup.
   async function goToStep(targetIndex, isInitial = false) {
-    const target = STEPS[targetIndex];
-    if (!target) {
-      // Past the last step (Done clicked) or before the first (Previous
-      // disabled by driver.js itself, so not reachable in practice) — treat
-      // like any other tour-ending event.
-      if (!isInitial) driverObj.destroy();
-      return;
-    }
-
-    const showSidebar = isMobile && isNavStep(target);
-    if (isMobile) {
-      setMobileNavOpen?.(showSidebar);
-      if (showSidebar) {
-        await new Promise((resolve) => setTimeout(resolve, SIDEBAR_TRANSITION_MS));
-        if (abortController.signal.aborted) return;
+    // driver.js doesn't await onNextClick/onPrevClick, so a second tap can
+    // arrive while a prior goToStep is still mid-flight (sidebar transition,
+    // navigate(), waitForElement()). Without this guard, two overlapping
+    // calls' setMobileNavOpen()/driverObj.moveTo() calls can resolve out of
+    // order and desync the sidebar from whatever step ends up displayed. The
+    // tour intentionally behaves like a temporarily disabled wizard during
+    // each transition: extra taps are dropped, not queued or replayed.
+    if (isAdvancing) return;
+    isAdvancing = true;
+    try {
+      const target = STEPS[targetIndex];
+      if (!target) {
+        // Past the last step (Done clicked) or before the first (Previous
+        // disabled by driver.js itself, so not reachable in practice) — treat
+        // like any other tour-ending event.
+        if (!isInitial) driverObj.destroy();
+        return;
       }
-    }
 
-    if (target.route !== window.location.pathname) navigate?.(target.route);
+      const showSidebar = isMobile && isNavStep(target);
+      if (isMobile) {
+        setMobileNavOpen?.(showSidebar);
+        if (showSidebar) {
+          await new Promise((resolve) => setTimeout(resolve, SIDEBAR_TRANSITION_MS));
+          if (abortController.signal.aborted) return;
+        }
+      }
 
-    const found = await waitForElement(target.element, {
-      timeoutMs: WAIT_FOR_ELEMENT_TIMEOUT_MS,
-      signal: abortController.signal,
-    });
-    if (abortController.signal.aborted) return; // tour was destroyed while this wait was pending
+      if (target.route !== window.location.pathname) navigate?.(target.route);
 
-    if (!found) {
-      // See WAIT_FOR_ELEMENT_TIMEOUT_MS comment above — same early-exit path
-      // as every other way the tour can end. `isInitial` means driver.js was
-      // never `drive()`n, so there's nothing to destroy(); finish() directly.
+      const found = await waitForElement(target.element, {
+        timeoutMs: WAIT_FOR_ELEMENT_TIMEOUT_MS,
+        signal: abortController.signal,
+      });
+      if (abortController.signal.aborted) return; // tour was destroyed while this wait was pending
+
+      if (!found) {
+        // See WAIT_FOR_ELEMENT_TIMEOUT_MS comment above — same early-exit path
+        // as every other way the tour can end. `isInitial` means driver.js was
+        // never `drive()`n, so there's nothing to destroy(); finish() directly.
+        if (isInitial) finish();
+        else driverObj.destroy();
+        return;
+      }
+
+      if (isInitial) driverObj.drive(targetIndex);
+      else driverObj.moveTo(targetIndex);
+    } catch (err) {
+      // Matches this file's existing convention of ending the tour cleanly on
+      // any anomaly (the not-found-element path above, onHighlightStarted's
+      // route check, onPopState) rather than leaving it in an undefined
+      // state — an unexpected throw here (driver.js internals, a torn-down
+      // DOM mid-navigation) is just one more anomaly class, not a special case.
+      console.error('[productTour] goToStep failed, ending tour:', err);
       if (isInitial) finish();
       else driverObj.destroy();
-      return;
+    } finally {
+      isAdvancing = false;
     }
-
-    if (isInitial) driverObj.drive(targetIndex);
-    else driverObj.moveTo(targetIndex);
   }
 
   function start() {
