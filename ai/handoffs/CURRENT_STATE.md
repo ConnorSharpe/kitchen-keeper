@@ -1,392 +1,107 @@
 # Task
 
-Implementation session for `ai/tasks/TASK-042-spec.md` (DRAFT-3, approved 9.7 → 9.95). Prior session was
-audit-only (spec drafting, zero code touched); this session implemented the code-level parts.
+Spec-drafting session for `ai/tasks/TASK-045-spec.md` — a mobile onboarding-tour bug Connor found by hand
+("hamburger menu tour" doesn't keep the sidebar open for the duration, so the Pantry nav-item tooltip has
+nothing to point at). This was an audit-only session: the spec went through three rounds of GPT architect
+review and is now fully approved. **Zero application code has been touched — implementation has not
+started.**
 
 # Current Status
 
-**Implementation Complete: Parts A, B, C, E, F — done, verified, not yet deployed.**
-**Release Validation (Parts D, G): still open — unchanged from the spec, requires Connor + physical devices.**
+**Spec Complete: TASK-045-spec.md is DRAFT-3, 10/10, APPROVED FOR IMPLEMENTATION.**
+**Implementation: not started — this is the next session's work.**
 
-## Part A — pinned dependency versions
+## What the bug actually is
 
-`server/package.json`: `express` → `^4.22.2`, `morgan` → `^1.11.0`, plus an `overrides` block for
-`qs`/`body-parser`/`form-data`/`brace-expansion`/`side-channel`/`hasown`. `client/package.json`:
-`react-router-dom` → `^6.30.4`, plus `overrides` for `postcss`/`@babel/core`/`nanoid`. Ran `npm install` +
-`npm dedupe` in root/`server`/`client`.
+Root cause is a re-entrancy race in `client/src/components/onboarding/productTour.js`'s `goToStep()`:
+driver.js doesn't await `onNextClick`/`onPrevClick`, so tapping "Next" again before a previous
+`goToStep` call's async chain (sidebar toggle → 200ms transition wait → `navigate()` → `waitForElement()`)
+finishes starts a second overlapping call. The two calls' `setMobileNavOpen()`/`driverObj.moveTo()` calls
+can resolve out of order, desyncing the sidebar's actual open/closed state from whatever step driver.js
+ends up displaying.
 
-Verified via `npm audit` in each workspace — remaining findings match the spec's "out of scope" table
-exactly, nothing else:
-- `server`: `drizzle-orm` (SQL injection advisory), `drizzle-kit`/`esbuild` (dev-server CSRF), `@vercel/blob`/
-  `undici` (multiple advisories) — 7 findings, all pre-identified semver-major exclusions.
-- `client`: `vite`/`esbuild` (dev-server CSRF) — 2 findings (moderate + high on the same chain), same
-  pre-identified exclusion.
-- root: **new finding not in the spec's tables** — `shell-quote` (high, via `concurrently`'s dev dependency
-  tree). Pre-existing, unrelated to this task (the spec's dependency tables only covered `server/` and
-  `client/`, not root) — was previously masked in `npm audit` output by the much larger `@clerk/nextjs`
-  subtree Part B removes. Not fixed this session (out of scope for TASK-042); worth a follow-up ticket since
-  it's now visible.
+**Reproduced live**, not just hypothesized — see TASK-045-spec.md's Codebase Reality Check for the full
+methodology (scripted rapid clicks against `HouseholdPage.jsx`'s "Preview: new household" tour replay at a
+375×812 viewport). Rapid tapping (80ms apart) produced the exact reported symptom: popover showing
+"Pantry" while the sidebar was closed. At a deliberate pace, the same script showed the interleaved
+nav/content step design working correctly — so the fix is narrowly the race, not the tour's design.
 
-## Part B — dead dependency/code removal
+Ruled out along the way: TASK-044's unreproduced Pantry-page crash recurring (Connor confirmed no
+"Something went wrong" fallback screen appeared — ruled out via direct question, not assumed), and a
+CSS-transition-timing race (the original hypothesis before live reproduction disproved it).
 
-Deleted `server/middleware/auth.js`. Removed from `server/package.json`: `jsonwebtoken`, `bcrypt`, `uuid`,
-`cookie-parser` (+ its import and `app.use(cookieParser())` from `server/app.js`). Removed `@clerk/nextjs`
-from root `package.json`. Removed `@clerk/react` from `client/package.json`. Removed the `INVITE_CODE` row
-from `.env.example`.
+## The approved fix (not yet implemented)
 
-Verified: dedicated grep across `*.js`/`*.jsx` for all six removed-package names returns zero source matches;
-`npm ls @clerk/nextjs jsonwebtoken bcrypt uuid cookie-parser` (root) and `npm ls @clerk/react` (client) each
-report the packages absent from the resolved tree. `npm run lint`, `npm test` (82/82 passing, all three
-workspaces), and `npm run build` all pass clean after the removal.
-
-**Not independently verified this session**: a live Clerk sign-in against a local dev server (the spec's own
-Known Risk flagged this as the real verification for `cookie-parser` removal, not code-reading alone). This
-session mistakenly checked the repo-root `.env` (stale, pre-Clerk-migration leftover — missing
-`CLERK_SECRET_KEY`/`ENCRYPTION_KEY`/`OWNER_CLERK_ID`/`OPENAI_API_KEY`) and concluded no real credentials were
-available. **That was wrong** — `server/loadEnv.js` actually loads `server/.env.local` (confirmed present,
-with real `CLERK_SECRET_KEY`, `ENCRYPTION_KEY`, `OWNER_CLERK_ID`, `OPENAI_API_KEY`, `DATABASE_URL`, VAPID
-keys, and Blob token), and `client/.env.local` also exists with real Clerk/DB values. A real dev server CAN
-be booted and tested — this just wasn't discovered until after the dummy-env smoke test had already run. As
-a partial substitute this session, `server/app.js` was loaded with dummy env values via a one-off Node
-script: it imported cleanly through every router (`household.js` included) with no import-time errors,
-failing only on a downstream dummy-VAPID-key format check in the push module — confirms no import breakage
-from the `cookie-parser` removal, but is not the same as a real end-to-end signed-in session. **See Testing
-Walkthrough below — do this for real next session, it's actually possible now.**
-
-## Part C — join rate limiter
-
-New `server/middleware/createRateLimiter.js` factory. `server/middleware/aiRateLimit.js` refactored to use it
-(behavior-preserving — same `windowMs`, dynamic `limit`, `aiRateLimitKeyGenerator`, message text).
-`aiRateLimitKeyGenerator.js` and its test untouched. New `server/middleware/joinRateLimit.js` (10 attempts /
-15 min, keyed by `req.user?.id ?? req.ip`), applied to `router.post('/join', joinRateLimit, ...)` in
-`server/routes/household.js`.
-
-Verified: `aiRateLimitKeyGenerator.test.js`'s two tests ("keys by householdId when clerkAuth has populated
-req.user", "falls back to req.ip when req.user is absent") both still pass post-refactor — confirms the
-extraction didn't change `aiRateLimit`'s behavior.
-
-**Not verified this session**: the spec's manual check (11 wrong-code join attempts in <15 min as the same
-user → 11th rejected; a different user's correct code still succeeds in the same window) — requires a live
-authenticated session against a running server. Real credentials exist (`server/.env.local`) — see Testing
-Walkthrough below, this is doable next session.
-
-## Part E — README accuracy
-
-- Tech Stack Auth row: `JWT stored in httpOnly, sameSite=strict cookies` → `Authentication provided by
-  Clerk`.
-- Live Demo line: invite-code claim → `Sign-up is currently unrestricted — create an account via the link
-  above.`
-- Removed `INVITE_CODE` and `JWT_SECRET` rows from the Environment Variables table (`JWT_SECRET` removal
-  wasn't explicit in the spec's Part E bullet list but is required by the spec's own Verification Step 7 —
-  "README.md ... no longer mention[s] INVITE_CODE or JWT_SECRET" — so removed for consistency with that
-  criterion).
-- Removed the `INVITE_CODE` parenthetical from the "Run Your Own Instance" step 7, same reasoning.
-
-Note: README's Tech Stack row still says AI is "Google Gemini 2.0 Flash" and there's a `GEMINI_API_KEY` row
-in the env table — both stale (the app runs on OpenAI per `server/services/ai/resolveProvider.js`, per
-`.env.example`'s actual `OPENAI_API_KEY`). **Not fixed** — outside TASK-042's Part E scope, which named three
-specific edits, not a full README pass. Flagging so it isn't mistaken for missed scope.
-
-## Part F — household/members diagnostics
-
-`server/routes/household.js`'s `GET /members` handler now generates a short `requestId`
-(`randomUUID().split('-')[0]`, same pattern as `server/routes/ai.js`), times the call, and on error logs
-`request_id`/`householdId`/`userId`/`elapsedMs`/`error` before rethrowing (client-facing 500 unchanged —
-`server/app.js`'s global error handler wasn't touched).
-
-`householdService.getMembers(householdId, { requestId })` now logs the combined Neon query duration
-(`getById` + the `householdMembers` select) as `neon_query_elapsedMs`, and passes `requestId` through to
-`lookupClerkUsers`, which now logs its own `elapsedMs` and whether the `Promise.race` timeout actually fired
-(`timedOut=true/false`) on both the success and catch paths. Fallback behavior (empty `Map` on any failure)
-is unchanged — this only adds visibility.
-
-**Not verified this session**: the spec's manual check (force a Neon-layer error, confirm the log line
-appears with real values) — same as B/C above, doable next session with `server/.env.local`. Static review
-of the diff is the only verification done so far.
+One file, `client/src/components/onboarding/productTour.js`: add an `isAdvancing` boolean guard around
+`goToStep` (ignore new calls while one is already in flight, cleared in `finally`), plus a `catch` block
+that ends the tour cleanly on any unexpected exception — matching the file's existing convention that
+every abnormal exit path (element-not-found timeout, route divergence, back-button divergence) already
+ends the tour rather than leaving it in an undefined state. Full code, and the reasoning for rejecting a
+queue or a cancel-and-restart approach, is in the spec's Decision section. Read the spec directly before
+implementing — don't reimplement from this summary alone.
 
 # Files Created / Changed (this session)
 
-**New**: `server/middleware/createRateLimiter.js`, `server/middleware/joinRateLimit.js`.
-**Deleted**: `server/middleware/auth.js`.
-**Modified**: `package.json`, `package-lock.json`, `server/package.json`, `server/package-lock.json`,
-`client/package.json`, `client/package-lock.json`, `server/app.js`, `server/middleware/aiRateLimit.js`,
-`server/routes/household.js`, `server/services/householdService.js`, `README.md`, `.env.example`,
-`ai/handoffs/CURRENT_STATE.md` (this file).
-**Not touched**: `server/middleware/aiRateLimitKeyGenerator.js` and its test (by design, per spec).
+**New**: `ai/tasks/TASK-045-spec.md`.
+**Modified**: `ai/handoffs/CURRENT_STATE.md` (this file).
+**Not touched**: any application code — this was a spec-only session.
 
-Nothing deployed. All changes are local/uncommitted as of this handoff — Connor has not yet been asked to
-commit or push.
+Nothing deployed. Both new/changed files are docs; safe to commit and push directly (see Context Notes
+re: `.claude/settings.local.json`, which stays uncommitted as always).
 
 # Decisions Made
 
-- Removed the `JWT_SECRET` row from README's env table even though the spec's Part E bullets only named it
-  for `.env.example` (where it was already absent) — the spec's own Verification Step 7 requires README to
-  no longer mention `JWT_SECRET` either, so treated that as the binding criterion over the possibly-incomplete
-  bullet list.
-- Did not touch README's stale Gemini/`GEMINI_API_KEY` references — genuinely out of Part E's named scope,
-  unlike the JWT_SECRET case above which was directly required by a verification step.
-- Did not attempt to fix the newly-surfaced `shell-quote`/`concurrently` root-level vulnerability — outside
-  TASK-042's approved scope (spec's dependency tables never covered root), flagged as a follow-up instead of
-  silently fixed or silently ignored.
-- Used a dummy-env module-load smoke test as a partial substitute for real sign-in verification, initially
-  believing no valid credentials existed locally (checked the wrong file — repo-root `.env`, stale). Corrected
-  later in this same session: `server/.env.local` / `client/.env.local` do have real credentials, so the real
-  verification steps are actually possible and are laid out in the Testing Walkthrough section below rather
-  than left as a vague "needs real creds" blocker.
+- **Chose a drop-the-tap guard over a queue or cancel-and-restart** for the race fix — a short, fixed-step
+  tour doesn't need either's added complexity (a pending-index queue, or cancelling in-flight navigation/
+  sidebar-animation/`waitForElement` work and resyncing driver.js's internal state). Architect review
+  agreed on both rejections across all three rounds.
+- **Unexpected exceptions in `goToStep` destroy the tour cleanly** (`catch` → `finish()`/`driverObj.destroy()`)
+  rather than propagating as an unhandled promise rejection that would leave the tour frozen mid-step with
+  no user-visible signal anything went wrong. Verified (not just asserted) that this matches every other
+  abnormal exit path already in the file — see the spec's round-2 audit table for the full per-path
+  breakdown, including why the `abortController` early-returns and the `isInitial`+missing-`STEPS[0]` case
+  are not counterexamples.
+- **Declined routing the new `catch`'s error through TASK-044's `/api/client-errors` reporting pipeline**
+  (raised as an optional enhancement in round 2, not a requirement). Reasoning kept in the spec: that
+  pipeline is wired into `ErrorBoundary.componentDidCatch`, which only ever catches React render/lifecycle
+  exceptions — never async/event-handler throws like this one — so it was never in that pipeline's domain.
+  Adding a second `fetch`-based reporting call here would expand this task's scope and introduce a new
+  failure mode (a `fetch` that can itself throw/hang) inside a handler meant to stay simple.
+- **Fixed a pre-existing, unrelated local dev-environment issue to enable live reproduction**: see Side
+  Effect below. Confirmed with Connor before touching anything (read-only inspection first, explicit
+  go-ahead before the actual insert).
 
 # Known Risks
 
-Carried forward + new:
+Carried into the implementation session:
 
-- **Real-credential verification is still outstanding for Parts B, C, and F** — this session could only
-  static-check (grep, `npm ls`, lint/test/build, a dummy-env import smoke test), but real credentials for
-  this ARE available locally (`server/.env.local`, `client/.env.local`) — see Testing Walkthrough below. Do
-  these before or immediately after deploying, not skip them.
-- `overrides` in Part A pin a floor, not a permanent fixture — see the spec's own removal-check guidance
-  before any future direct-dependency bump in these areas.
-- Part C's `joinRateLimit` threshold (10/15min) is still an unvalidated guess per the spec's own "Decisions
-  Needed" — not changed this session.
-- Part D (Clerk sign-up posture, OpenAI prepaid billing) and Part G (iOS camera picker, full mobile tour,
-  Android install) remain fully open — unchanged from the prior handoff, still need Connor + physical
-  devices.
-- New, small, out-of-scope finding: root-level `shell-quote` high-severity advisory via `concurrently` (dev
-  dependency only, not shipped to production) — not part of this task, noted above.
+- **Extra rapid taps during a transition are silently dropped with no visual feedback** (Known Risk 1 in
+  the spec) — accepted as intentional UX ("the tour behaves like a temporarily disabled wizard"), not a
+  regression to fix. Worst-case drop window is bounded by `WAIT_FOR_ELEMENT_TIMEOUT_MS` (2000ms), not just
+  the common 200ms sidebar-transition case.
+- **This fix does not touch `SIDEBAR_TRANSITION_MS` or the interleaved step list** — both were confirmed
+  working correctly at a deliberate pace during reproduction; if a future device genuinely needs longer
+  than 200ms for the CSS transition even without a tap race, that would be a separate, currently
+  unobserved bug (see spec's Out of Scope).
+- **Acceptance criteria require live device/viewport testing**, not just lint/build — this project verifies
+  onboarding-tour changes via manual smoke testing (same precedent as TASK-024/025/026/043/044), not an
+  automated suite. The spec's Acceptance Criteria checklist (7 items: deliberate pace, rapid Next, rapid
+  Prev, mixed Next/Prev, exit-while-in-flight, real onboarding flow, desktop regression) should all be
+  walked through before considering this done.
 
-# Testing Walkthrough Results (2026-07-23, done)
+## Side effect: local dev DB migration-tracking drift fixed (unrelated to TASK-045 itself)
 
-All three checks passed against real credentials (`server/.env.local`), local dev server (`node server/index.js`
-on :3001, Vite on :5183), signed in as Connor Sharpe via Clerk.
-
-**Check 1 — Clerk sign-in without `cookie-parser` (Part B): PASS.** Session was already active on first load;
-forced a full reload and confirmed it stayed signed in on the dashboard, no redirect to sign-in.
-
-**Check 2 — join-code rate limiting (Part C): PASS, fully — including cross-user, closed out in a later
-session (2026-07-23).** Original pass: 10 wrong-code submissions to `/api/household/join` via the real `/join`
-UI each returned `404 Invalid join code`; the 11th returned `429 Too Many Requests` with the exact spec'd
-message.
-
-**Cross-user half, completed later same day**: no second real account was available, so used Clerk's own
-testing primitives on the **dev instance** rather than asking Connor for credentials — `clerk users create`
-(curated CLI command) made a throwaway user with a `+clerk_test` email (recognized by Clerk as a test address,
-never delivers real email), then `POST /sign_in_tokens` (Clerk Backend API, called directly with the dev
-`CLERK_SECRET_KEY` already in `server/.env.local` — the CLI's own raw `clerk api` subcommand 404's on this
-account for an unrelated reason, worth a `clerk update` at some point, 1.5.0 → 2.3.0 available) minted a
-sign-in token. Consuming it needed `window.Clerk.client.signIn.create({ strategy: 'ticket', ticket })` called
-directly via the browser's JS console — the automatic `?__clerk_ticket=` URL handling didn't fire because
-Clerk's dev-instance cross-origin session sync kept restoring Connor's already-active session first; had to
-`Clerk.signOut()` immediately before the ticket call each time. No password was ever created, stored, typed,
-or seen for the test account. Signed in as the test user, submitted the real household join code
-(`57B5C5F1`) at `/join` — **not rate-limited** (no `429`; the request reached `joinByCode`'s DB call, which
-only happens after `joinRateLimit` lets it through) — confirms `keyGenerator: (req) => req.user?.id ?? req.ip`
-really does key per-user, not globally or per-household. The join itself then hit an unrelated `500`
-(`NeonDbError: password authentication failed` / `endpoint could not be found` from the local dev server's
-staging Neon connection — looks like `server/.env.local`'s staging branch endpoint has gone stale, possibly
-from a staging DB refresh per TASK-039's own documented caveat that refreshing staging is destructive to
-whatever was pointing at the old branch). **Not investigated further — separate from TASK-042, a local dev
-environment issue, not a code bug**; worth Connor checking `server/.env.local`'s Neon connection details
-against the current `staging` branch next time local dev is touched. Test user deleted afterward
-(`clerk api /users/... -X DELETE`) — nothing left behind in Clerk's user list.
-
-**Check 3 — `household/members` diagnostics (Part F): PASS.** Temporarily broke the Neon query (bogus column
-via a raw `sql` fragment in `getMembers`'s `householdMembers` select), hit `GET /api/household/members` through
-the real Household page, confirmed the server log:
-`[kitchen-keeper] request_id=43ac5d8f function=getMembers householdId=1 userId=user_3FVuvJJGq9W65mQ1SrVwLaz48wS
-elapsedMs=128 error=column "household_id_bogus_column_xyz" does not exist` — while the client only ever saw a
-generic "Internal server error" (500), confirming no detail leak. Reverted the breakage immediately after
-(`git diff` confirmed clean); restarted the server and reconfirmed the members list renders normally again.
-
-**Two unrelated things surfaced during this session, not part of TASK-042, not investigated further:**
-
-1. **PWA service worker (`client/public/sw.js`) navigation-cache bug**: once the SW is active (2nd+ visit),
-   a full-page navigation straight to `/join` (e.g., a real invite-link click) sometimes lands the address bar
-   back on `/` instead of showing the join form — looks like the classic SW gotcha where a cached response's
-   internal `.url` differing from the request causes the browser to rewrite the address bar. Only reproduced
-   with the SW active; unregistering it fixed it immediately. Worth a real test on a device with the PWA
-   actually installed (ties into Part G's device-verification gap) since this would break real invite links,
-   not just an artifact of this session's tooling.
-2. **Clerk token hydration race right after a full page load**: submitting a form within ~1s of a hard
-   navigation (before `window.Clerk.session` fully hydrates) got a real `401` from `clerkAuth`, which redirects
-   to `/sign-in`. A manual `fetch` a moment later with a freshly-fetched token succeeded fine. Likely not a
-   real user-facing issue (humans don't submit forms that fast after a page load) but flagging since it's a
-   genuine 401, not a test artifact — happened consistently, not once.
-
-Both are candidates for their own follow-up tickets if Connor wants them looked at; neither touches any
-TASK-042 code path.
-
-# Deployed to Production (2026-07-23)
-
-Committed the testing-walkthrough results, merged `staging` → `main` (fast-forward), pushed. Vercel deployed
-clean (`kitchen-keeper-4kaplu4g5-...`, Ready in 29s). Verified via `curl` that the server is serving the
-correct new `index.html`/bundle, and confirmed the live app renders and functions correctly (Chat, Household,
-sign-in) post-deploy. **Parts A/B/C/E/F are now live in production.**
-
-**Two things found during production verification, both pre-existing, neither caused by this deploy:**
-
-1. **PWA service worker serves a stale shell after any deploy — FIXED.** (`client/public/sw.js`): a
-   returning browser with the SW already active kept serving a cached `index.html` referencing a JS bundle
-   hash from the *previous* deployment. Because `vercel.json`'s catch-all rewrite (`"/(.*)" → "/index.html"`)
-   serves `index.html` content for literally any unmatched path — including a deleted old asset path — the
-   stale bundle request returns 200 with HTML instead of a 404, and the browser fails to mount React with a
-   blank white screen and no visible console error. Reproduced live on `kitchenkeeper.kitchen` right after
-   this session's own TASK-042 deploy (fixed at the time by unregistering the SW + clearing `caches`
-   manually — that was a workaround, not the fix).
-
-   **Fix**: `sw.js`'s fetch handler now goes network-first for navigation requests (`request.mode ===
-   'navigate'`), falling back to the cached shell only when actually offline — so a returning visitor always
-   gets the current deployment's `index.html`, and therefore its real (existing) asset hashes. Non-navigation
-   requests (hashed `/assets/*` JS/CSS) keep the original cache-first-with-background-refresh strategy, which
-   is correct for content-hashed filenames (a given hash's content never changes).
-
-   **Verified locally, not just by inspection**: built the client twice (`npm run build`) with a one-line
-   source change between builds to force a different JS bundle hash, registered the SW against build A via
-   `vite preview`, then rebuilt to build B without restarting the server (simulating a deploy landing under a
-   visitor's feet) and reloaded. Confirmed build B's own `console.log` marker fired and `read_network_requests`
-   showed only the new hash was ever requested — no blank screen, no reference to the deleted old hash.
-   Deployed to production (`staging` → `main` → Vercel), confirmed live: the SW registered against
-   `kitchenkeeper.kitchen` is `activated` and serving the fixed fetch handler.
-2. **`GET /api/onboarding` 500s in production — FIXED this session.** `NeonDbError: relation
-   "user_onboarding" does not exist`. Confirmed via `vercel logs` this predated this session's deploy (same
-   error present in the prior production deployment from ~2 hours earlier). Root cause: `server/db/migrations/
-   0018_user_onboarding.sql` (from TASK-040) had never been run against the **production** Neon branch —
-   README.md's own deployment instructions say migrations are applied manually via the Neon SQL Editor, so
-   this was a one-time miss, not a code bug. Masked in the UI because `AuthContext`'s onboarding fetch fails
-   open (`{ complete: true, flow: null }` after one retry) — meaning new users signing up on production had
-   been silently skipping the onboarding tour rather than seeing an error, since whenever TASK-040 shipped.
-   **Fix**: Connor ran `0018_user_onboarding.sql`'s `CREATE TYPE`/`CREATE TABLE` statements directly against
-   production via the Neon SQL Editor (Claude walked through it but did not touch production credentials or
-   run the SQL itself — `DATABASE_URL` is marked Sensitive in Vercel and returns empty via `vercel env pull`,
-   so there was no CLI path to it anyway). Verified fixed: `GET /api/onboarding` now returns `200
-   {"complete":true,"flow":null}` live on `kitchenkeeper.kitchen`, and `vercel logs` shows a clean `200` with
-   no `NeonDbError`.
-
-   **Follow-up, same session: `0019_drop_users.sql` also run.** `SELECT COUNT(*) FROM users;` returned `1`
-   (not 0), so this wasn't run blind — Connor checked `SELECT id, email, name, created_at FROM users;` and
-   confirmed the single row was his own pre-Clerk leftover account, not anything unexpected. With that
-   confirmed, Connor ran `DROP TABLE "users";` against production via the Neon SQL Editor. Verified afterward:
-   live site reload shows zero console errors, every API route (`pantry`, `recipes`, `onboarding`,
-   `ai/chat/history`, `household`) returns `200`, and `vercel logs` shows nothing referencing `users` — matches
-   the migration's own claim of zero code references. **Both TASK-042-adjacent production migrations
-   (0018, 0019) are now applied; production schema is caught up with what staging already had.**
-
-# Part D Progress (2026-07-23)
-
-**Decision 1 — Clerk sign-up posture: leave as-is.** Pulled the actual production instance config via
-`clerk config pull --instance <prod instance id>` (the `clerk link`'s cached "prod" alias doesn't resolve —
-this repo's CLI link only has the dev instance cached; had to pass the real instance ID from `clerk apps
-list`). Production `auth_access_control.sign_up_mode` is `"public"`, but it's not unprotected: email
-verification is required at sign-up (`auth_email.verify_at_sign_up: true`), bot/CAPTCHA protection is
-enabled (`auth_attack_protection.bot_protection.captcha_enabled: true`, `captcha_widget_type: "smart"`),
-enumeration protection is on (`"bulk"`), and account lockout is enabled (100 attempts / 60 min). This is
-meaningfully better than TASK-042's spec assumed — the spec's audit only checked for the app-level
-`INVITE_CODE` gate (confirmed dead) and never checked Clerk's own instance-level protections. Connor's
-decision: keep this posture, no Clerk config change needed. **Decision 1 of Part D closed.**
-
-**Bug found + fixed while checking Decision 2 — `OWNER_CLERK_ID` mismatch in production.** Checking
-`publicAiAccessEnabled` (the actual OpenAI-spend gate) requires the `/api/admin/platform-settings` route,
-which requires `req.user.id === process.env.OWNER_CLERK_ID`. Testing this via Connor's live production
-session returned `403 Owner access required`, and `GET /api/household`'s `viewerIsOwner` field confirmed
-`false`. Production and dev/staging are separate Clerk instances with separate user IDs for the same person
-(`user_3GqNHSFKpSVGdJbOn6XghbtxKU8` in prod vs. `user_3FVuvJJGq9W65mQ1SrVwLaz48wS` in dev/staging) —
-production's `OWNER_CLERK_ID` env var had the wrong (dev/staging) ID, so Connor's real production account was
-never recognized as the owner. Confirmed via `vercel env pull` that `OWNER_CLERK_ID` is also Sensitive-flagged
-(returns empty), so this had to be fixed via `vercel env add OWNER_CLERK_ID production --value
-user_3GqNHSFKpSVGdJbOn6XghbtxKU8 --sensitive --force --yes`, then `vercel redeploy <latest> --target
-production` (env var changes don't apply to already-built deployments). Verified fixed: `viewerIsOwner: true`
-and `/api/admin/platform-settings` now returns `200` for Connor's real production session.
-
-**Decision 2 — OpenAI billing: publicAiAccessEnabled confirmed false in production, prepaid/auto-recharge
-status deliberately left open by Connor.** Now that the owner route is reachable, confirmed live:
-`{"publicAiAccessEnabled": false, "aiRateLimitMax": 20}` — the safety-critical flag is correctly off, so
-there's no live spend exposure today. **Still open, by Connor's explicit choice this session** (asked
-directly, he said "leave it open" rather than check now): TASK-037's original requirement was switching the
-OpenAI org to prepaid credits with auto-recharge off, *confirmed* (not just recommended) before this flag is
-ever set to `true`. That's an OpenAI dashboard setting outside any tool available this session. **Standing
-invariant, unchanged: do not flip `publicAiAccessEnabled` to `true` in production until the prepaid/
-auto-recharge status is actually confirmed** — this isn't a completed decision, just a deferred one.
-
-# Testing Walkthrough (next session — do this interactively with Connor)
-
-Prerequisite already satisfied: `server/.env.local` and `client/.env.local` exist with real Clerk/OpenAI/
-Neon/VAPID/Blob credentials — confirmed present this session. No credential setup needed, just start the
-server and walk through these three checks together.
-
-**Setup**
-1. Start the dev server: `npm run dev` from repo root (via the Browser preview tool's `dev` launch config if
-   one exists in `.claude/launch.json`, otherwise `run_in_background` Bash/PowerShell). This runs Express on
-   `:3001` and Vite on `:5173` concurrently.
-2. Open `http://localhost:5173` in the Browser pane.
-
-**Check 1 — Clerk sign-in still works without `cookie-parser` (Part B)**
-3. Ask Connor to sign in (or sign up) through the app's normal Clerk flow.
-4. Confirm the app lands on the pantry/dashboard view, not stuck on the sign-in screen.
-5. Reload the page. Confirm the session persists (still signed in, no redirect back to sign-in) — this is
-   the actual proof that removing `cookie-parser` didn't break Clerk's own session handling.
-
-**Check 2 — join-code rate limiting (Part C)**
-6. With Connor signed in to one household, submit a wrong join code via the app's "Join household" UI 11
-   times within 15 minutes (same user/session each time).
-7. Confirm the 11th attempt returns the rate-limit message ("Too many join attempts. Please wait a few
-   minutes and try again.") instead of the normal "Invalid join code" error — check the Network tab or ask
-   Connor what the UI showed.
-8. If a second household/account is available, confirm it can still attempt a join in the same 15-minute
-   window without being blocked — proves the limiter is keyed per-user (`req.user.id`), not global.
-
-**Check 3 — `household/members` diagnostics fire correctly (Part F)**
-9. Temporarily break the Neon query on purpose — easiest is editing `DATABASE_URL` in `server/.env.local` to
-   an unreachable host, or briefly renaming a column reference in `householdService.getById`/`getMembers` —
-   restart the dev server after the change.
-10. Hit `GET /api/household/members` (load the household/settings page in the app, or `curl` it with a valid
-    session cookie).
-11. Check the server's console output for a line matching
-    `[kitchen-keeper] request_id=<id> function=getMembers householdId=<id> userId=<id> elapsedMs=<n>
-    error=<msg>` — confirms Part F's diagnostics actually fire with real values, not just look right in the
-    diff.
-12. Revert the temporary breakage (restore the real `DATABASE_URL` / column reference) and confirm
-    `GET /api/household/members` succeeds normally again before moving on.
-
-If all three checks pass, Parts B/C/F are verified for real, not just via lint/test/build — safe to treat
-Implementation Complete as fully proven, not just "should work."
-
-# Files Required Next
-
-None beyond the Testing Walkthrough above and deployment. Suggested order for the next session or for
-Connor directly:
-1. Run the Testing Walkthrough above (real credentials already exist, no setup blocker).
-2. Commit and deploy Parts A/B/C/E/F once the walkthrough passes.
-3. Work Part D (Clerk Dashboard + OpenAI billing decisions) and Part G (device checks) directly with Connor,
-   per the spec's Completion Criteria split.
-4. Consider a follow-up ticket for the `shell-quote`/`concurrently` finding and the separately-flagged
-   `@vercel/blob`/`drizzle-orm` major-version upgrades (both already called out as their own future task in
-   the spec's Out of Scope section).
-
-# Part G Progress (2026-07-23)
-
-**Item 1 — iOS camera/photo picker: tested on Connor's real device, found a real bug, fixed and deployed.**
-Connor tested `RecipeUpload.jsx` and `ReceiptUpload.jsx` on actual iOS Safari. Finding: the plain library file
-input (`<input type="file" accept="image/*">`, no `capture` attribute) already opens iOS's native chooser with
-**Take Photo / Photo Library / Choose File all in one** — so TASK-041 Part D's dedicated "📷 Take Photo"
-button (a second input with `capture="environment"`) was pure redundancy, not a fix for anything. Connor's
-call: remove the two-button mobile split entirely, make the single library-style input (previously desktop-only,
-gated behind `!isMobile`) the one and only upload trigger on every device.
-
-**Fix**: removed the `isMobile` state/`matchMedia` detection and the entire mobile-specific two-button block
-from both `RecipeUpload.jsx` and `ReceiptUpload.jsx` — both components now render the same single upload label
-unconditionally (desktop and mobile identical). `ReceiptUpload.jsx`'s now-unused `useEffect` import was removed
-too. Verified: `npm run lint` clean, all 82 tests pass, checked both components at desktop and 375×812 mobile
-viewport in the Browser pane (both showed the single dropzone correctly, no leftover two-button UI), deployed
-(`staging` → `main` → Vercel), and reconfirmed live on `kitchenkeeper.kitchen` at mobile viewport post-deploy.
-**Item 1 closed** — this is actually a stronger result than the spec asked for: not just "confirmed working,"
-a real UX bug found via genuine device testing and shipped same-session.
-
-**Items 2 and 3 — not started.** Full 11-step tour walkthrough on real iOS Safari, and a real Android
-"Add to Home Screen" install-and-launch, still need Connor directly on those two devices — nothing to report
-yet.
-
-# Recommended Next Action
-
-Part D and Part G item 1 are resolved. What's left: Part D's OpenAI prepaid-billing confirmation (deliberately
-deferred by Connor), and Part G items 2–3 (iOS tour walkthrough, Android install) — both need Connor on
-physical devices, not something to chase further in an unattended session.
+While trying to reproduce the bug locally, `npm run dev`'s server startup failed with `NeonDbError: type
+"onboarding_flow" already exists`. Root cause: `drizzle.__drizzle_migrations` was missing tracking rows for
+`0018_user_onboarding` and `0019_drop_users` even though both were already fully applied to the actual
+schema (confirmed via read-only queries before touching anything) — same underlying drift class already
+documented for `0017_platform_settings` in `0018_user_onboarding.sql`'s own comment and
+`TASK-040-spec.md`. **Flagged to Connor that `server/.env.local` points at the same shared Neon database
+the deployed app uses, not an isolated local branch** — he confirmed proceeding. Fixed by inserting the
+two missing tracking rows (sha256 hash of each migration file, matching drizzle's own hashing, + each
+migration's `_journal.json` `when` timestamp) — pure bookkeeping, no schema change. Local dev now starts
+cleanly. `0017` itself is still untracked in the journal (pre-existing, undisturbed) — no action taken,
+matches TASK-040's original note.
 
 # Context Notes
 
@@ -395,5 +110,26 @@ physical devices, not something to chase further in an unattended session.
 - `.claude/settings.local.json` continues to have pre-existing local uncommitted changes (permission-prompt
   settings) unrelated to this or any prior session's work — left as-is, same note carried in every handoff
   since TASK-040.
-- No production or staging deploy happened this session — all verification was local (lint/test/build) or
-  static (grep/npm ls/npm audit).
+- Local dev DB migration drift (see Side Effect above) is now fixed — `npm run dev` should start cleanly
+  next session without hitting the `onboarding_flow` migration error.
+- This session used the Browser preview tool's `server`/`client` launch configs (`.claude/launch.json`) at
+  a 375×812 mobile viewport to reproduce the bug via `HouseholdPage.jsx`'s onboarding-preview replay
+  feature — the same approach is the fastest path to exercising TASK-045's Acceptance Criteria next
+  session, no new setup needed.
+- **Environment gotcha worth knowing before trusting visual output in this environment**: this session's
+  Browser pane did not composite frames (`screenshot` calls failed with "the Browser pane is not
+  displayed"), and `getComputedStyle(el).transform` returned stale/frozen values that contradicted the
+  element's actual (correct) CSS class for over a second of polling — a tooling artifact, not a real bug.
+  Verify DOM/CSS state via `element.classList` or React fiber `memoizedState` inspection instead of
+  screenshots or computed-transform reads if the pane reports it isn't compositing.
+
+# Recommended Next Action
+
+Implement `ai/tasks/TASK-045-spec.md` exactly as approved:
+1. Add the `isAdvancing` guard + `catch`/`finally` to `goToStep` in
+   `client/src/components/onboarding/productTour.js`, per the spec's Decision section code block.
+2. Walk the spec's full Acceptance Criteria checklist live (mobile viewport, `HouseholdPage.jsx`'s
+   onboarding preview replay for the scripted/rapid-tap checks; a real fresh-account tour for the "real
+   onboarding flow" check; desktop viewport for the regression check).
+3. Commit and, once verified, deploy per this project's normal `staging` → `main` → Vercel flow — no new
+   process beyond what TASK-042/044 already established.
