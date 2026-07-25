@@ -75,8 +75,23 @@ export function runProductTour(onFinished, { setMobileNavOpen, navigate } = {}) 
   const abortController = new AbortController();
   let driverObj;
   let isAdvancing = false;
+  let finished = false;
 
+  // Called directly by every path below that ends the tour, not just via driver.js's
+  // onDestroyed (see start()'s config) — driver.js only fires onDestroyed if its own
+  // internal per-step "settled" state is already populated, and that state isn't set
+  // until a step's CSS transition fully completes (confirmed in its bundled source: the
+  // 400ms default transition duration), even though the popover itself is already
+  // visually in place around the halfway point. Calling destroy() in that ~200ms gap —
+  // exactly what happens when "Done" is clicked as soon as the last step's popover looks
+  // ready — tears down the UI but silently skips onDestroyed, so the tour never
+  // completes. Calling finish() ourselves removes that dependency entirely; the guard
+  // makes it harmless if onDestroyed also fires for the same completion. finished
+  // commits before onFinished() runs, deliberately: completion is one-time and
+  // irreversible, so a misbehaving callback doesn't get a second chance to re-run it.
   function finish() {
+    if (finished) return;
+    finished = true;
     abortController.abort();
     window.removeEventListener('popstate', onPopState);
     if (isMobile) setMobileNavOpen?.(false);
@@ -92,6 +107,7 @@ export function runProductTour(onFinished, { setMobileNavOpen, navigate } = {}) 
     const activeIndex = driverObj?.getActiveIndex();
     const activeStep = activeIndex !== undefined ? STEPS[activeIndex] : undefined;
     if (activeStep && activeStep.route !== window.location.pathname) {
+      finish();
       driverObj.destroy();
     }
   }
@@ -114,8 +130,13 @@ export function runProductTour(onFinished, { setMobileNavOpen, navigate } = {}) 
       if (!target) {
         // Past the last step (Done clicked) or before the first (Previous
         // disabled by driver.js itself, so not reachable in practice) — treat
-        // like any other tour-ending event.
-        if (!isInitial) driverObj.destroy();
+        // like any other tour-ending event. finish() before destroy(): our
+        // completion doesn't depend on driver.js's onDestroyed firing (see
+        // finish()'s own comment above).
+        if (!isInitial) {
+          finish();
+          driverObj.destroy();
+        }
         return;
       }
 
@@ -141,7 +162,10 @@ export function runProductTour(onFinished, { setMobileNavOpen, navigate } = {}) 
         // as every other way the tour can end. `isInitial` means driver.js was
         // never `drive()`n, so there's nothing to destroy(); finish() directly.
         if (isInitial) finish();
-        else driverObj.destroy();
+        else {
+          finish();
+          driverObj.destroy();
+        }
         return;
       }
 
@@ -155,7 +179,10 @@ export function runProductTour(onFinished, { setMobileNavOpen, navigate } = {}) 
       // DOM mid-navigation) is just one more anomaly class, not a special case.
       console.error('[productTour] goToStep failed, ending tour:', err);
       if (isInitial) finish();
-      else driverObj.destroy();
+      else {
+        finish();
+        driverObj.destroy();
+      }
     } finally {
       isAdvancing = false;
     }
@@ -168,7 +195,10 @@ export function runProductTour(onFinished, { setMobileNavOpen, navigate } = {}) 
       onNextClick: (_el, _step, opts) => goToStep((opts.index ?? -1) + 1),
       onPrevClick: (_el, _step, opts) => goToStep((opts.index ?? 1) - 1),
       onHighlightStarted: (_el, step) => {
-        if (step?.route && step.route !== window.location.pathname) driverObj.destroy();
+        if (step?.route && step.route !== window.location.pathname) {
+          finish();
+          driverObj.destroy();
+        }
       },
       onDestroyed: finish,
     });
@@ -183,7 +213,10 @@ export function runProductTour(onFinished, { setMobileNavOpen, navigate } = {}) 
     // Continue button, or the Household page's preview button), so
     // desktop's always-visible nav is already long painted — this delay is
     // cheap insurance against a future caller that skips that click, not a
-    // fix for an observed bug.
-    requestAnimationFrame(() => setTimeout(start, START_DELAY_MS));
+    // fix for an observed bug. Plain setTimeout, not requestAnimationFrame:
+    // rAF callbacks don't run at all while the tab is backgrounded, which
+    // silently prevents the tour from ever starting until it's foregrounded
+    // again; setTimeout is at most throttled, never indefinitely paused.
+    setTimeout(start, START_DELAY_MS);
   }
 }

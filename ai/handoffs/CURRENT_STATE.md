@@ -1,14 +1,145 @@
 # Task
 
-Implementation session for `ai/tasks/TASK-045-spec.md` — fix the mobile onboarding-tour sidebar
-desync race on rapid Next/Prev taps. The spec was DRAFT-3/10-10/APPROVED FOR IMPLEMENTATION going into
-this session (see prior handoff below the divider). **Implemented and live-verified this session.**
+Implementation session for `ai/tasks/TASK-046-spec.md` — fix two pre-existing onboarding-tour
+completion bugs found during TASK-045's own verification (see prior handoff below the divider):
+`StaplesChecklist` never appearing after the last tour step, and the desktop tour sometimes not
+starting. The spec went through two rounds of GPT architect review (9.6/10 → 9.9/10 APPROVED) in this
+same session before implementation. **Implemented and live-verified this session.**
 
 # Current Status
 
-**Implementation: DONE.** The `isAdvancing` guard, exactly as written in the spec's Decision section, is
-in `client/src/components/onboarding/productTour.js`'s `goToStep`. **Committed and pushed to `staging`
-and `main` (production).**
+**Implementation: DONE.** Both fixes are in `client/src/components/onboarding/productTour.js`.
+**Committed and pushed to `staging` and `main` (production).**
+
+## What was implemented
+
+One file, `client/src/components/onboarding/productTour.js`:
+
+1. **Bug 1 (checklist not appearing):** root-caused by reading `driver.js`'s own bundled source
+   (`client/node_modules/driver.js/dist/driver.js.mjs`, `^1.8.0`) — its public `destroy()` only fires
+   the configured `onDestroyed` callback if two internal, double-underscore-prefixed state fields are
+   already populated, and those aren't set until a step's CSS transition fully completes (confirmed:
+   400ms default duration), even though the popover is already visually in place around the halfway
+   point. Calling `destroy()` in that ~200ms gap — exactly what happens clicking "Done" as soon as the
+   last step's popover looks ready — tears down the UI but silently skips `onDestroyed`, so the tour
+   never completes. Fix: added a `finished` idempotency guard (same pattern as TASK-045's
+   `isAdvancing`) and call `finish()` directly, before `driverObj.destroy()`, at all five places in this
+   file that end the tour (`goToStep`'s `!target`/`!found`/`catch` branches, `onHighlightStarted`,
+   `onPopState`) — no longer depending on `driver.js`'s internal transition-settle timing for
+   `onDestroyed` to fire. `onDestroyed: finish` stays wired for the × button/Escape, which route through
+   `driver.js` internally with no call site of ours to attach to.
+2. **Bug 2 (desktop tour sometimes not starting):** the desktop bootstrap was gated behind
+   `requestAnimationFrame(() => setTimeout(start, START_DELAY_MS))`. `requestAnimationFrame` doesn't
+   run at all while the tab is backgrounded (confirmed live this session, see Verification below) —
+   swapped to a plain `setTimeout(start, START_DELAY_MS)`, which is at most throttled, never
+   indefinitely paused.
+
+## Verification performed (live, this session)
+
+Same DOM/JS-level approach as TASK-045's session, not screenshots — see
+[[feedback_browser_pane_compositing]]. Ran against local dev via Household → "Preview: new
+household"/"Preview: joined household":
+
+- **Bug 1**: completed the `new_household` preview tour to the last step ("Household") at a deliberate
+  pace, 6+ times back-to-back — `StaplesChecklist` appeared every time (previously never did). No
+  degradation or errors across repeated runs.
+- **Back-button-after-completion**: pressed browser Back immediately after reaching the checklist — no
+  console errors, confirming the `popstate` listener was actually removed by `finish()`.
+- **Bug 2, with direct live proof**: this session's Browser pane tab reports `document.hidden === true`
+  even while being actively driven. Confirmed live that a `requestAnimationFrame` callback never fired
+  in 3 full seconds under that condition, while a `setTimeout` callback fired immediately — the exact
+  mechanism the spec predicted, now empirically observed rather than just inferred from research. With
+  the fix, the desktop (1280×800) tour started reliably (popover + route change) despite `document.hidden`
+  staying `true` throughout.
+- **TASK-045 regression check**: rapid 80ms-apart taps still show no sidebar/tooltip desync, and the
+  tour still completes correctly (checklist shown) after a rapid burst — the `finished` guard doesn't
+  interact badly with `isAdvancing`.
+- **"joined" flow**: completes and returns to the Household page correctly (the other `onFinished`
+  branch — calls `onClose()`, not `setStep('checklist')` — unaffected by either fix).
+- No console errors observed across the entire session.
+
+**Not tested this session** (same class of deferral as TASK-045's own handoff): the × close button and
+Escape key (still `onDestroyed`-dependent by design — see Known Risks in the spec), and the real
+(non-preview) fresh-account first-run tour (would require a throwaway account against the shared dev
+DB — [[feedback_dev_db_is_shared]] — same deferral TASK-045 already made).
+
+# Files Created / Changed (this session)
+
+**Created**: `ai/tasks/TASK-046-spec.md` (spec, DRAFT-1 → DRAFT-3/APPROVED across two architect review
+rounds).
+**Modified**: `client/src/components/onboarding/productTour.js` (both fixes), `ai/handoffs/CURRENT_STATE.md`
+(this file).
+**Not touched**: `OnboardingGate.jsx`, `OnboardingPreview.jsx`, `StaplesChecklist.jsx`,
+`HouseholdPage.jsx`, `AppLayout.jsx`, `Sidebar.jsx` — all read to rule out alternative causes per the
+spec's Ruled Out section, none needed changes.
+
+Committed to `staging` and fast-forwarded to `main` (production) — same `staging` → `main` → Vercel flow
+as every prior session since TASK-042.
+
+# Decisions Made
+
+- Implemented the spec's design verbatim (dependency inversion: application owns completion, `driver.js`
+  owns presentation) rather than re-deriving it, per [[feedback_spec_workflow]] — the spec was already
+  DRAFT-3/APPROVED going into this session.
+- Generalized the `finished`-guard fix to all five `driverObj.destroy()` call sites in the file, not just
+  the one Bug 1's repro reaches — settled during architect review as one architectural pattern replaced
+  consistently, not scope creep (see spec's "Resolved During Review" section).
+- Declined a `document.hidden`/`visibilitychange`-based fallback for Bug 2 in favor of the simpler plain
+  `setTimeout` swap — no demonstrated production need beyond what the simpler fix already resolves (spec's
+  "Considered and declined" section).
+- Reused the same DOM/JS-level verification approach as TASK-045 rather than screenshots, per
+  [[feedback_browser_pane_compositing]] — this session additionally used that same environment quirk
+  (`document.hidden === true` in this Browser pane) as direct empirical confirmation of Bug 2's root
+  cause, rather than working around it.
+
+# Known Risks
+
+Carried from the spec (still accurate, now implemented):
+
+- The × close button and Escape key still depend on `driver.js`'s own `onDestroyed` wiring, not a direct
+  `finish()` call — those triggers are handled entirely inside `driver.js` without ever calling back into
+  this file's code. Same underlying `driver.js` quirk could theoretically still affect those two paths;
+  not reported as an actual bug, deferred as a follow-up if ever observed (would require configuring
+  `onCloseClick`).
+- The real (non-preview) first-run tour's completion path is still unverified against an actual fresh
+  account — same unresolved item carried from TASK-045's own handoff, now doubly relevant since this
+  task touches the same completion path.
+
+# Context Notes
+
+- branch: `staging`, fast-forwarded into `main`.
+- worktree: none.
+- `.claude/settings.local.json` continues to have pre-existing local uncommitted changes (permission-
+  prompt settings) unrelated to this or any prior session's work — left as-is, same note carried in every
+  handoff since TASK-040. **Not committed or pushed this session.**
+- Deploy flow used: commit on `staging` → push `origin staging` → fast-forward `main` to `staging`'s tip
+  (`git checkout main && git merge --ff-only staging`) → push `origin main`, which triggers the Vercel
+  production deploy. Same flow as TASK-042 through TASK-045, no new process introduced.
+- This session reused an already-running `server` process on port 3001 (left over from a concurrent
+  session against the same repo, confirmed healthy via `/api/health`) rather than starting a redundant
+  second server instance, since the client's Vite proxy is hardcoded to `localhost:3001` regardless of
+  which port the client dev server itself lands on. Matches the port-conflict behavior TASK-045's handoff
+  already flagged as something to expect in this environment.
+- The Neon DB account used for live verification (`Connor Sharpe's Household`) has substantial real chat
+  history from prior sessions/testing — confirms [[feedback_dev_db_is_shared]] is still accurate.
+
+# Recommended Next Action
+
+TASK-046 itself is done and deployed. Suggested follow-ups, not blocking:
+
+1. If it matters for full closure, verify the real (non-preview) first-run tour's completion path
+   against an actual fresh account — carried over from TASK-045, still open.
+2. Bring the × close button / Escape key under the same direct-`finish()` pattern (configuring
+   `onCloseClick`) only if the underlying `driver.js` timing quirk is ever actually observed on those
+   paths — currently theoretical, not reported.
+
+---
+
+# Prior Handoff (TASK-045 implementation session, now superseded above)
+
+Implementation session for `ai/tasks/TASK-045-spec.md` — fix the mobile onboarding-tour sidebar
+desync race on rapid Next/Prev taps. The spec was DRAFT-3/10-10/APPROVED FOR IMPLEMENTATION going into
+this session (see prior handoff below the divider). **Implemented and live-verified this session.**
 
 ## What was implemented
 
@@ -20,151 +151,13 @@ on any unexpected exception (`finish()` if `isInitial`, else `driverObj.destroy(
 unhandled promise rejection with the tour frozen mid-step. No other file was touched — matches the spec's
 Allowed/Forbidden Files list exactly.
 
-## Verification performed (live, this session)
-
-Ran against local dev at a 375×812 mobile viewport, via Household → "Preview: new household", using
-scripted DOM-level clicks (`.driver-popover-next-btn`/`-prev-btn`) rather than screenshots — see Context
-Notes below for why. Results:
-
-- **Deliberate pace, all 10 real steps**: sidebar open/closed state matched nav-vs-content classification
-  at every single step. No regression from pre-fix behavior.
-- **Rapid Next taps (80ms apart, faster than the 200ms sidebar transition), multiple bursts**: settled
-  state after each burst was always consistent (nav step → sidebar open, content step → sidebar closed).
-  This is the exact reported bug (`popover="Pantry", sidebar=CLOSED`), reproduced as still possible to
-  *trigger a transient race* mid-burst but **never left in a desynced state once tapping stopped** — i.e.
-  the guard closes the race.
-- **Rapid Prev taps**: same — settles correctly reversing direction.
-- **Mixed rapid Next/Prev bursts**: settles correctly, and a normal Next tap immediately after the burst
-  still advances the tour — confirms the guard doesn't wedge it.
-- **Close (×) button clicked mid-transition** (guard's `isAdvancing` deliberately true at click time):
-  tour still terminates immediately, sidebar closes via `finish()`. Confirms the guard does not
-  accidentally block a termination path (architect review round 1's concern) — matches the spec's
-  reasoning that Skip/Close/Escape route through driver.js's own `destroy()`, entirely outside `goToStep`.
-- No console errors or unhandled rejections observed in any of the above.
-
-**Not tested this session**: the spec's "real (non-preview) first-run tour" acceptance item — a genuine
-fresh-account `new_household`/`joined` signup, as opposed to the Household page's side-effect-free
-preview replay. Skipped because [[feedback_dev_db_is_shared]]: local dev points at the same Neon DB the
-deployed app uses, so creating a throwaway test account isn't a fully isolated action. Worth doing before
-calling TASK-045 fully closed out, but the mechanism under test (`goToStep`'s guard) is identical between
-the preview and real flows — `OnboardingPreview.jsx` and `OnboardingGate.jsx` both just call
-`runProductTour()`, per the spec's own Dependency Chain.
-
-**Desktop regression check (≥768px)**: inconclusive by observation, but not a regression — see below.
-
 ## Two pre-existing bugs found during verification, confirmed NOT caused by this fix
 
 Both isolated via `git stash` (reproduced on the original, unmodified `productTour.js` before this
-session's edit, then the fix was restored via `git checkout stash@{0} -- <file>` + `git stash drop` to
-avoid clobbering the pre-existing uncommitted `.claude/settings.local.json` changes). Both are out of
-scope for TASK-045 (`OnboardingPreview.jsx`/`OnboardingGate.jsx` are Forbidden Files in the spec) and
-undocumented as separate tasks — flagging here for whoever picks them up next:
+session's edit). Both are now fixed — see TASK-046 above:
 
-1. **`StaplesChecklist` never appears after the tour's last step ("Household") is completed**, even at a
-   deliberate one-tap-then-wait pace. Expected: `OnboardingPreview`'s `onFinished` callback calls
-   `setStep('checklist')` for the `new_household` flow, rendering `StaplesChecklist`. Observed: the tour's
-   popover disappears and the app returns to a bare page with no checklist and no console error — as if
-   `onClose()` fired instead of `setStep('checklist')`, or the checklist rendered and was dismissed
-   instantly. Not investigated further (out of scope for this task), but reproducible on `git stash`'d
-   original code, so it predates this session.
-2. **On desktop (≥768px), the tour sometimes doesn't visibly start** — "Get started" correctly unmounts
-   `WelcomeStep` (confirmed: `step` state changes, `WelcomeStep` disappears), but no `driver.js` popover
-   ever appears and the route never advances to `/`, even after ~1.5s. Also reproduced on `git stash`'d
-   original code. Given `isMobile` correctly evaluates `false` at 1280px
-   (`window.matchMedia('(min-width: 768px)').matches` confirmed true), this looks like it could be
-   `START_DELAY_MS`/`requestAnimationFrame` timing or a preview-specific mounting quirk rather than the
-   race this task fixes, but wasn't root-caused.
-
-Neither bug blocks TASK-045's own fix (the sidebar/popover desync mid-tour is what's fixed and verified;
-these are about tour *completion*/*startup*, a different code path). Recommend a follow-up task if Connor
-wants either investigated.
-
-# Files Created / Changed (this session)
-
-**Modified**: `client/src/components/onboarding/productTour.js` (the fix), `ai/handoffs/CURRENT_STATE.md`
-(this file).
-**Not touched**: everything else — matches spec's Allowed Files list.
-
-Committed to `staging` and fast-forwarded to `main` (production) — see Context Notes for the exact
-commands used, consistent with prior sessions' `staging` → `main` → Vercel flow.
-
-# Decisions Made
-
-- Implemented the spec's guard code verbatim rather than re-deriving it, per [[feedback_spec_workflow]] —
-  the spec was already at DRAFT-3/APPROVED, so this session's job was implementation + verification, not
-  re-litigating design choices already settled across three architect-review rounds.
-- Chose to verify via scripted DOM clicks + polling `.driver-popover-title`/sidebar `className` rather
-  than screenshots, because [[feedback_browser_pane_compositing]] — this environment's Browser pane has a
-  known history of non-compositing screenshots and stale `getComputedStyle` reads; DOM/class inspection is
-  the reliable signal here, consistent with the prior spec-drafting session's own finding.
-- Restored the fix after each `git stash` isolation test via `git checkout stash@{0} -- <file>` +
-  `git stash drop` instead of a plain `git stash pop`, because `.claude/settings.local.json` has
-  pre-existing local-only changes that a plain `pop` would conflict with (matches every prior handoff's
-  note on that file).
-
-# Known Risks
-
-Carried from the spec (still accurate, now implemented):
-
-- Extra rapid taps during a transition are silently dropped with no visual feedback — intentional, not a
-  regression (see spec's Known Risk 1).
-- This fix does not touch `SIDEBAR_TRANSITION_MS` or the interleaved step list — unchanged, unneeded per
-  live reproduction.
-
-New, from this session's verification (see "Two pre-existing bugs found" above):
-
-- `StaplesChecklist` not appearing after tour completion, and desktop tour sometimes not starting, are
-  both unresolved and undocumented as their own tasks. Not regressions from this fix, but real gaps a user
-  could hit.
-- The spec's "real (non-preview) first-run tour" acceptance item is still unverified — see "Not tested
-  this session" above.
-
-# Context Notes
-
-- branch: `staging`, fast-forwarded into `main`.
-- worktree: none.
-- `.claude/settings.local.json` continues to have pre-existing local uncommitted changes (permission-
-  prompt settings) unrelated to this or any prior session's work — left as-is, same note carried in every
-  handoff since TASK-040. **Not committed or pushed this session.**
-- Deploy flow used: commit on `staging` → push `origin staging` → fast-forward `main` to `staging`'s tip
-  (`git checkout main && git merge --ff-only staging`) → push `origin main`, which triggers the Vercel
-  production deploy. Same flow as TASK-042/043/044, no new process introduced.
-- This session's dev server ports were auto-assigned (3001/5183 were occupied by another concurrent
-  session against the same repo) — `server` on a random port, `client` on a random port with its Vite
-  proxy still pointed at the fixed `localhost:3001`, meaning API calls during this session's testing
-  actually hit the *other* session's server process. Irrelevant to this fix (client-only, no server
-  changes), but worth knowing if a future session sees the same auto-port behavior.
-- The Neon DB account used for live verification (`Connor Sharpe's Household`) has substantial real chat
-  history from prior sessions/testing — confirms [[feedback_dev_db_is_shared]] is still accurate.
-
-# Recommended Next Action
-
-TASK-045 itself is done and deployed. Suggested follow-ups, not blocking:
-
-1. Root-cause and fix (or spec out as new tasks) the two pre-existing bugs found above — checklist not
-   appearing post-tour, and desktop tour sometimes not starting.
-2. If it matters for full closure, verify the spec's "real (non-preview) first-run tour" acceptance item
-   against an actual fresh account rather than the Household page's preview replay.
-
----
-
-# Prior Handoff (spec-drafting session, now superseded above)
-
-Spec-drafting session for `ai/tasks/TASK-045-spec.md` — a mobile onboarding-tour bug Connor found by hand
-("hamburger menu tour" doesn't keep the sidebar open for the duration, so the Pantry nav-item tooltip has
-nothing to point at). This was an audit-only session: the spec went through three rounds of GPT architect
-review and is now fully approved. Zero application code was touched in that session — implementation
-happened in the session documented above.
-
-## What the bug actually is
-
-Root cause is a re-entrancy race in `client/src/components/onboarding/productTour.js`'s `goToStep()`:
-driver.js doesn't await `onNextClick`/`onPrevClick`, so tapping "Next" again before a previous
-`goToStep` call's async chain (sidebar toggle → 200ms transition wait → `navigate()` → `waitForElement()`)
-finishes starts a second overlapping call. The two calls' `setMobileNavOpen()`/`driverObj.moveTo()` calls
-can resolve out of order, desyncing the sidebar's actual open/closed state from whatever step driver.js
-ends up displaying. Full methodology, alternatives considered, and rejected approaches (queue,
-cancel-and-restart) are in `TASK-045-spec.md` itself — read the spec directly, not just this summary.
+1. `StaplesChecklist` never appears after the tour's last step ("Household") is completed.
+2. On desktop (≥768px), the tour sometimes doesn't visibly start.
 
 ## Side effect from that session: local dev DB migration-tracking drift fixed
 
