@@ -1,169 +1,145 @@
 # Task
 
-Implementation session for `ai/tasks/TASK-046-spec.md` — fix two pre-existing onboarding-tour
-completion bugs found during TASK-045's own verification (see prior handoff below the divider):
-`StaplesChecklist` never appearing after the last tour step, and the desktop tour sometimes not
-starting. The spec went through two rounds of GPT architect review (9.6/10 → 9.9/10 APPROVED) in this
-same session before implementation. **Implemented and live-verified this session.**
+Spec-drafting session for `ai/tasks/TASK-048-spec.md` — a public landing page shown to signed-out
+visitors at `/`, describing the app's purpose with "Create account" and "Log in" buttons. Connor asked
+for this directly (no prior bug report/investigation trigger) as part of the app's ongoing move toward
+being publicly reachable (see TASK-037). **Spec only — DRAFT-3, APPROVED FOR IMPLEMENTATION after two
+rounds of GPT architect review (9.7/10 → 10/10). No code written yet this session.**
 
 # Current Status
 
-**Implementation: DONE.** Both fixes are in `client/src/components/onboarding/productTour.js`.
-**Committed and pushed to `staging` and `main` (production).**
+**Spec: APPROVED. Implementation: NOT STARTED.** This session did research + spec drafting only, per
+[[feedback_spec_workflow]] — draft, then external GPT architect review rounds, then implement in a
+(possibly later) session. Both review rounds are recorded directly in the spec file's Architect Review
+History table; nothing further is pending on the spec itself.
 
-## What was implemented
+## What was done this session
 
-One file, `client/src/components/onboarding/productTour.js`:
+- Read `AI_Dev_Agent_Efficiency_Guide_v3_addendum.md` (Connor's attached context-management guide) — not
+  materially relevant to this task (it's about agent context/token budgeting, not app features), so it
+  didn't shape the spec beyond confirming there was nothing applicable to apply.
+- Read the current codebase to establish ground truth before designing anything: `client/src/App.jsx`
+  (routing + the existing `PrivateRoute`), `client/src/pages/JoinPage.jsx` (the one existing precedent for
+  a route reachable while signed out), `client/src/components/layout/AppLayout.jsx`/`Sidebar.jsx` (the
+  authenticated shell `ChatPage` depends on), `README.md` (source of truth for the landing page's copy —
+  deliberately not inventing new marketing language), `client/index.html` (confirmed no `<meta
+  description>` exists today), and `client/package.json` (confirmed `@clerk/clerk-react@^5.61.8` — the
+  plain SPA package, not `@clerk/react-router`, which matters because some 2026 web results describe a
+  newer `<Show>`-component pattern that doesn't apply to this app's actual installed package).
+- **Read the installed Clerk source directly** (`client/node_modules/@clerk/clerk-react/dist/index.js`)
+  rather than trusting docs, to settle whether `SignedIn`/`SignedOut` can flash the wrong state during
+  Clerk's initial load: confirmed `SignedIn` requires a truthy `userId`, `SignedOut` requires `userId ===
+  null` (strict), and `userId` is `undefined` (neither truthy nor `null`) until Clerk actually resolves —
+  so both components render nothing during that gap. This proved a manual `isLoaded` gate is unnecessary
+  for this task, which the DRAFT-1 architect review round explicitly praised as stronger than "I think
+  Clerk handles this."
+- Drafted DRAFT-1 of `ai/tasks/TASK-048-spec.md`, sent it through two rounds of external GPT architect
+  review, and updated the spec in response to each round (see the spec's own Architect Review History table
+  for full detail — not duplicated here).
+  - **Round 1** required one architectural change: `PrivateRoute` (the routing component that gates all six
+    private paths) should not hardcode an import of the new `LandingPage` — that conflates "gate private
+    content" with "know about the marketing homepage." The reviewer's own suggested fix (a standalone
+    `RootPage` route sitting outside `AppLayout` entirely) was evaluated and **declined with reasoning**:
+    `ChatPage` isn't self-contained — it depends on `AppLayout`'s `<Outlet/>` for `Sidebar`,
+    `PantryProvider`, `OnboardingGate`, and shared `mobileNavOpen` context, so pulling `/` out to a fully
+    separate route would force either a second `AppLayout` mount (a real regression: `PantryProvider`,
+    and therefore pantry data, would refetch on every nav between `/` and any other private page) or
+    changes to `AppLayout` itself to support two mounting styles. Adopted the underlying principle a
+    different way instead: `PrivateRoute` now takes the signed-out root's element as a `publicHomeElement`
+    prop from `App.jsx`'s route definitions, rather than hardcoding it.
+  - **Round 2**: 10/10, approved outright, confirming the round-1 revision was the right call and that the
+    declined `RootPage` alternative was correctly declined given the codebase constraint. One
+    non-blocking, non-actioned observation for future reference: if more public/authenticated route
+    carve-outs are ever needed beyond this single `/` case, revisit whether `publicHomeElement` is still
+    the right abstraction — not relevant today with only one carve-out.
+- Updated this file (the handoff you're reading) and committed both to `staging`.
 
-1. **Bug 1 (checklist not appearing):** root-caused by reading `driver.js`'s own bundled source
-   (`client/node_modules/driver.js/dist/driver.js.mjs`, `^1.8.0`) — its public `destroy()` only fires
-   the configured `onDestroyed` callback if two internal, double-underscore-prefixed state fields are
-   already populated, and those aren't set until a step's CSS transition fully completes (confirmed:
-   400ms default duration), even though the popover is already visually in place around the halfway
-   point. Calling `destroy()` in that ~200ms gap — exactly what happens clicking "Done" as soon as the
-   last step's popover looks ready — tears down the UI but silently skips `onDestroyed`, so the tour
-   never completes. Fix: added a `finished` idempotency guard (same pattern as TASK-045's
-   `isAdvancing`) and call `finish()` directly, before `driverObj.destroy()`, at all five places in this
-   file that end the tour (`goToStep`'s `!target`/`!found`/`catch` branches, `onHighlightStarted`,
-   `onPopState`) — no longer depending on `driver.js`'s internal transition-settle timing for
-   `onDestroyed` to fire. `onDestroyed: finish` stays wired for the × button/Escape, which route through
-   `driver.js` internally with no call site of ours to attach to.
-2. **Bug 2 (desktop tour sometimes not starting):** the desktop bootstrap was gated behind
-   `requestAnimationFrame(() => setTimeout(start, START_DELAY_MS))`. `requestAnimationFrame` doesn't
-   run at all while the tab is backgrounded (confirmed live this session, see Verification below) —
-   swapped to a plain `setTimeout(start, START_DELAY_MS)`, which is at most throttled, never
-   indefinitely paused.
+## Design the spec settled on (for the next agent to implement — not yet written to code)
 
-## Verification performed (live, this session)
+- `client/src/pages/LandingPage.jsx` (new): a single static page, copy drawn from `README.md`'s existing
+  description/feature list, with `<Link>`s to `/sign-up` and `/sign-in` (not Clerk's modal-triggering
+  buttons — this app already committed to path-based auth routing). Must never import `AppLayout` or
+  `PantryProvider` — an explicit, spec-documented invariant, not just an implied side effect.
+- `client/src/App.jsx`: `PrivateRoute` gains an optional `publicHomeElement` prop; when signed out and
+  `location.pathname === '/'`, it renders that element instead of `RedirectToSignIn`. The one route usage
+  that wraps `AppLayout` passes `publicHomeElement={<LandingPage />}`. No other route, and no other file,
+  changes.
+- `client/index.html`: one new `<meta name="description">` tag — purely additive.
 
-Same DOM/JS-level approach as TASK-045's session, not screenshots — see
-[[feedback_browser_pane_compositing]]. Ran against local dev via Household → "Preview: new
-household"/"Preview: joined household":
-
-- **Bug 1**: completed the `new_household` preview tour to the last step ("Household") at a deliberate
-  pace, 6+ times back-to-back — `StaplesChecklist` appeared every time (previously never did). No
-  degradation or errors across repeated runs.
-- **Back-button-after-completion**: pressed browser Back immediately after reaching the checklist — no
-  console errors, confirming the `popstate` listener was actually removed by `finish()`.
-- **Bug 2, with direct live proof**: this session's Browser pane tab reports `document.hidden === true`
-  even while being actively driven. Confirmed live that a `requestAnimationFrame` callback never fired
-  in 3 full seconds under that condition, while a `setTimeout` callback fired immediately — the exact
-  mechanism the spec predicted, now empirically observed rather than just inferred from research. With
-  the fix, the desktop (1280×800) tour started reliably (popover + route change) despite `document.hidden`
-  staying `true` throughout.
-- **TASK-045 regression check**: rapid 80ms-apart taps still show no sidebar/tooltip desync, and the
-  tour still completes correctly (checklist shown) after a rapid burst — the `finished` guard doesn't
-  interact badly with `isAdvancing`.
-- **"joined" flow**: completes and returns to the Household page correctly (the other `onFinished`
-  branch — calls `onClose()`, not `setStep('checklist')` — unaffected by either fix).
-- No console errors observed across the entire session.
-
-**Not tested this session** (same class of deferral as TASK-045's own handoff): the × close button and
-Escape key (still `onDestroyed`-dependent by design — see Known Risks in the spec), and the real
-(non-preview) fresh-account first-run tour (would require a throwaway account against the shared dev
-DB — [[feedback_dev_db_is_shared]] — same deferral TASK-045 already made).
-
-# Files Created / Changed (this session)
-
-**Created**: `ai/tasks/TASK-046-spec.md` (spec, DRAFT-1 → DRAFT-3/APPROVED across two architect review
-rounds).
-**Modified**: `client/src/components/onboarding/productTour.js` (both fixes), `ai/handoffs/CURRENT_STATE.md`
-(this file).
-**Not touched**: `OnboardingGate.jsx`, `OnboardingPreview.jsx`, `StaplesChecklist.jsx`,
-`HouseholdPage.jsx`, `AppLayout.jsx`, `Sidebar.jsx` — all read to rule out alternative causes per the
-spec's Ruled Out section, none needed changes.
-
-Committed to `staging` and fast-forwarded to `main` (production) — same `staging` → `main` → Vercel flow
-as every prior session since TASK-042.
+Full code (not just a description) for all three changes is already written out in the spec's Design
+section — the next agent should be able to implement directly from
+[`ai/tasks/TASK-048-spec.md`](../tasks/TASK-048-spec.md) without re-deriving the design.
 
 # Decisions Made
 
-- Implemented the spec's design verbatim (dependency inversion: application owns completion, `driver.js`
-  owns presentation) rather than re-deriving it, per [[feedback_spec_workflow]] — the spec was already
-  DRAFT-3/APPROVED going into this session.
-- Generalized the `finished`-guard fix to all five `driverObj.destroy()` call sites in the file, not just
-  the one Bug 1's repro reaches — settled during architect review as one architectural pattern replaced
-  consistently, not scope creep (see spec's "Resolved During Review" section).
-- Declined a `document.hidden`/`visibilitychange`-based fallback for Bug 2 in favor of the simpler plain
-  `setTimeout` swap — no demonstrated production need beyond what the simpler fix already resolves (spec's
-  "Considered and declined" section).
-- Reused the same DOM/JS-level verification approach as TASK-045 rather than screenshots, per
-  [[feedback_browser_pane_compositing]] — this session additionally used that same environment quirk
-  (`document.hidden === true` in this Browser pane) as direct empirical confirmation of Bug 2's root
-  cause, rather than working around it.
+- Spec-then-review-then-implement, not implement-directly — per [[feedback_spec_workflow]] and since this
+  touches the app's root routing/auth-gating path, exactly the kind of change worth a second opinion before
+  code exists.
+- Declined the architect review's literal `RootPage` restructuring suggestion (round 1) with a concrete,
+  codebase-specific counter-argument (`AppLayout`/`PantryProvider`/`Outlet` coupling) rather than accepting
+  it at face value — the reviewer agreed with this reasoning in round 2 rather than pushing back further.
+- Did not implement any code this session — Connor's request was specifically to draft and review the
+  spec, then hand off; implementation is explicitly the next agent's job.
 
 # Known Risks
 
-Carried from the spec (still accurate, now implemented):
+Carried from the spec (all still accurate, see `ai/tasks/TASK-048-spec.md`'s own Known Risks section for
+full detail):
 
-- The × close button and Escape key still depend on `driver.js`'s own `onDestroyed` wiring, not a direct
-  `finish()` call — those triggers are handled entirely inside `driver.js` without ever calling back into
-  this file's code. Same underlying `driver.js` quirk could theoretically still affect those two paths;
-  not reported as an actual bug, deferred as a follow-up if ever observed (would require configuring
-  `onCloseClick`).
-- The real (non-preview) first-run tour's completion path is still unverified against an actual fresh
-  account — same unresolved item carried from TASK-045's own handoff, now doubly relevant since this
-  task touches the same completion path.
+- SPA client-side rendering means non-JS crawlers won't see the landing copy on first paint — accepted for
+  v1, not solved (would need SSR/prerendering, out of scope).
+- `PrivateRoute` is shared code gating five other private paths besides `/` — the implementer must verify
+  (spec's Verification Steps #4) that signed-out deep links to `/dashboard`, `/pantry`, `/recipes`,
+  `/shopping`, `/household` still hard-redirect to sign-in exactly as today; a mistake in the
+  `publicHomeElement`/`pathname === '/'` check would silently make more than just the root path public.
 
 # Context Notes
 
-- branch: `staging`, fast-forwarded into `main`.
+- branch: `staging`.
 - worktree: none.
-- `.claude/settings.local.json` continues to have pre-existing local uncommitted changes (permission-
-  prompt settings) unrelated to this or any prior session's work — left as-is, same note carried in every
-  handoff since TASK-040. **Not committed or pushed this session.**
-- Deploy flow used: commit on `staging` → push `origin staging` → fast-forward `main` to `staging`'s tip
-  (`git checkout main && git merge --ff-only staging`) → push `origin main`, which triggers the Vercel
-  production deploy. Same flow as TASK-042 through TASK-045, no new process introduced.
-- This session reused an already-running `server` process on port 3001 (left over from a concurrent
-  session against the same repo, confirmed healthy via `/api/health`) rather than starting a redundant
-  second server instance, since the client's Vite proxy is hardcoded to `localhost:3001` regardless of
-  which port the client dev server itself lands on. Matches the port-conflict behavior TASK-045's handoff
-  already flagged as something to expect in this environment.
-- The Neon DB account used for live verification (`Connor Sharpe's Household`) has substantial real chat
-  history from prior sessions/testing — confirms [[feedback_dev_db_is_shared]] is still accurate.
+- No dev servers were started this session — this was a research/spec-drafting session, no code to
+  preview.
+- **Unrelated pre-existing uncommitted work still sits in the working tree** and was deliberately left
+  untouched by this session's commit (scoped to just the spec + this handoff, per Connor's explicit "commit
+  the docs" instruction): `ai/tasks/TASK-047-spec.md` and its full implementation (`server/db/schema.js`,
+  `server/db/migrations/0020_suggestions.sql` + journal entry, `server/services/suggestionService.js`,
+  `server/routes/suggestions.js`, `server/app.js`, `client/src/components/dashboard/SuggestionBox.jsx`,
+  `client/src/pages/DashboardPage.jsx`) — per the prior handoff below, this was implemented and
+  live-verified in an earlier session but is **still awaiting Connor's review before it's committed**. Also
+  still present: `.claude/settings.local.json`'s pre-existing local diff (carried uncommitted since
+  TASK-040, per every handoff since). None of this is TASK-048's concern — noted here only so the next
+  agent doesn't mistake it for something this session touched or that needs cleaning up as part of
+  TASK-048.
 
 # Recommended Next Action
 
-TASK-046 itself is done and deployed. Suggested follow-ups, not blocking:
-
-1. If it matters for full closure, verify the real (non-preview) first-run tour's completion path
-   against an actual fresh account — carried over from TASK-045, still open.
-2. Bring the × close button / Escape key under the same direct-`finish()` pattern (configuring
-   `onCloseClick`) only if the underlying `driver.js` timing quirk is ever actually observed on those
-   paths — currently theoretical, not reported.
+1. Implement `ai/tasks/TASK-048-spec.md` (DRAFT-3, APPROVED FOR IMPLEMENTATION) verbatim — all three file
+   changes are fully specified with code in the spec's Design section.
+2. Live-verify against local dev per the spec's own Verification Steps (8 steps: signed-out landing render,
+   sign-up flow, sign-in flow, deep-link regression check on the five other private paths, no
+   signed-in flash, responsive check, meta tag present, keyboard/accessibility check).
+3. Leave the TASK-047 suggestion-box work (see Context Notes above) alone unless Connor separately asks for
+   it — it's a different, already-implemented, already-reviewed-by-architect feature waiting on Connor's
+   own diff review, not this task's responsibility.
 
 ---
 
-# Prior Handoff (TASK-045 implementation session, now superseded above)
+# Prior Handoff (TASK-047 implementation session, now superseded above)
 
-Implementation session for `ai/tasks/TASK-045-spec.md` — fix the mobile onboarding-tour sidebar
-desync race on rapid Next/Prev taps. The spec was DRAFT-3/10-10/APPROVED FOR IMPLEMENTATION going into
-this session (see prior handoff below the divider). **Implemented and live-verified this session.**
+Implementation session for `ai/tasks/TASK-047-spec.md` — private, owner-only "Suggest an Improvement"
+feedback box on the Dashboard. The spec went through two rounds of GPT architect review (9.6/10 →
+9.9/10 APPROVED) before implementation, plus two scope questions resolved directly with Connor before
+drafting (no read UI — DB-only; fire-and-forget submitter UX). **Implemented and live-verified that
+session; still not committed/pushed as of this handoff** — left for Connor to review the diff before it
+lands on `staging`. Full detail (files created/changed, verification performed, test data left in the
+shared DB) is preserved in git history of this file as of the TASK-047 session — see that commit if ever
+needed again, not duplicated here to keep this handoff from growing unbounded.
 
-## What was implemented
+# Prior-Prior Handoff (TASK-046 implementation session)
 
-One file, `client/src/components/onboarding/productTour.js`: `goToStep` now tracks a closure-scoped
-`isAdvancing` boolean. A call that arrives while a prior one is still in flight returns immediately
-(dropped, not queued). The whole body is wrapped in `try/catch/finally`: `finally` always clears the flag
-(guarantees the tour can't permanently wedge even on an early return), and `catch` ends the tour cleanly
-on any unexpected exception (`finish()` if `isInitial`, else `driverObj.destroy()`) instead of leaving an
-unhandled promise rejection with the tour frozen mid-step. No other file was touched — matches the spec's
-Allowed/Forbidden Files list exactly.
-
-## Two pre-existing bugs found during verification, confirmed NOT caused by this fix
-
-Both isolated via `git stash` (reproduced on the original, unmodified `productTour.js` before this
-session's edit). Both are now fixed — see TASK-046 above:
-
-1. `StaplesChecklist` never appears after the tour's last step ("Household") is completed.
-2. On desktop (≥768px), the tour sometimes doesn't visibly start.
-
-## Side effect from that session: local dev DB migration-tracking drift fixed
-
-While reproducing the bug locally, `npm run dev`'s server startup failed with `NeonDbError: type
-"onboarding_flow" already exists`. Root cause: `drizzle.__drizzle_migrations` was missing tracking rows for
-`0018_user_onboarding` and `0019_drop_users` even though both were already fully applied to the actual
-schema — same underlying drift class already documented for `0017_platform_settings`. Fixed by inserting
-the two missing tracking rows (pure bookkeeping, no schema change). `0017` itself is still untracked in
-the journal (pre-existing, undisturbed).
+Fixed two pre-existing onboarding-tour completion bugs (`StaplesChecklist` not appearing after the last
+step; desktop tour sometimes not starting), both root-caused via `driver.js`'s bundled source and fixed
+in `client/src/components/onboarding/productTour.js` (a `finished` idempotency guard called before
+`driverObj.destroy()` at all five end-of-tour call sites, and swapping a `requestAnimationFrame` gate for
+a plain `setTimeout`). Live-verified, committed and pushed to `staging` and fast-forwarded to `main`
+(production). Full detail in git history / the TASK-046 spec if ever needed again.
