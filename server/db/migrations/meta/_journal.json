@@ -134,6 +134,13 @@
       "when": 1753142460000,
       "tag": "0019_drop_users",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1785171529668,
+      "tag": "0020_suggestions",
+      "breakpoints": true
     }
   ]
 }

@@ -16,6 +16,7 @@ import dietaryRouter from './routes/dietary.js';
 import adminRouter from './routes/admin.js';
 import onboardingRouter from './routes/onboarding.js';
 import clientErrorsRouter from './routes/clientErrors.js';
+import suggestionsRouter from './routes/suggestions.js';
 
 const REQUIRED_ENV = [
   'CLERK_SECRET_KEY',
@@ -65,6 +66,7 @@ app.use('/api/dietary', dietaryRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/onboarding', onboardingRouter);
 app.use('/api/client-errors', clientErrorsRouter);
+app.use('/api/suggestions', suggestionsRouter);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 

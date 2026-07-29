@@ -1,6 +1,7 @@
 import ExpiryStrip from '../components/dashboard/ExpiryStrip.jsx';
 import EatThisNow from '../components/dashboard/EatThisNow.jsx';
 import QuickAdd from '../components/dashboard/QuickAdd.jsx';
+import SuggestionBox from '../components/dashboard/SuggestionBox.jsx';
 import PageHeader from '../components/layout/PageHeader.jsx';
 
 export default function DashboardPage() {
@@ -36,6 +37,14 @@ export default function DashboardPage() {
           Quick Add
         </h2>
         <QuickAdd />
+      </section>
+
+      {/* Zone 4: private, owner-only suggestion box */}
+      <section aria-labelledby="suggestion-heading">
+        <h2 id="suggestion-heading" className="sr-only">
+          Suggest an Improvement
+        </h2>
+        <SuggestionBox />
       </section>
     </div>
   );

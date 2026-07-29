@@ -203,3 +203,18 @@ export const mealLogs = pgTable('meal_logs', {
   loggedAt: text('logged_at').notNull(),
   source: text('source').notNull().default('agent'),
 });
+
+// Private, owner-only feedback box (TASK-047). Write-only from the app's perspective — no read
+// endpoint exists; the owner queries this table directly. clerkUserId is stored (not just
+// householdId) so a specific submission can be attributed to a member of a multi-person household.
+export const suggestions = pgTable('suggestions', {
+  id: serial('id').primaryKey(),
+  householdId: integer('household_id')
+    .notNull()
+    .references(() => households.id, { onDelete: 'cascade' }),
+  clerkUserId: text('clerk_user_id').notNull(),
+  message: text('message').notNull(),
+  createdAt: text('created_at')
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+});
