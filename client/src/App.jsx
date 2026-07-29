@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import {
   SignIn,
@@ -11,6 +11,7 @@ import { AuthProvider } from './context/AuthContext.jsx';
 import AppLayout from './components/layout/AppLayout.jsx';
 import ErrorBoundary from './components/layout/ErrorBoundary.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
+import LandingPage from './pages/LandingPage.jsx';
 import PantryPage from './pages/PantryPage.jsx';
 import RecipesPage from './pages/RecipesPage.jsx';
 import ShoppingPage from './pages/ShoppingPage.jsx';
@@ -18,12 +19,15 @@ import ChatPage from './pages/ChatPage.jsx';
 import HouseholdPage from './pages/HouseholdPage.jsx';
 import JoinPage from './pages/JoinPage.jsx';
 
-function PrivateRoute({ children }) {
+function PrivateRoute({ children, publicHomeElement }) {
+  const location = useLocation();
   return (
     <>
       <SignedIn>{children}</SignedIn>
       <SignedOut>
-        <RedirectToSignIn />
+        {publicHomeElement && location.pathname === '/'
+          ? publicHomeElement
+          : <RedirectToSignIn />}
       </SignedOut>
     </>
   );
@@ -50,7 +54,7 @@ export default function App() {
 
             <Route
               element={
-                <PrivateRoute>
+                <PrivateRoute publicHomeElement={<LandingPage />}>
                   <AppLayout />
                 </PrivateRoute>
               }
