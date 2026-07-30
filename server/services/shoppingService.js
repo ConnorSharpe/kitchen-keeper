@@ -196,18 +196,10 @@ export async function addManualItem(householdId, listId, itemData) {
   return { status: 'ok', item: newItem };
 }
 
-// Full build: aggregate ingredients → deduplicate → pantry cross-reference → persist atomically.
-export async function buildFromRecipes(householdId, name, recipeIds) {
-  // Every recipe must belong to this user
-  const recipeRows = await Promise.all(
-    recipeIds.map(async (id) => {
-      const [r] = await db.select().from(recipes).where(eq(recipes.id, id));
-      return r && r.householdId === householdId ? r : null;
-    })
-  );
-  if (recipeRows.some((r) => r === null)) return { status: 'invalid_recipes' };
-
-  // Aggregate by lowercase name; track unit mismatches
+// Aggregates ingredients across recipes by lowercase-trimmed name, flagging unit
+// disagreements rather than guessing. Private: encodes matching assumptions specific
+// to this file's callers (see TASK-049 D-6).
+function aggregateIngredients(recipeRows) {
   const ingredientMap = new Map();
   for (const recipe of recipeRows) {
     for (const ing of parseJSON(recipe.ingredients)) {
@@ -231,8 +223,12 @@ export async function buildFromRecipes(householdId, name, recipeIds) {
       }
     }
   }
+  return [...ingredientMap.values()];
+}
 
-  // Cross-reference active pantry — reduce shortfalls, skip fully stocked items
+// Cross-references active (non-consumed) pantry stock — reduces shortfalls in place,
+// drops entries the pantry fully covers. Private, mirrors aggregateIngredients (D-6).
+async function subtractPantry(householdId, entries) {
   const activePantry = await db
     .select()
     .from(pantryItems)
@@ -255,7 +251,8 @@ export async function buildFromRecipes(householdId, name, recipeIds) {
   }
 
   const needed = [];
-  for (const [key, entry] of ingredientMap) {
+  for (const entry of entries) {
+    const key = entry.ingredientName.trim().toLowerCase();
     if (!entry.hasUnitMismatch && entry.quantity !== null) {
       const inPantry = pantryMap.get(key);
       if (inPantry && inPantry.unit === entry.unit) {
@@ -265,6 +262,55 @@ export async function buildFromRecipes(householdId, name, recipeIds) {
     }
     needed.push(entry);
   }
+  return needed;
+}
+
+// Cross-references the list's own existing *unchecked* items, so adding a recipe on
+// top of an item already on the list produces one shortfall row instead of a
+// duplicate. Checked rows are excluded entirely — isChecked is a workflow-completion
+// marker, never synced to pantryItems (see toggleItem), so a checked row can be stale
+// and must not silently suppress a genuinely-needed new ingredient (TASK-049 D-2).
+// Never mutates existingItems — only the new entry's quantity is reduced or dropped.
+function subtractExistingListItems(existingItems, entries) {
+  const unchecked = existingItems.filter((it) => !it.isChecked);
+  const listMap = new Map();
+  for (const it of unchecked) {
+    const key = it.ingredientName.trim().toLowerCase();
+    const cur = listMap.get(key);
+    if (cur && cur.unit === it.unit) {
+      cur.quantity = (cur.quantity ?? 0) + (it.quantity ?? 0);
+    } else if (!cur) {
+      listMap.set(key, { quantity: it.quantity, unit: it.unit });
+    }
+  }
+  const result = [];
+  for (const entry of entries) {
+    const key = entry.ingredientName.trim().toLowerCase();
+    if (!entry.hasUnitMismatch && entry.quantity !== null) {
+      const onList = listMap.get(key);
+      if (onList && onList.unit === entry.unit && onList.quantity !== null) {
+        if (onList.quantity >= entry.quantity) continue; // list already covers it — drop entirely
+        entry.quantity = entry.quantity - onList.quantity; // insert only the shortfall
+      }
+    }
+    result.push(entry);
+  }
+  return result;
+}
+
+// Full build: aggregate ingredients → deduplicate → pantry cross-reference → persist atomically.
+export async function buildFromRecipes(householdId, name, recipeIds) {
+  // Every recipe must belong to this user
+  const recipeRows = await Promise.all(
+    recipeIds.map(async (id) => {
+      const [r] = await db.select().from(recipes).where(eq(recipes.id, id));
+      return r && r.householdId === householdId ? r : null;
+    })
+  );
+  if (recipeRows.some((r) => r === null)) return { status: 'invalid_recipes' };
+
+  const entries = aggregateIngredients(recipeRows);
+  const needed = await subtractPantry(householdId, entries);
 
   // Persist list, then items — no db.transaction() (drizzle-orm/neon-http has no
   // interactive transaction support; TASK-035 Part A1). The list insert and the
@@ -307,4 +353,65 @@ export async function buildFromRecipes(householdId, name, recipeIds) {
     .filter((i) => i.hasUnitMismatch)
     .map((i) => i.ingredientName);
   return { status: 'ok', list, items, warnings };
+}
+
+// Adds selected recipes' ingredients to a list that already exists — aggregates,
+// cross-references pantry, then cross-references the list's own unchecked items
+// (never mutating them), and inserts only the shortfall. Returns just the newly
+// inserted items (see TASK-049 Design section 3).
+export async function addRecipesToList(householdId, listId, recipeIds) {
+  const [list] = await db
+    .select()
+    .from(shoppingLists)
+    .where(
+      and(
+        eq(shoppingLists.id, listId),
+        eq(shoppingLists.householdId, householdId)
+      )
+    );
+  if (!list) return { status: 'not_found' };
+
+  const recipeRows = await Promise.all(
+    recipeIds.map(async (id) => {
+      const [r] = await db.select().from(recipes).where(eq(recipes.id, id));
+      return r && r.householdId === householdId ? r : null;
+    })
+  );
+  if (recipeRows.some((r) => r === null)) return { status: 'invalid_recipes' };
+
+  const entries = aggregateIngredients(recipeRows);
+  const afterPantry = await subtractPantry(householdId, entries);
+
+  const existingItems = await db
+    .select()
+    .from(shoppingListItems)
+    .where(eq(shoppingListItems.listId, listId));
+
+  const needed = subtractExistingListItems(existingItems, afterPantry);
+
+  // sortOrder continues from the full existing set (checked + unchecked) — checked
+  // rows still occupy sort positions even though they're excluded from coverage above.
+  const maxSort = existingItems.reduce((m, i) => Math.max(m, i.sortOrder), -1);
+
+  let items = [];
+  if (needed.length > 0) {
+    items = await db
+      .insert(shoppingListItems)
+      .values(
+        needed.map((ing, idx) => ({
+          listId,
+          ingredientName: ing.ingredientName,
+          quantity: ing.quantity,
+          unit: ing.unit,
+          sortOrder: maxSort + 1 + idx,
+          hasUnitMismatch: ing.hasUnitMismatch,
+        }))
+      )
+      .returning();
+  }
+
+  const warnings = needed
+    .filter((i) => i.hasUnitMismatch)
+    .map((i) => i.ingredientName);
+  return { status: 'ok', items, warnings };
 }

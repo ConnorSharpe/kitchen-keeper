@@ -1,83 +1,102 @@
 # Task
 
-Spec-drafting session for `ai/tasks/TASK-049-spec.md`: let a user create a shopping list from scratch
-(no recipe required), preserve the existing start-from-recipe flow, and add a new capability — add saved
-recipe(s) to a list that already exists, inserting only the ingredients the household doesn't already
-have. **Spec is fully approved (two rounds of GPT architect review, 9.7/10 → 10/10). Implementation has
-NOT started this session** — no code was written, only the spec.
+TASK-049 implementation session: built `ai/tasks/TASK-049-spec.md` (DRAFT-3, approved) end to end —
+blank-list creation, and the new add-recipe(s)-to-an-existing-list capability. **Implemented and
+live-verified this session. Not yet committed** — working tree has the changes, no commit made (only
+commit on explicit request, per session convention).
 
 # Current Status
 
-**DRAFT-3, APPROVED FOR IMPLEMENTATION. No code changes yet — next session should implement directly
-against the spec.**
+**Implementation complete, live-verified in the local dev environment, test data cleaned up. Awaiting
+Connor's go-ahead to commit.**
 
 ## What was done this session
 
-- Read the full existing shopping/recipe/pantry code path before designing anything: `buildFromRecipes`
-  ([shoppingService.js](../../server/services/shoppingService.js)) already does recipe-ingredient
-  aggregation + pantry cross-referencing for a *fresh* list; the only creation path today requires
-  `recipeIds.min(1)`; `addManualItem` already lets a user add one item at a time to an *existing* list
-  with no dedup; no recipe→shopping-list UI exists outside the Shopping page.
-- Researched 2026 practice on ingredient-name matching (fuzzy/Levenshtein) and unit conversion libraries
-  before deciding what to extend — deliberately declined both in favor of extending the app's existing
-  exact-match convention, since fuzzy matching risks wrong auto-merges and unit conversion needs a
-  per-ingredient density table this app doesn't have. See the spec's Research section for sources.
-- Drafted DRAFT-1: blank lists via `recipeIds: []` on the existing build endpoint (no new endpoint), a
-  new `POST /:id/add-recipes` endpoint reusing extracted `aggregateIngredients`/`subtractPantry` helpers
-  plus a new `subtractExistingListItems` pass, never mutating pre-existing list rows.
-- Architect review round 1 (9.7/10): required one change — `subtractExistingListItems` must only treat
-  **unchecked** existing rows as coverage. Verified the reasoning against the actual code before accepting
-  it, not on the review's authority alone: `toggleItem` only flips `isChecked` and never writes to
-  `pantryItems`, so a checked row can go stale (already used up since a prior trip) on a list the
-  household hasn't cleared — letting it silently suppress a new recipe's real ingredient need would be a
-  correctness bug. Applied the fix (DRAFT-2), added a dedicated verification step for it.
-- Architect review round 2 (10/10, approved): confirmed the fix and its "pantry = inventory, shopping
-  list = purchasing workflow" framing. One non-blocking observation (in-place mutation in the new helper,
-  consistent with the existing pattern) documented as D-7 rather than acted on. Folded the review's
-  implementation-risk checklist into a new "Implementation Notes" section in the spec so it reaches
-  whoever implements this next, not just the review history table.
+- Implemented exactly per the spec's Allowed Files list, no scope drift:
+  - [shoppingService.js](../../server/services/shoppingService.js): extracted `aggregateIngredients` and
+    `subtractPantry` out of `buildFromRecipes` as private helpers (no logic change — verified via a live
+    2-recipe build, see below); added `subtractExistingListItems` (checked rows excluded from coverage,
+    never mutates existing rows) and `addRecipesToList` per the spec's Design section 3, byte-matching the
+    spec's own reference implementation for the tricky exclusion logic.
+  - [shopping.js](../../server/routes/shopping.js): relaxed `buildSchema.recipeIds` to `.min(0).default([])`;
+    added `POST /:id/add-recipes` with its own `.min(1)` schema and the same `not_found`/`invalid_recipes`
+    status mapping used elsewhere in the file.
+  - [useShopping.js](../../client/src/hooks/useShopping.js): added `addRecipesToList`.
+  - New [RecipeSelectList.jsx](../../client/src/components/shopping/RecipeSelectList.jsx): extracted shared
+    checkbox-list UI, used by both modals.
+  - [BuildListModal.jsx](../../client/src/components/shopping/BuildListModal.jsx): recipe selection now
+    optional, dynamic submit label (`Create List` / `Build List`), skips the result screen on a 0-recipe
+    submit, retitled to "New Shopping List".
+  - New [AddRecipesModal.jsx](../../client/src/components/shopping/AddRecipesModal.jsx): recipe picker
+    reusing `RecipeSelectList`, "Add to List" submit, handles the 0-items-added case with dedicated copy.
+  - [ShoppingPage.jsx](../../client/src/pages/ShoppingPage.jsx): "+ Add Recipe" button, `AddRecipesModal`
+    wiring, `refreshKey` folded into `ShoppingList`'s existing `key`-triggers-refetch mechanism (no change
+    to `ShoppingList.jsx` itself, per the spec's Forbidden Files), updated subtitle/empty-state copy.
+- `npm run lint` clean on every changed/new file; `npm test --prefix server` — 82/82 passing (no
+  shopping-service-specific tests exist in this repo to extend).
+- Live-verified in the local dev environment (separate Neon branch from staging/prod — see
+  [[feedback_dev_db_is_shared]]) against Connor's real local household data (2 saved recipes: "Lobster
+  Pasta with Cream Sauce," "Caribbean Style Curry Cod"), using disposable test shopping lists deleted
+  afterward via a direct `DELETE /api/shopping/:id` call (the UI's `window.confirm` didn't resolve
+  through the automated browser tool, so cleanup went through the API instead of the confirm dialog).
+  Confirmed live: blank-list creation with immediate no-result-screen landing (Verification Step 2);
+  manual-add still works on a blank list (Step 3); the pre-extraction regression path (2 recipes sharing
+  "garlic" at the same unit, 31 items, no crash, exact-match convention intact — Step 1, no live case
+  existed in this household's 2 recipes for the unit-*mismatch* half of Step 1, covered instead by direct
+  code inspection since the extraction is copy-only); a partial-overlap shortfall row (Butter 2 tbsps
+  needed, 1 already on the list unchecked → new 1-tbsps row, original untouched — Step 5); **the
+  architect-mandated checked-item-exclusion fix** — a checked "Garlic minced" row did not suppress a new
+  recipe's need, a full new row was inserted and the checked row was left exactly as it was (Step 6, the
+  highest-risk behavior in the whole spec); coverage correctly dropped 11 of 13 already-covered
+  ingredients on a repeat add, only re-adding the two with no quantity (Salt, Pepper — confirms this is
+  the spec's own intended `quantity !== null` guard, not a bug); both modals and the "+ Add Recipe" button
+  render and remain usable at a 375px mobile viewport (Step 11). Steps 8/9 (cross-household/list-ownership
+  guards) and Step 10 (sortOrder from the full existing set) were verified by direct code inspection
+  against the spec's reference implementation rather than a live second-household test, since they
+  mechanically match the exact pattern every other `:id` route in this file already uses.
 
 # Decisions Made
 
-- Blank-list creation reuses `POST /api/shopping/build` with `recipeIds: []` rather than a second create
-  endpoint — the existing service function already produces a correct empty list for a zero-recipe call
-  with no logic change, confirmed by reading it.
-- No fuzzy ingredient matching, no automatic unit conversion, no schema change (no `sourceRecipeId`
-  provenance column) — all explicitly scoped out, see the spec's Decisions/Out of Scope sections.
-- Existing-list coverage checking only consults **unchecked** rows and never mutates any existing row
-  (checked or unchecked) — inserts a fresh row for the shortfall instead. Two independent invariants,
-  kept separate in the spec (D-2) after architect review round 1 split them apart for future-maintenance
-  clarity.
-- `aggregateIngredients`, `subtractPantry`, `subtractExistingListItems` are private, unexported helpers
-  inside `shoppingService.js` — not a general-purpose utility surface.
+- No implementation decisions diverged from the approved spec — implemented as designed, including the
+  parts the spec was most explicit about getting right (D-2's checked/unchecked split, D-6's private
+  helper extraction).
 
 # Known Risks
 
-- **None new from this session** — no code was written, so no new runtime risk. The spec's own Known
-  Risks section (extraction-regression risk on `buildFromRecipes`, doubled exact-match brittleness,
-  intentional same-name duplicate rows after a partial-overlap add) applies once implementation starts.
-- Carried forward, unrelated to this session, still open: OpenAI billing confirmation and Clerk sign-up
-  hardening from the public-AI-access fix (see [[project_go_public_readiness]] — not re-detailed here,
-  tracked in memory since it's still accurate and this session didn't touch it).
+- **Not yet committed.** Working tree has all seven Allowed Files changes; nothing pushed or committed
+  this session — only commit on Connor's explicit request.
+- Carried forward, unrelated to this session: OpenAI billing confirmation and Clerk sign-up hardening
+  from the public-AI-access fix — see [[project_go_public_readiness]].
 
 # Context Notes
 
 - branch: `staging`.
-- No dev servers were started this session — this was pure spec drafting (reading code + one round of web
-  research + two rounds of architect review), no UI to preview yet since nothing was implemented.
+- Dev servers were started via the project's `.claude/launch.json` configs (`server` on 3001, `client` on
+  5183) — a stale `node index.js` from an earlier, uncleaned session was occupying port 3001 and was
+  stopped first so the new code was actually what got exercised.
 
 # Recommended Next Action
 
-1. **Implement `ai/tasks/TASK-049-spec.md` directly** — it's fully approved, DRAFT-3. Follow its Allowed
-   Files / Forbidden Files sections exactly, and pay particular attention to the four points in its new
-   Implementation Notes section (byte-identical `buildFromRecipes` extraction, `sortOrder` using the full
-   existing-item set not the unchecked subset, filtering checked rows before building the coverage map,
-   and confirming the `refreshKey` remount actually surfaces new items in the UI).
-2. Run the spec's own Verification Steps (11 of them) before considering this done — Step 6 in particular
-   exercises the round-1 architect fix and must not be skipped.
-3. Unrelated carry-forward, not blocking TASK-049: OpenAI billing confirmation and Clerk sign-up hardening
-   are still open per [[project_go_public_readiness]] — worth surfacing to Connor if this session has
-   spare time, but not part of this task.
+1. Review the diff, then let Claude know if/when to commit — no commit was made this session per the
+   commit-only-on-request convention.
+2. Unrelated carry-forward, not blocking TASK-049: OpenAI billing confirmation and Clerk sign-up hardening
+   are still open per [[project_go_public_readiness]].
+
+---
+
+# Prior Handoff (TASK-049 spec-drafting session, now superseded above)
+
+Spec-drafting session for `ai/tasks/TASK-049-spec.md`: let a user create a shopping list from scratch (no
+recipe required), preserve the existing start-from-recipe flow, and add a new capability — add saved
+recipe(s) to a list that already exists, inserting only the ingredients the household doesn't already
+have. Read the full existing shopping/recipe/pantry code path before designing anything, researched and
+deliberately declined fuzzy ingredient matching and automatic unit conversion in favor of extending the
+app's existing exact-match convention (see the spec's Research section for sources), then went through two
+rounds of GPT architect review (9.7/10 → 10/10 APPROVED). Round 1's one required change —
+`subtractExistingListItems` must only treat **unchecked** existing rows as coverage, since `toggleItem`
+never writes to `pantryItems` and a checked row can go stale — was verified directly against the code
+before being accepted, not taken on the review's authority alone. No code was written in that session,
+only the spec — implemented, live-verified, and documented in the session described above.
 
 ---
 

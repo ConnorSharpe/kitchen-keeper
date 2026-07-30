@@ -3,13 +3,12 @@ import { api } from '../../api/index.js';
 import toast from 'react-hot-toast';
 import RecipeSelectList from './RecipeSelectList.jsx';
 
-export default function BuildListModal({ onClose, onBuild }) {
+export default function AddRecipesModal({ onClose, onAdd }) {
   const [recipes, setRecipes] = useState([]);
   const [loadingRecipes, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState(new Set());
-  const [listName, setListName] = useState('');
-  const [building, setBuilding] = useState(false);
-  const [result, setResult] = useState(null); // { list, items, warnings } after build
+  const [adding, setAdding] = useState(false);
+  const [result, setResult] = useState(null); // { items, warnings } after add
 
   useEffect(() => {
     api
@@ -27,26 +26,20 @@ export default function BuildListModal({ onClose, onBuild }) {
     });
   }
 
-  async function handleBuild() {
-    if (!listName.trim()) {
-      toast.error('Give the list a name.');
+  async function handleAdd() {
+    if (selectedIds.size === 0) {
+      toast.error('Select at least one recipe.');
       return;
     }
 
-    setBuilding(true);
+    setAdding(true);
     try {
-      const data = await onBuild(listName.trim(), [...selectedIds]);
-      if (selectedIds.size === 0) {
-        // No result screen is meaningful for a 0-recipe list (always 0 items,
-        // 0 warnings) — land the user straight on their new empty list.
-        onClose();
-      } else {
-        setResult(data);
-      }
+      const data = await onAdd([...selectedIds]);
+      setResult(data);
     } catch (err) {
       toast.error(err.message);
     } finally {
-      setBuilding(false);
+      setAdding(false);
     }
   }
 
@@ -55,7 +48,7 @@ export default function BuildListModal({ onClose, onBuild }) {
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <h2 className="font-semibold text-gray-900">
-            {result ? 'List Built' : 'New Shopping List'}
+            {result ? 'Recipe Added' : 'Add Recipe to List'}
           </h2>
           <button
             onClick={onClose}
@@ -69,14 +62,18 @@ export default function BuildListModal({ onClose, onBuild }) {
         {/* Result view */}
         {result ? (
           <div className="p-4 space-y-4">
-            <p className="text-sm text-gray-700">
-              <span className="font-medium">
-                &quot;{result.list.name}&quot;
-              </span>{' '}
-              created with{' '}
-              <span className="font-medium">{result.items.length}</span> item
-              {result.items.length !== 1 ? 's' : ''}.
-            </p>
+            {result.items.length === 0 ? (
+              <p className="text-sm text-gray-700">
+                Every ingredient from the selected recipe(s) is already in
+                your pantry or on this list.
+              </p>
+            ) : (
+              <p className="text-sm text-gray-700">
+                Added{' '}
+                <span className="font-medium">{result.items.length}</span>{' '}
+                item{result.items.length !== 1 ? 's' : ''}.
+              </p>
+            )}
 
             {result.warnings.length > 0 && (
               <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-1">
@@ -106,33 +103,17 @@ export default function BuildListModal({ onClose, onBuild }) {
             </button>
           </div>
         ) : (
-          /* Builder view */
+          /* Picker view */
           <>
             <div className="p-4 space-y-3 overflow-y-auto flex-1">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  List name
-                </label>
-                <input
-                  type="text"
-                  value={listName}
-                  onChange={(e) => setListName(e.target.value)}
-                  placeholder="e.g. This week's meals"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                />
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-gray-700 mb-1">
+                <p className="text-sm font-medium text-gray-700 mb-2">
                   Select recipes{' '}
                   {selectedIds.size > 0 && (
                     <span className="text-orange-600">
                       ({selectedIds.size} selected)
                     </span>
                   )}
-                </p>
-                <p className="text-xs text-gray-400 mb-2">
-                  Optional — leave unselected to start with a blank list.
                 </p>
 
                 <RecipeSelectList
@@ -152,15 +133,11 @@ export default function BuildListModal({ onClose, onBuild }) {
                 Cancel
               </button>
               <button
-                onClick={handleBuild}
-                disabled={building || !listName.trim()}
+                onClick={handleAdd}
+                disabled={adding || selectedIds.size === 0}
                 className="flex-1 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {building
-                  ? 'Building…'
-                  : selectedIds.size > 0
-                    ? 'Build List'
-                    : 'Create List'}
+                {adding ? 'Adding…' : 'Add to List'}
               </button>
             </div>
           </>

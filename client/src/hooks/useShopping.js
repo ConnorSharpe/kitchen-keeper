@@ -30,5 +30,17 @@ export function useShopping() {
     setLists((prev) => prev.filter((l) => l.id !== listId));
   }, []);
 
-  return { lists, loading, fetchLists, buildList, removeList };
+  // Returns { items, warnings } — only the newly inserted items.
+  const addRecipesToList = useCallback(async (listId, recipeIds) => {
+    return api.post(`/api/shopping/${listId}/add-recipes`, { recipeIds });
+  }, []);
+
+  return {
+    lists,
+    loading,
+    fetchLists,
+    buildList,
+    removeList,
+    addRecipesToList,
+  };
 }

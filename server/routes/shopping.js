@@ -9,6 +9,10 @@ router.use(clerkAuth);
 
 const buildSchema = z.object({
   name: z.string().min(1).max(200),
+  recipeIds: z.array(z.coerce.number().int().positive()).min(0).default([]),
+});
+
+const addRecipesSchema = z.object({
   recipeIds: z
     .array(z.coerce.number().int().positive())
     .min(1, 'Select at least one recipe'),
@@ -56,6 +60,31 @@ router.post('/build', validate(buildSchema), async (req, res) => {
       warnings: result.warnings,
     });
 });
+
+// POST /api/shopping/:id/add-recipes
+router.post(
+  '/:id/add-recipes',
+  validate(addRecipesSchema),
+  async (req, res) => {
+    const listId = Number(req.params.id);
+    const { recipeIds } = req.body;
+    const result = await shoppingService.addRecipesToList(
+      req.user.householdId,
+      listId,
+      recipeIds
+    );
+    if (result.status === 'not_found')
+      return res.status(404).json({ error: 'Not found' });
+    if (result.status === 'invalid_recipes') {
+      return res
+        .status(400)
+        .json({
+          error: 'One or more recipe IDs are invalid or do not belong to you.',
+        });
+    }
+    res.status(201).json({ items: result.items, warnings: result.warnings });
+  }
+);
 
 // GET /api/shopping/:id/items
 router.get('/:id/items', async (req, res) => {

@@ -2,13 +2,17 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useShopping } from '../hooks/useShopping.js';
 import BuildListModal from '../components/shopping/BuildListModal.jsx';
+import AddRecipesModal from '../components/shopping/AddRecipesModal.jsx';
 import ShoppingList from '../components/shopping/ShoppingList.jsx';
 import PageHeader from '../components/layout/PageHeader.jsx';
 
 export default function ShoppingPage() {
-  const { lists, loading, fetchLists, buildList, removeList } = useShopping();
+  const { lists, loading, fetchLists, buildList, removeList, addRecipesToList } =
+    useShopping();
   const [selectedId, setSelectedId] = useState(null);
   const [showBuildModal, setShowModal] = useState(false);
+  const [showAddRecipesModal, setShowAddRecipesModal] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     fetchLists();
@@ -32,6 +36,12 @@ export default function ShoppingPage() {
     return data;
   }
 
+  async function handleAddRecipes(recipeIds) {
+    const data = await addRecipesToList(selectedId, recipeIds);
+    setRefreshKey((k) => k + 1);
+    return data;
+  }
+
   async function handleDelete(listId) {
     if (!window.confirm('Delete this shopping list? This cannot be undone.'))
       return;
@@ -50,14 +60,14 @@ export default function ShoppingPage() {
       {/* Page header */}
       <PageHeader
         title="Shopping Lists"
-        subtitle="Built from your saved recipes, cross-referenced with your pantry."
+        subtitle="Start from scratch or from your saved recipes, cross-referenced with your pantry."
         className="mb-6"
         actions={
           <button
             onClick={() => setShowModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 shadow-sm"
           >
-            <span aria-hidden>+</span> Build List
+            <span aria-hidden>+</span> New List
           </button>
         }
       />
@@ -76,13 +86,13 @@ export default function ShoppingPage() {
           </span>
           <p className="text-lg font-medium text-gray-700">No lists yet.</p>
           <p className="text-sm text-gray-400 mt-1">
-            Build one from your saved recipes.
+            Start a blank list, or build one from your saved recipes.
           </p>
           <button
             onClick={() => setShowModal(true)}
             className="mt-6 px-5 py-2.5 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700"
           >
-            Build Shopping List
+            New Shopping List
           </button>
         </div>
       ) : (
@@ -133,12 +143,23 @@ export default function ShoppingPage() {
                   <h2 className="font-semibold text-gray-900 text-lg">
                     {selectedList.name}
                   </h2>
-                  <span className="text-xs text-gray-400">
-                    Created{' '}
-                    {new Date(selectedList.createdAt).toLocaleDateString()}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setShowAddRecipesModal(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 border border-orange-200 text-orange-700 rounded-lg text-xs font-medium hover:bg-orange-50"
+                    >
+                      <span aria-hidden>+</span> Add Recipe
+                    </button>
+                    <span className="text-xs text-gray-400">
+                      Created{' '}
+                      {new Date(selectedList.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
                 </div>
-                <ShoppingList key={selectedId} listId={selectedId} />
+                <ShoppingList
+                  key={`${selectedId}-${refreshKey}`}
+                  listId={selectedId}
+                />
               </>
             ) : (
               <p className="text-sm text-gray-400 text-center py-8">
@@ -153,6 +174,13 @@ export default function ShoppingPage() {
         <BuildListModal
           onClose={() => setShowModal(false)}
           onBuild={handleBuild}
+        />
+      )}
+
+      {showAddRecipesModal && (
+        <AddRecipesModal
+          onClose={() => setShowAddRecipesModal(false)}
+          onAdd={handleAddRecipes}
         />
       )}
     </div>
