@@ -1,145 +1,124 @@
 # Task
 
-Spec-drafting session for `ai/tasks/TASK-048-spec.md` — a public landing page shown to signed-out
-visitors at `/`, describing the app's purpose with "Create account" and "Log in" buttons. Connor asked
-for this directly (no prior bug report/investigation trigger) as part of the app's ongoing move toward
-being publicly reachable (see TASK-037). **Spec only — DRAFT-3, APPROVED FOR IMPLEMENTATION after two
-rounds of GPT architect review (9.7/10 → 10/10). No code written yet this session.**
+Production support investigation: Connor's father John Sharpe signed up as a real public user and
+reported the in-app AI chat ("the agent") erroring. No prior spec — a live bug report, triaged and fixed
+directly against production.
 
 # Current Status
 
-**Spec: APPROVED. Implementation: NOT STARTED.** This session did research + spec drafting only, per
-[[feedback_spec_workflow]] — draft, then external GPT architect review rounds, then implement in a
-(possibly later) session. Both review rounds are recorded directly in the spec file's Architect Review
-History table; nothing further is pending on the spec itself.
+**Root-caused and fixed. Code unchanged this session — the fix was a production configuration value, not
+a deploy.** This handoff (plus the correction to stale TASK-048/047 status below) is the only thing being
+committed this session.
 
 ## What was done this session
 
-- Read `AI_Dev_Agent_Efficiency_Guide_v3_addendum.md` (Connor's attached context-management guide) — not
-  materially relevant to this task (it's about agent context/token budgeting, not app features), so it
-  didn't shape the spec beyond confirming there was nothing applicable to apply.
-- Read the current codebase to establish ground truth before designing anything: `client/src/App.jsx`
-  (routing + the existing `PrivateRoute`), `client/src/pages/JoinPage.jsx` (the one existing precedent for
-  a route reachable while signed out), `client/src/components/layout/AppLayout.jsx`/`Sidebar.jsx` (the
-  authenticated shell `ChatPage` depends on), `README.md` (source of truth for the landing page's copy —
-  deliberately not inventing new marketing language), `client/index.html` (confirmed no `<meta
-  description>` exists today), and `client/package.json` (confirmed `@clerk/clerk-react@^5.61.8` — the
-  plain SPA package, not `@clerk/react-router`, which matters because some 2026 web results describe a
-  newer `<Show>`-component pattern that doesn't apply to this app's actual installed package).
-- **Read the installed Clerk source directly** (`client/node_modules/@clerk/clerk-react/dist/index.js`)
-  rather than trusting docs, to settle whether `SignedIn`/`SignedOut` can flash the wrong state during
-  Clerk's initial load: confirmed `SignedIn` requires a truthy `userId`, `SignedOut` requires `userId ===
-  null` (strict), and `userId` is `undefined` (neither truthy nor `null`) until Clerk actually resolves —
-  so both components render nothing during that gap. This proved a manual `isLoaded` gate is unnecessary
-  for this task, which the DRAFT-1 architect review round explicitly praised as stronger than "I think
-  Clerk handles this."
-- Drafted DRAFT-1 of `ai/tasks/TASK-048-spec.md`, sent it through two rounds of external GPT architect
-  review, and updated the spec in response to each round (see the spec's own Architect Review History table
-  for full detail — not duplicated here).
-  - **Round 1** required one architectural change: `PrivateRoute` (the routing component that gates all six
-    private paths) should not hardcode an import of the new `LandingPage` — that conflates "gate private
-    content" with "know about the marketing homepage." The reviewer's own suggested fix (a standalone
-    `RootPage` route sitting outside `AppLayout` entirely) was evaluated and **declined with reasoning**:
-    `ChatPage` isn't self-contained — it depends on `AppLayout`'s `<Outlet/>` for `Sidebar`,
-    `PantryProvider`, `OnboardingGate`, and shared `mobileNavOpen` context, so pulling `/` out to a fully
-    separate route would force either a second `AppLayout` mount (a real regression: `PantryProvider`,
-    and therefore pantry data, would refetch on every nav between `/` and any other private page) or
-    changes to `AppLayout` itself to support two mounting styles. Adopted the underlying principle a
-    different way instead: `PrivateRoute` now takes the signed-out root's element as a `publicHomeElement`
-    prop from `App.jsx`'s route definitions, rather than hardcoding it.
-  - **Round 2**: 10/10, approved outright, confirming the round-1 revision was the right call and that the
-    declined `RootPage` alternative was correctly declined given the codebase constraint. One
-    non-blocking, non-actioned observation for future reference: if more public/authenticated route
-    carve-outs are ever needed beyond this single `/` case, revisit whether `publicHomeElement` is still
-    the right abstraction — not relevant today with only one carve-out.
-- Updated this file (the handoff you're reading) and committed both to `staging`.
-
-## Design the spec settled on (for the next agent to implement — not yet written to code)
-
-- `client/src/pages/LandingPage.jsx` (new): a single static page, copy drawn from `README.md`'s existing
-  description/feature list, with `<Link>`s to `/sign-up` and `/sign-in` (not Clerk's modal-triggering
-  buttons — this app already committed to path-based auth routing). Must never import `AppLayout` or
-  `PantryProvider` — an explicit, spec-documented invariant, not just an implied side effect.
-- `client/src/App.jsx`: `PrivateRoute` gains an optional `publicHomeElement` prop; when signed out and
-  `location.pathname === '/'`, it renders that element instead of `RedirectToSignIn`. The one route usage
-  that wraps `AppLayout` passes `publicHomeElement={<LandingPage />}`. No other route, and no other file,
-  changes.
-- `client/index.html`: one new `<meta name="description">` tag — purely additive.
-
-Full code (not just a description) for all three changes is already written out in the spec's Design
-section — the next agent should be able to implement directly from
-[`ai/tasks/TASK-048-spec.md`](../tasks/TASK-048-spec.md) without re-deriving the design.
+- Traced the bug through the code without guessing: `client/src/pages/ChatPage.jsx`'s `send()` catches any
+  `/api/ai/chat` failure and toasts `err.message` — `client/src/api/index.js`'s `request()` throws
+  `Error(data.error)` for any non-2xx response with a plain-string `error` body.
+- `server/routes/ai.js`'s `POST /chat` has no local try/catch; errors bubble to `server/app.js`'s global
+  error handler (`express-async-errors` catches the rejected promise), which exposes `err.message` whenever
+  `status < 500` — so a 403 always reaches the user verbatim.
+- `server/services/ai/resolveProvider.js` throws `NoApiKeyError` (403, code `NO_API_KEY`, message "Please
+  add your OpenAI API key in Settings to use AI features.") whenever the requesting household is not owned
+  by `OWNER_CLERK_ID`, has no BYOK OpenAI key of its own, and the platform-wide `publicAiAccessEnabled` flag
+  is off.
+- **Confirmed against the live production DB** (queried directly via `@neondatabase/serverless`, read-only
+  first): household 28 ("LA Sharpe's", created 2026-07-28) is owned by a different Clerk user than
+  `OWNER_CLERK_ID`, has no `openai_api_key`, and `platform_settings.public_ai_access_enabled` was `false`.
+  This reproduces the exact reported symptom deterministically — every chat message from that household
+  would 403.
+- This is precisely the still-open risk from TASK-037 (see [[project_go_public_readiness]]): public
+  sign-ups have no working path to AI chat without either a BYOK key or the platform toggle enabled, and
+  neither Clerk sign-up hardening nor OpenAI prepaid billing were ever confirmed before TASK-048 shipped a
+  public landing page inviting exactly this kind of sign-up.
+- Asked Connor how to fix it (global toggle vs. per-household key vs. do nothing) rather than assuming —
+  he chose the global toggle.
+- **Applied the fix directly to production**: `UPDATE platform_settings SET public_ai_access_enabled =
+  true ...` via the same effect as the existing `PATCH /api/admin/platform-settings` endpoint (chose direct
+  SQL over minting an owner session token to hit the gated admin route).
+- Verified the write hit the correct database, not a stale one — a fresh `vercel env pull` returned an
+  empty `DATABASE_URL`, which was concerning right after today's earlier Neon 3-branch split
+  ([[feedback_dev_db_is_shared]]). Diffed Neon hostnames instead of trusting the pull: the cached
+  `.env.vercel`'s host (`ep-misty-hill-ak264gcz`) differs from the new `local`/`staging` branch host
+  (`ep-icy-rice-akewupba` used in `server/.env.local`/root `.env`), consistent with that memory's note that
+  production was left untouched during the split. The blank fresh-pull value is Vercel treating
+  `DATABASE_URL` as write-only/"sensitive" now, not a rotation — noted in memory so it isn't re-alarmed on
+  next look.
+- Corrected this handoff's own stale status: the prior version of this file (as of commit `96c671e`)
+  described TASK-048 as "spec approved, implementation NOT STARTED." That was true only at that commit —
+  `git log` shows TASK-048 was implemented and committed at `7506748`, and TASK-047 (previously "awaiting
+  Connor's review before commit") was committed at `f9eed51`. Both are live in the current codebase; this
+  handoff was simply never updated after those landed. See "Prior Handoffs" below for what those sessions
+  actually did.
 
 # Decisions Made
 
-- Spec-then-review-then-implement, not implement-directly — per [[feedback_spec_workflow]] and since this
-  touches the app's root routing/auth-gating path, exactly the kind of change worth a second opinion before
-  code exists.
-- Declined the architect review's literal `RootPage` restructuring suggestion (round 1) with a concrete,
-  codebase-specific counter-argument (`AppLayout`/`PantryProvider`/`Outlet` coupling) rather than accepting
-  it at face value — the reviewer agreed with this reasoning in round 2 rather than pushing back further.
-- Did not implement any code this session — Connor's request was specifically to draft and review the
-  spec, then hand off; implementation is explicitly the next agent's job.
+- Diagnosed by tracing actual code paths and querying the live production DB read-only first, rather than
+  guessing from symptoms alone or asking Connor to reproduce/screenshot before any investigation happened.
+- Did not silently pick a fix — the choice between "enable public AI access," "just fix John's household,"
+  or "do nothing" has real billing/product implications, so it was posed to Connor directly
+  ([[project_go_public_readiness]] already flagged this exact tradeoff as unresolved).
+- Verified the database identity (hostname diff) before trusting a production write, rather than assuming
+  a cached env file was still accurate immediately after unrelated infra changes elsewhere in the project.
 
 # Known Risks
 
-Carried from the spec (all still accurate, see `ai/tasks/TASK-048-spec.md`'s own Known Risks section for
-full detail):
-
-- SPA client-side rendering means non-JS crawlers won't see the landing copy on first paint — accepted for
-  v1, not solved (would need SSR/prerendering, out of scope).
-- `PrivateRoute` is shared code gating five other private paths besides `/` — the implementer must verify
-  (spec's Verification Steps #4) that signed-out deep links to `/dashboard`, `/pantry`, `/recipes`,
-  `/shopping`, `/household` still hard-redirect to sign-in exactly as today; a mistake in the
-  `publicHomeElement`/`pathname === '/'` check would silently make more than just the root path public.
+- **`publicAiAccessEnabled` is now `true` in production, and OpenAI prepaid billing / auto-recharge-off was
+  never confirmed set up** (TASK-037 prerequisite #2, still open — see [[project_go_public_readiness]] for
+  the full update). Anonymous public sign-ups can now spend against Connor's own `OPENAI_API_KEY`, rate
+  limited only by `aiRateLimitMax` (currently 20). This is the single most important carry-forward item.
+- TASK-037 prerequisite #1 (Clerk Dashboard sign-up hardening — email verification, bot/CAPTCHA, invite-only
+  mode) is also still unconfirmed.
+- Carried from prior handoffs, still accurate: SPA client-side rendering means non-JS crawlers won't see
+  landing-page copy on first paint (accepted, not solved). `.claude/settings.local.json`'s pre-existing
+  local diff remains uncommitted, unrelated to any of this.
 
 # Context Notes
 
-- branch: `staging`.
-- worktree: none.
-- No dev servers were started this session — this was a research/spec-drafting session, no code to
-  preview.
-- **Unrelated pre-existing uncommitted work still sits in the working tree** and was deliberately left
-  untouched by this session's commit (scoped to just the spec + this handoff, per Connor's explicit "commit
-  the docs" instruction): `ai/tasks/TASK-047-spec.md` and its full implementation (`server/db/schema.js`,
-  `server/db/migrations/0020_suggestions.sql` + journal entry, `server/services/suggestionService.js`,
-  `server/routes/suggestions.js`, `server/app.js`, `client/src/components/dashboard/SuggestionBox.jsx`,
-  `client/src/pages/DashboardPage.jsx`) — per the prior handoff below, this was implemented and
-  live-verified in an earlier session but is **still awaiting Connor's review before it's committed**. Also
-  still present: `.claude/settings.local.json`'s pre-existing local diff (carried uncommitted since
-  TASK-040, per every handoff since). None of this is TASK-048's concern — noted here only so the next
-  agent doesn't mistake it for something this session touched or that needs cleaning up as part of
-  TASK-048.
+- branch: `staging`, being fast-forwarded to `main` (production) this session per Connor's explicit request
+  — this handoff commit is the only code-repo change; the actual bug fix was a direct production DB write
+  made earlier in the session, already live before this push.
+- No dev servers were started this session — investigation used direct DB queries and code reading, not a
+  running app instance.
 
 # Recommended Next Action
 
-1. Implement `ai/tasks/TASK-048-spec.md` (DRAFT-3, APPROVED FOR IMPLEMENTATION) verbatim — all three file
-   changes are fully specified with code in the spec's Design section.
-2. Live-verify against local dev per the spec's own Verification Steps (8 steps: signed-out landing render,
-   sign-up flow, sign-in flow, deep-link regression check on the five other private paths, no
-   signed-in flash, responsive check, meta tag present, keyboard/accessibility check).
-3. Leave the TASK-047 suggestion-box work (see Context Notes above) alone unless Connor separately asks for
-   it — it's a different, already-implemented, already-reviewed-by-architect feature waiting on Connor's
-   own diff review, not this task's responsibility.
+1. **Ask Connor to confirm OpenAI billing is actually capped** (prepaid credits, auto-recharge off) now
+   that public AI access is live — do not treat this as done without his explicit confirmation.
+2. Revisit Clerk Dashboard sign-up settings (prerequisite #1) before treating the app as fully
+   "go-public ready."
+3. No other TASK-048/047 follow-up needed — both are implemented, committed, and live.
 
 ---
 
-# Prior Handoff (TASK-047 implementation session, now superseded above)
+# Prior Handoff (TASK-048 spec + implementation, now superseded above)
 
-Implementation session for `ai/tasks/TASK-047-spec.md` — private, owner-only "Suggest an Improvement"
-feedback box on the Dashboard. The spec went through two rounds of GPT architect review (9.6/10 →
-9.9/10 APPROVED) before implementation, plus two scope questions resolved directly with Connor before
-drafting (no read UI — DB-only; fire-and-forget submitter UX). **Implemented and live-verified that
-session; still not committed/pushed as of this handoff** — left for Connor to review the diff before it
-lands on `staging`. Full detail (files created/changed, verification performed, test data left in the
-shared DB) is preserved in git history of this file as of the TASK-047 session — see that commit if ever
-needed again, not duplicated here to keep this handoff from growing unbounded.
+Spec-drafting session for `ai/tasks/TASK-048-spec.md` — a public landing page shown to signed-out visitors
+at `/`, with "Create account" and "Log in" buttons, per two rounds of GPT architect review (9.7/10 →
+10/10). Design: `client/src/pages/LandingPage.jsx` (new, static, copy from README, links to `/sign-up` /
+`/sign-in`, never imports `AppLayout`/`PantryProvider`); `client/src/App.jsx`'s `PrivateRoute` gained an
+optional `publicHomeElement` prop rather than hardcoding the landing page import; one additive `<meta
+name="description">` in `client/index.html`. Declined the architect's suggested `RootPage` restructuring
+with a concrete codebase-specific counter-argument (`AppLayout`/`PantryProvider`/`Outlet` coupling) — agreed
+correct in round 2. **Implemented and committed in a later session (`7506748`)** — this file previously
+described it as not-yet-implemented; that was stale as of the correction above. Full design detail
+preserved in `ai/tasks/TASK-048-spec.md` and this file's git history as of the spec-approval commit
+(`96c671e`) if ever needed again.
 
-# Prior-Prior Handoff (TASK-046 implementation session)
+# Prior-Prior Handoff (TASK-047 implementation session)
+
+Private, owner-only "Suggest an Improvement" feedback box on the Dashboard. Two rounds of GPT architect
+review (9.6/10 → 9.9/10 APPROVED) before implementation, plus two scope questions resolved directly with
+Connor (no read UI — DB-only; fire-and-forget submitter UX). **Implemented, live-verified, and committed in
+a later session (`f9eed51`)** — this file previously described it as awaiting Connor's review before
+commit; that was stale as of the correction above. Full detail in git history as of the TASK-047
+implementation session if ever needed again.
+
+# Prior-Prior-Prior Handoff (TASK-046 implementation session)
 
 Fixed two pre-existing onboarding-tour completion bugs (`StaplesChecklist` not appearing after the last
-step; desktop tour sometimes not starting), both root-caused via `driver.js`'s bundled source and fixed
-in `client/src/components/onboarding/productTour.js` (a `finished` idempotency guard called before
-`driverObj.destroy()` at all five end-of-tour call sites, and swapping a `requestAnimationFrame` gate for
-a plain `setTimeout`). Live-verified, committed and pushed to `staging` and fast-forwarded to `main`
+step; desktop tour sometimes not starting), both root-caused via `driver.js`'s bundled source and fixed in
+`client/src/components/onboarding/productTour.js` (a `finished` idempotency guard called before
+`driverObj.destroy()` at all five end-of-tour call sites, and swapping a `requestAnimationFrame` gate for a
+plain `setTimeout`). Live-verified, committed and pushed to `staging` and fast-forwarded to `main`
 (production). Full detail in git history / the TASK-046 spec if ever needed again.
