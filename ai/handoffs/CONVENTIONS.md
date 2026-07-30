@@ -3,17 +3,18 @@
 Durable, cross-session conventions for this repo. Unlike `CURRENT_STATE.md` (rewritten each session as
 a handoff), this file accumulates and should be updated in place when a convention changes.
 
-## Environments (as of TASK-039)
+## Environments (as of TASK-039, DB split 2026-07-30)
 
 | Environment | Git branch | Neon branch | Clerk instance | URL |
 |---|---|---|---|---|
 | Production | `main` | `main` (Neon default/production branch) | Production (`pk_live_...`) | `kitchenkeeper.kitchen` |
 | Staging (Vercel Preview) | `staging` | `staging` | Development (`pk_test_d2lubmluZy1zd2lmdC03NC5jbGVyay5hY2NvdW50cy5kZXYk`) | `kitchen-keeper-git-staging-connorsharpes-projects.vercel.app` |
-| Local dev | (working tree) | `staging` | Development (same as staging) | `localhost` |
+| Local dev | (working tree) | `local` | Development (same as staging) | `localhost` |
 
-`staging` is a single, static, long-lived Neon branch shared by Preview deployments and local dev — not
-a branch created per PR/deployment (that's Neon's "branch per Vercel Preview" feature, deliberately not
-enabled; see `ai/tasks/TASK-039-spec.md` Out of Scope).
+Each of `staging` and `local` is a single, static, long-lived Neon branch (forked from `main` on
+2026-07-30) — not a branch created per PR/deployment (that's Neon's "branch per Vercel Preview"
+feature, deliberately not enabled; see `ai/tasks/TASK-039-spec.md` Out of Scope). All three branches
+are fully independent: local dev can no longer read or write staging's or production's data.
 
 ## Push workflow
 
@@ -25,13 +26,15 @@ Pro or a public repo); this relies on checking `git branch --show-current` befor
 
 ## Canonical migration order
 
-`staging`'s Neon branch is a point-in-time fork of production — it does not automatically pick up new
-Drizzle migrations applied to production. Every schema change follows this order, so there's one
-sequence instead of everyone inventing their own:
+`staging` and `local` are point-in-time forks of production — neither automatically picks up new
+Drizzle migrations applied to production or to each other. Every schema change follows this order, so
+there's one sequence instead of everyone inventing their own:
 
-1. Apply the new migration to the `staging` Neon branch first.
-2. Push/test the corresponding code on the `staging` git branch against it — this is what actually
-   exercises the new schema before it's live.
+1. Apply the new migration to the `local` Neon branch first (runs automatically on `npm run dev` via
+   `server/db/migrate.js`) and iterate there.
+2. Apply the same migration to the `staging` Neon branch, then push/test the corresponding code on the
+   `staging` git branch against it — this is what actually exercises the new schema in a Preview
+   deployment before it's live.
 3. Once verified, apply the same migration to production.
 4. Merge `staging` → `main`, which deploys the verified code to Production against the now-migrated
    production database.
@@ -41,22 +44,28 @@ the *new* schema. Prefer an expand/contract pattern for destructive changes (add
 across separate migrations) rather than a single migration that drops/renames a column, so that window
 doesn't break the still-running old code.
 
-## Staging branch runbook
+## Staging / local branch runbook
 
 - **Mis-pointed env var** (Preview accidentally pointing at the wrong database): revert the affected
   `vercel env` value back to Production's current value — a normal edit, not a rebuild.
-- **`staging` branch itself is bad** (e.g. a migration went wrong on it): re-fork `staging` fresh from
-  current production rather than hand-reversing schema changes. The branch is disposable and cheaply
-  re-creatable, not precious.
-- **Refreshing `staging` from production** (to pull in newer data) is destructive to whatever
-  staging-only data exists at the time — it replaces the branch's contents wholesale. No periodic
-  refresh is automated; do it manually if/when staging's data becomes too stale to be useful.
+- **`staging` or `local` branch itself is bad** (e.g. a migration went wrong on it): re-fork it fresh
+  from current production rather than hand-reversing schema changes. Both branches are disposable and
+  cheaply re-creatable, not precious. Re-forking `local` just means updating `server/.env.local` and
+  root `.env` with the new branch's connection string.
+- **Refreshing `staging`/`local` from production** (to pull in newer data) is destructive to whatever
+  branch-only data exists at the time — it replaces the branch's contents wholesale. No periodic
+  refresh is automated; do it manually if/when a branch's data becomes too stale to be useful.
 
 ## Known gap
 
-Only `DATABASE_URL` was repointed to the `staging` Neon branch for the Preview environment (the only
-Postgres variable this codebase reads — see `server/db/client.js`). The other ~10 Postgres-family
-variables the Neon-Vercel integration also sets (`POSTGRES_PRISMA_URL`, `PGHOST_UNPOOLED`, etc.) still
-point at production. If any future code starts reading one of those directly instead of `DATABASE_URL`,
-repoint it the same way — check via the Neon console (Connect → connection details for the `staging`
-branch) rather than guessing the format.
+Only `DATABASE_URL` is repointed per environment (the only Postgres variable this codebase reads —
+see `server/db/client.js`): Vercel's Preview scope → `staging` branch, `server/.env.local` and root
+`.env` → `local` branch. The other ~10 Postgres-family variables the Neon-Vercel integration also sets
+(`POSTGRES_PRISMA_URL`, `PGHOST_UNPOOLED`, etc.) still point at production in all scopes. If any future
+code starts reading one of those directly instead of `DATABASE_URL`, repoint it the same way — check
+via the Neon console (Connect → connection details for the relevant branch) rather than guessing the
+format.
+
+Root `.env.local` and `client/.env.local` also contain a stray, unused `DATABASE_URL` (no code path
+loads them — only `server/.env.local` is loaded via `dotenv`, in `server/loadEnv.js`). Harmless but
+worth deleting next time either file is touched.
