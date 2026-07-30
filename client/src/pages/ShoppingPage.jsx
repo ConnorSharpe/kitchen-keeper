@@ -88,12 +88,6 @@ export default function ShoppingPage() {
           <p className="text-sm text-gray-400 mt-1">
             Start a blank list, or build one from your saved recipes.
           </p>
-          <button
-            onClick={() => setShowModal(true)}
-            className="mt-6 px-5 py-2.5 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700"
-          >
-            New Shopping List
-          </button>
         </div>
       ) : (
         /* Two-panel layout */

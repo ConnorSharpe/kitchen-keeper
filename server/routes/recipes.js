@@ -4,6 +4,7 @@ import { clerkAuth } from '../middleware/clerkAuth.js';
 import { validate } from '../middleware/validate.js';
 import * as recipeService from '../services/recipeService.js';
 import * as recipeBlocklistService from '../services/recipeBlocklistService.js';
+import * as recipeSearchService from '../services/recipeSearchService.js';
 import { RECIPE_SOURCES } from '../../shared/recipeSources.js';
 
 const router = express.Router();
@@ -46,6 +47,16 @@ const updateSchema = createSchema.omit({ imageBase64: true }).partial();
 router.get('/', async (req, res) => {
   const list = await recipeService.getAll(req.user.householdId);
   res.json({ recipes: list });
+});
+
+// GET /api/recipes/suggested-for-shopping — TASK-050: saved recipes ranked by pantry
+// overlap, for the Shopping page's "Suggest recipes for me" button (D-14: kept under
+// /api/recipes since this is a recipe read, not a shopping-list mutation).
+router.get('/suggested-for-shopping', async (req, res) => {
+  const suggestions = await recipeSearchService.rankSavedByPantry(
+    req.user.householdId
+  );
+  res.json({ suggestions });
 });
 
 // POST /api/recipes

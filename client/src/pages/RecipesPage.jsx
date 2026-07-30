@@ -5,6 +5,7 @@ import { useRecipeBlocklist } from '../hooks/useRecipeBlocklist.js';
 import { api } from '../api/index.js';
 import RecipeCard from '../components/recipes/RecipeCard.jsx';
 import RecipeModal from '../components/recipes/RecipeModal.jsx';
+import AddToListModal from '../components/shopping/AddToListModal.jsx';
 import RecipeUpload from '../components/recipes/RecipeUpload.jsx';
 import RecipeUrlImport from '../components/recipes/RecipeUrlImport.jsx';
 import RecipeReviewModal from '../components/recipes/RecipeReviewModal.jsx';
@@ -98,6 +99,7 @@ export default function RecipesPage() {
   } = useRecipeBlocklist();
 
   const [openRecipe, setOpenRecipe] = useState(null);
+  const [addToListRecipe, setAddToListRecipe] = useState(null);
   const [showUpload, setShowUpload] = useState(false);
   const [showUrlImport, setShowUrlImport] = useState(false);
   const [reviewRecipe, setReviewRecipe] = useState(null);
@@ -489,6 +491,7 @@ export default function RecipesPage() {
               onToggleFavorite={handleToggleFavorite}
               isFavoriteLoading={favLoadingId === recipe.id}
               onBlock={handleBlockSaved}
+              onAddToList={setAddToListRecipe}
             />
           ))}
         </div>
@@ -501,6 +504,15 @@ export default function RecipesPage() {
           onClose={() => setOpenRecipe(null)}
           onDelete={handleDelete}
           onToggleFavorite={handleToggleFavorite}
+          onAddToList={setAddToListRecipe}
+        />
+      )}
+
+      {addToListRecipe && (
+        <AddToListModal
+          recipeId={addToListRecipe.id}
+          recipeName={addToListRecipe.name}
+          onClose={() => setAddToListRecipe(null)}
         />
       )}
 

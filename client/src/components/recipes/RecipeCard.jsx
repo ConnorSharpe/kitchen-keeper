@@ -1,3 +1,5 @@
+import { useState, useRef, useEffect } from 'react';
+
 const SOURCE_BADGE = {
   upload: { label: 'Uploaded', cls: 'bg-blue-100 text-blue-700' },
   ai_suggested: { label: 'AI Suggested', cls: 'bg-purple-100 text-purple-700' },
@@ -12,9 +14,26 @@ export default function RecipeCard({
   onToggleFavorite,
   isFavoriteLoading,
   onBlock,
+  onAddToList,
 }) {
   const badge = SOURCE_BADGE[recipe.source] ?? SOURCE_BADGE.manual;
   const totalMins = (recipe.prepMins ?? 0) + (recipe.cookMins ?? 0);
+
+  // TASK-050 D-6/D-9/D-10: DOM measurement (not a character-count heuristic), useEffect
+  // (not useLayoutEffect — no flicker risk), ResizeObserver (not a window listener).
+  const [expanded, setExpanded] = useState(false);
+  const [isTruncated, setIsTruncated] = useState(false);
+  const descRef = useRef(null);
+
+  useEffect(() => {
+    const el = descRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => {
+      setIsTruncated(el.scrollHeight > el.clientHeight);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [recipe.description]);
 
   return (
     <div
@@ -59,6 +78,17 @@ export default function RecipeCard({
             <button
               onClick={(e) => {
                 e.stopPropagation();
+                onAddToList(recipe);
+              }}
+              className="text-sm leading-none text-gray-300 hover:text-orange-500 transition-colors"
+              aria-label="Add to shopping list"
+              title="Add to shopping list"
+            >
+              🛒
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
                 onToggleFavorite(recipe.id);
               }}
               disabled={isFavoriteLoading}
@@ -74,9 +104,26 @@ export default function RecipeCard({
 
         {/* Description */}
         {recipe.description && (
-          <p className="text-xs text-gray-500 line-clamp-2">
-            {recipe.description}
-          </p>
+          <div>
+            <p
+              ref={descRef}
+              className={`text-xs text-gray-500 ${expanded ? '' : 'line-clamp-2'}`}
+            >
+              {recipe.description}
+            </p>
+            {(isTruncated || expanded) && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpanded((v) => !v);
+                }}
+                className="text-xs text-orange-600 hover:underline mt-0.5"
+              >
+                {expanded ? 'Read less' : 'Read more'}
+              </button>
+            )}
+          </div>
         )}
 
         {/* Tags */}

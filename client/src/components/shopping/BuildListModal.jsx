@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../../api/index.js';
 import toast from 'react-hot-toast';
 import RecipeSelectList from './RecipeSelectList.jsx';
+import ShoppingResultSummary from './ShoppingResultSummary.jsx';
 
 export default function BuildListModal({ onClose, onBuild }) {
   const [recipes, setRecipes] = useState([]);
@@ -68,43 +69,20 @@ export default function BuildListModal({ onClose, onBuild }) {
 
         {/* Result view */}
         {result ? (
-          <div className="p-4 space-y-4">
-            <p className="text-sm text-gray-700">
-              <span className="font-medium">
-                &quot;{result.list.name}&quot;
-              </span>{' '}
-              created with{' '}
-              <span className="font-medium">{result.items.length}</span> item
-              {result.items.length !== 1 ? 's' : ''}.
-            </p>
-
-            {result.warnings.length > 0 && (
-              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-1">
-                <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
-                  Unit mismatch — review these items
-                </p>
-                <ul className="text-sm text-amber-800 space-y-0.5">
-                  {result.warnings.map((w) => (
-                    <li key={w} className="flex items-center gap-1.5">
-                      <span aria-hidden>⚠️</span> {w}
-                    </li>
-                  ))}
-                </ul>
-                <p className="text-xs text-amber-600 mt-1">
-                  The same ingredient appeared in multiple recipes with
-                  different units. Quantities could not be combined — check the
-                  list and adjust manually.
-                </p>
-              </div>
-            )}
-
-            <button
-              onClick={onClose}
-              className="w-full py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700"
-            >
-              Done
-            </button>
-          </div>
+          <ShoppingResultSummary
+            bodyText={
+              <>
+                <span className="font-medium">
+                  &quot;{result.list.name}&quot;
+                </span>{' '}
+                created with{' '}
+                <span className="font-medium">{result.items.length}</span> item
+                {result.items.length !== 1 ? 's' : ''}.
+              </>
+            }
+            warnings={result.warnings}
+            onDone={onClose}
+          />
         ) : (
           /* Builder view */
           <>

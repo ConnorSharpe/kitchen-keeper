@@ -2,11 +2,17 @@ import { useState, useEffect } from 'react';
 import { api } from '../../api/index.js';
 import toast from 'react-hot-toast';
 import RecipeSelectList from './RecipeSelectList.jsx';
+import ShoppingResultSummary from './ShoppingResultSummary.jsx';
 
 export default function AddRecipesModal({ onClose, onAdd }) {
   const [recipes, setRecipes] = useState([]);
   const [loadingRecipes, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState(new Set());
+  // TASK-050 D-11: tracked separately from selectedIds — replaced wholesale on each
+  // "Suggest recipes for me" click, never mutated by checkbox interactions. selectedIds
+  // stays the single source of truth for what's checked.
+  const [suggestedIds, setSuggestedIds] = useState(new Set());
+  const [suggesting, setSuggesting] = useState(false);
   const [adding, setAdding] = useState(false);
   const [result, setResult] = useState(null); // { items, warnings } after add
 
@@ -24,6 +30,26 @@ export default function AddRecipesModal({ onClose, onAdd }) {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  }
+
+  async function handleSuggest() {
+    setSuggesting(true);
+    try {
+      const data = await api.get('/api/recipes/suggested-for-shopping');
+      const ids = (data.suggestions ?? []).map((s) => s.id);
+      if (ids.length === 0) {
+        toast('No strong pantry matches among your saved recipes right now.', {
+          icon: 'ℹ️',
+        });
+        return;
+      }
+      setSuggestedIds(new Set(ids));
+      setSelectedIds((prev) => new Set([...prev, ...ids]));
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSuggesting(false);
+    }
   }
 
   async function handleAdd() {
@@ -61,53 +87,36 @@ export default function AddRecipesModal({ onClose, onAdd }) {
 
         {/* Result view */}
         {result ? (
-          <div className="p-4 space-y-4">
-            {result.items.length === 0 ? (
-              <p className="text-sm text-gray-700">
-                Every ingredient from the selected recipe(s) is already in
-                your pantry or on this list.
-              </p>
-            ) : (
-              <p className="text-sm text-gray-700">
-                Added{' '}
-                <span className="font-medium">{result.items.length}</span>{' '}
-                item{result.items.length !== 1 ? 's' : ''}.
-              </p>
-            )}
-
-            {result.warnings.length > 0 && (
-              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-1">
-                <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
-                  Unit mismatch — review these items
-                </p>
-                <ul className="text-sm text-amber-800 space-y-0.5">
-                  {result.warnings.map((w) => (
-                    <li key={w} className="flex items-center gap-1.5">
-                      <span aria-hidden>⚠️</span> {w}
-                    </li>
-                  ))}
-                </ul>
-                <p className="text-xs text-amber-600 mt-1">
-                  The same ingredient appeared in multiple recipes with
-                  different units. Quantities could not be combined — check the
-                  list and adjust manually.
-                </p>
-              </div>
-            )}
-
-            <button
-              onClick={onClose}
-              className="w-full py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700"
-            >
-              Done
-            </button>
-          </div>
+          <ShoppingResultSummary
+            bodyText={
+              result.items.length === 0 ? (
+                'Every ingredient from the selected recipe(s) is already in your pantry or on this list.'
+              ) : (
+                <>
+                  Added{' '}
+                  <span className="font-medium">{result.items.length}</span>{' '}
+                  item{result.items.length !== 1 ? 's' : ''}.
+                </>
+              )
+            }
+            warnings={result.warnings}
+            onDone={onClose}
+          />
         ) : (
           /* Picker view */
           <>
             <div className="p-4 space-y-3 overflow-y-auto flex-1">
+              <button
+                type="button"
+                onClick={handleSuggest}
+                disabled={suggesting}
+                className="w-full py-2 border border-orange-200 text-orange-700 rounded-lg text-sm font-medium hover:bg-orange-50 disabled:opacity-50"
+              >
+                {suggesting ? 'Suggesting…' : '✨ Suggest recipes for me'}
+              </button>
+
               <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">
+                <p className="text-sm font-medium text-gray-700 mb-1">
                   Select recipes{' '}
                   {selectedIds.size > 0 && (
                     <span className="text-orange-600">
@@ -115,6 +124,11 @@ export default function AddRecipesModal({ onClose, onAdd }) {
                     </span>
                   )}
                 </p>
+                {[...selectedIds].some((id) => suggestedIds.has(id)) && (
+                  <p className="text-xs text-orange-500 mb-2">
+                    Suggested based on your pantry
+                  </p>
+                )}
 
                 <RecipeSelectList
                   recipes={recipes}

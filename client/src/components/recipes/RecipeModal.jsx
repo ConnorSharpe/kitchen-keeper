@@ -14,6 +14,7 @@ export default function RecipeModal({
   onClose,
   onDelete,
   onToggleFavorite,
+  onAddToList,
 }) {
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -183,12 +184,20 @@ export default function RecipeModal({
           >
             {deleting ? 'Deleting…' : confirming ? 'Confirm delete?' : 'Delete'}
           </button>
-          <button
-            onClick={onClose}
-            className="text-sm px-4 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
-          >
-            Close
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onAddToList(recipe)}
+              className="text-sm px-3 py-1.5 rounded-md border border-orange-200 text-orange-700 hover:bg-orange-50 transition-colors"
+            >
+              🛒 Add to Shopping List
+            </button>
+            <button
+              onClick={onClose}
+              className="text-sm px-4 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -8,6 +8,8 @@ import * as mealLogService from './mealLogService.js';
 import * as dietaryService from './dietaryService.js';
 import * as recipeBlocklistService from './recipeBlocklistService.js';
 import * as recipeScorer from '../utils/recipeScorer.js';
+import * as recipeService from './recipeService.js';
+import * as pantryService from './pantryService.js';
 
 const SPOONACULAR_BASE = 'https://api.spoonacular.com';
 const THEMEALDB_BASE = 'https://www.themealdb.com/api/json/v1/1';
@@ -346,6 +348,18 @@ function candidateContainsTarget(candidate, targetIngredients) {
 // feel too sticky or too random.
 const RECENT_RECIPE_PENALTY = 0.5;
 
+// TASK-050 D-12: the "is this saved recipe a good enough pantry match" bar, shared by
+// suggestForChat's saved-source filter (below) and rankSavedByPantry (end of file) — one
+// place for the 0.25/1 threshold instead of the same literals living in two functions.
+export function qualifiesAsPantryMatch(recipe, allItems) {
+  const { overlapScore, matchedIngredients, unmatchedIngredients } = recipeScorer.score(
+    recipe,
+    allItems
+  );
+  const qualifies = overlapScore >= 0.25 && matchedIngredients.length >= 1;
+  return { overlapScore, matchedIngredients, unmatchedIngredients, qualifies };
+}
+
 /**
  * Chat-tool domain logic for the `suggest_recipes` tool (TASK-036 Part A, D-A2): scoring,
  * tiering, and pantry-status annotation for the AI chat suggestion flow. Moved here from
@@ -442,14 +456,10 @@ export async function suggestForChat(args, ctx) {
   function scoreCandidates(pool) {
     return pool
       .map((c) => {
-        const { overlapScore, matchedIngredients, unmatchedIngredients } =
-          recipeScorer.score(c, allItems);
+        const { overlapScore, matchedIngredients, unmatchedIngredients, qualifies } =
+          qualifiesAsPantryMatch(c, allItems);
         const { allergyNote, healthNote } = recipeScorer.annotateHealth(c, dp);
-        if (
-          c.source === 'saved' &&
-          (overlapScore < 0.25 || matchedIngredients.length < 1)
-        )
-          return null;
+        if (c.source === 'saved' && !qualifies) return null;
         const recentPenalty = shownKeys.has(deriveRecipeKey(c))
           ? RECENT_RECIPE_PENALTY
           : 0;
@@ -579,4 +589,35 @@ export async function suggestForChat(args, ctx) {
     strategy: effectiveStrategy,
     recipeSuggestions: annotated,
   };
+}
+
+// TASK-050 D-5: household's own saved recipes only, ranked by pantry overlap — no external
+// API call (an ephemeral Spoonacular/TheMealDB result has no recipeId addRecipesToList could
+// use). Reuses qualifiesAsPantryMatch's threshold (D-4/D-12) rather than a new one.
+const MAX_SUGGESTIONS = 5;
+
+export async function rankSavedByPantry(householdId) {
+  const [allRecipes, allItems] = await Promise.all([
+    recipeService.getAll(householdId),
+    pantryService.getAll(householdId),
+  ]);
+
+  return allRecipes
+    .map((r) => {
+      const { overlapScore, matchedIngredients, qualifies } = qualifiesAsPantryMatch(
+        r,
+        allItems
+      );
+      if (!qualifies) return null;
+      return {
+        id: r.id,
+        name: r.name,
+        tags: r.tags,
+        overlapScore,
+        matchedCount: matchedIngredients.length,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.overlapScore - a.overlapScore)
+    .slice(0, MAX_SUGGESTIONS);
 }
