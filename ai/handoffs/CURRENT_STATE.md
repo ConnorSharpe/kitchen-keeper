@@ -1,5 +1,89 @@
 # Task
 
+TASK-052 spec-drafting session: drafted `ai/tasks/TASK-052-spec.md` — migrates the 6 JSON-producing AI
+calls in `aiService.js` (`eatThisNow`, `expandSuggestion`, `parseReceipt`, `parseRecipeImage`,
+`parseRecipeText`, `enrichRecipeFields`) from prompt-instructed JSON / `json_object` mode onto OpenAI
+Structured Outputs (`response_format: json_schema`, `strict: true`). This is deferred finding #1 of the
+5 TASK-051 left queued for future tasks. **Spec only — DRAFT-3, 9.9/10, APPROVED FOR IMPLEMENTATION. No
+code was written this session.**
+
+## What was done this session
+
+- Connor asked which of TASK-051's 5 deferred findings to spec next; presented all 5 with their tradeoffs
+  and let him pick — structured outputs (finding #1).
+- Researched OpenAI Structured Outputs before drafting: strict-mode requirements
+  (`additionalProperties: false` + full `required` lists at every nesting level, no optional-by-omission,
+  object-only schema root), and the two failure modes it introduces that the current code has no
+  equivalent for (moderation refusal via `message.refusal`, and truncation via
+  `finish_reason !== 'stop'`) — sources cited in the spec's own Research section.
+- Read `aiService.js` in full and the relevant parts of `routes/ai.js` (the Zod `parsedRecipeSchema`
+  validator, the `enrichRecipeFields` merge logic) before designing anything.
+- Drafted [TASK-052-spec.md](../tasks/TASK-052-spec.md): 6 new JSON Schema constants (one shared between
+  `parseRecipeImage` and `parseRecipeText`, matching their existing documented shared contract); a shared
+  `parseStructuredResponse` helper collapsing the extract/parse/derive-status sequence to one call per
+  site; a uniform `structured_status` log field (`ok`/`refusal`/`length`/`content_filter`/`parse_failed`)
+  across all 6 functions; `parseRecipeImage`'s existing retry loop retargeted to only retry transient
+  failures (`length`/`parse_failed`), not policy-driven ones (`refusal`/`content_filter`); a small bundled
+  dedup of `PANTRY_TOOLS`'s two existing duplicate category-enum lists into one `PANTRY_CATEGORIES`
+  constant, reused by the new receipt schema.
+- Two rounds of GPT architect review: DRAFT-1 (9.6/10, six required changes) → DRAFT-2 (9.9/10, approved,
+  one optional suggestion folded in) → DRAFT-3 (final, that suggestion applied). Both rounds involved
+  genuine pushback, not mechanical acceptance:
+  - Round 1: agreed and applied the `finish_reason !== 'stop'` generalization (the reviewer's
+    `content_filter` gap was real, not hypothetical), the tightened transient-only retry policy, and the
+    unified logging vocabulary. **Pushed back on the reviewer's headline concern** — that all "six
+    hand-written JSON Schemas" duplicate existing Zod validators — after checking the actual code and
+    finding it true for only 1 of 6 (`PARSED_RECIPE_SCHEMA`, plus indirectly `enrichRecipeFields`'s
+    fields via the merge); declined the reviewer's preferred fix (generate JSON Schema from Zod — needs a
+    new npm dependency and doesn't map cleanly onto Zod's optional/coerce/default semantics vs. strict
+    mode's required-nullable/no-coercion rules), adopted their fallback (document + synchronize)
+    strengthened into a real automated key-set cross-check test (D-9) instead of a comment alone.
+  - Round 2: no required changes; one optional suggestion (collapse the still-duplicated
+    extract/parse/derive-status sequence into a second helper, `parseStructuredResponse`) accepted and
+    folded in immediately rather than left for implementation to rediscover, since it completed what D-1
+    already set out to do.
+
+# Decisions Made
+
+All design decisions are captured in the spec itself (D-1 through D-9) — see
+[TASK-052-spec.md](../tasks/TASK-052-spec.md) rather than duplicating them here. Notably: schemas stay
+inline in `aiService.js` rather than a new file, with an explicit future-split trigger (D-2, "if a 7th
+structured-output call is ever added"); `parseRecipeImage`/`parseRecipeText` share one schema constant
+(D-3); retry is added only to `parseRecipeImage`, and only for transient (not policy-driven) failures,
+with concrete infrastructure reasoning rather than "matches existing behavior" (D-4); the
+schema/Zod-duplication concern is handled by an automated cross-check test rather than codegen (D-9).
+
+# Known Risks
+
+- **Nothing implemented yet** — this session produced only the approved spec. The 6 functions' actual
+  behavior (prompt wording, `response_format`, retry logic) is unchanged in the live app until a future
+  session implements TASK-052.
+- Carried forward, unrelated to this session: OpenAI prepaid billing / auto-recharge-off confirmation is
+  still open — see [[project_go_public_readiness]] — and remains the biggest open risk given
+  `publicAiAccessEnabled` is live in production.
+- Carried forward from TASK-051: the pre-flight-check confirmation on staging/production's BYOK-drop
+  migration was never independently re-verified by Claude (only local was) — no new information surfaced
+  this session, still worth a quick confirmation from Connor if not already done.
+
+# Context Notes
+
+- branch: `staging`.
+- No dev servers were started this session — spec-drafting and review only, no live verification
+  performed or needed.
+
+# Recommended Next Action
+
+1. Implement TASK-052 per its own Allowed Files list, Design sections 1-9, and Constraints — the spec is
+   DRAFT-3, APPROVED FOR IMPLEMENTATION, no further review round needed before starting.
+2. Follow the spec's own Testing/Verification Plan (10 steps, including 3 new automated tests) before
+   considering the task done.
+3. Unrelated carry-forward, not blocking TASK-052: OpenAI billing confirmation is still open per
+   [[project_go_public_readiness]].
+
+---
+
+# Prior Handoff (TASK-051 implementation session, now superseded above)
+
 TASK-051 implementation session: built `ai/tasks/TASK-051-spec.md` (DRAFT-2, 9.9/10, approved) end to
 end — removed BYOK entirely, unified AI access gating behind a single `requireAiAccess` middleware
 covering all 7 AI endpoints, and shipped the 3 bundled low-risk AI-efficiency fixes (prompt-cache
@@ -158,7 +242,7 @@ Node flag.
 
 ---
 
-# Prior Handoff (TASK-050 implementation session, now superseded above)
+# Prior-Prior Handoff (TASK-050 implementation session, now superseded above)
 
 TASK-050 implementation session: built `ai/tasks/TASK-050-spec.md` (DRAFT-2, approved) end to end —
 suggest-recipes button, recipe-to-list entry point, read more/less. **Implemented and committed
@@ -168,7 +252,7 @@ commit's history if ever needed again.
 
 ---
 
-# Prior-Prior Handoff (TASK-049 implementation session, now superseded above)
+# Prior-Prior-Prior Handoff (TASK-049 implementation session, now superseded above)
 
 TASK-049 implementation session: built `ai/tasks/TASK-049-spec.md` (DRAFT-3, approved) end to end —
 blank-list creation, and the new add-recipe(s)-to-an-existing-list capability. **Implemented and
@@ -249,7 +333,7 @@ commit on explicit request, per session convention).
 
 ---
 
-# Prior-Prior-Prior Handoff (TASK-049 spec-drafting session, now superseded above)
+# Prior-Prior-Prior-Prior Handoff (TASK-049 spec-drafting session, now superseded above)
 
 Spec-drafting session for `ai/tasks/TASK-049-spec.md`: let a user create a shopping list from scratch (no
 recipe required), preserve the existing start-from-recipe flow, and add a new capability — add saved
@@ -265,7 +349,7 @@ only the spec — implemented, live-verified, and documented in the session desc
 
 ---
 
-# Prior-Prior-Prior-Prior Handoff (Production AI chat 403 fix for new public sign-ups)
+# Prior-Prior-Prior-Prior-Prior Handoff (Production AI chat 403 fix for new public sign-ups)
 
 Production support investigation, no prior spec: Connor's father John Sharpe signed up as a real public
 user and hit a 403 on in-app AI chat. Traced through `ChatPage.jsx` → `api/index.js` → `routes/ai.js` →
@@ -286,7 +370,7 @@ commit `561d0da` if ever needed again.
 
 ---
 
-# Prior-Prior-Prior-Prior-Prior Handoff (TASK-048 spec + implementation, now superseded above)
+# Prior-Prior-Prior-Prior-Prior-Prior Handoff (TASK-048 spec + implementation, now superseded above)
 
 Spec-drafting session for `ai/tasks/TASK-048-spec.md` — a public landing page shown to signed-out visitors
 at `/`, with "Create account" and "Log in" buttons, per two rounds of GPT architect review (9.7/10 →
@@ -300,7 +384,7 @@ described it as not-yet-implemented; that was stale as of the correction above. 
 preserved in `ai/tasks/TASK-048-spec.md` and this file's git history as of the spec-approval commit
 (`96c671e`) if ever needed again.
 
-# Prior-Prior-Prior-Prior-Prior-Prior Handoff (TASK-047 implementation session)
+# Prior-Prior-Prior-Prior-Prior-Prior-Prior Handoff (TASK-047 implementation session)
 
 Private, owner-only "Suggest an Improvement" feedback box on the Dashboard. Two rounds of GPT architect
 review (9.6/10 → 9.9/10 APPROVED) before implementation, plus two scope questions resolved directly with
