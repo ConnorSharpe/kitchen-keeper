@@ -22,8 +22,8 @@ export default function LandingPage() {
         </h1>
         <p className="mt-4 text-gray-500 max-w-xl">
           Kitchen Keeper is an AI-powered food waste management app for households. Track your pantry, see
-          what's expiring, get AI meal suggestions tailored to what you have on hand, and share it all with
-          your family — from your phone or browser.
+          what&apos;s expiring, get AI meal suggestions tailored to what you have on hand, and share it all
+          with your family — from your phone or browser.
         </p>
 
         <div className="mt-8 flex flex-col sm:flex-row gap-3">

@@ -218,7 +218,7 @@ const fractionalQuantity = z
   ])
   .transform((v) => (typeof v === 'number' && isFinite(v) ? v : null));
 
-const parsedRecipeSchema = z.object({
+export const parsedRecipeSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(1000).nullable().optional(),
   ingredients: z

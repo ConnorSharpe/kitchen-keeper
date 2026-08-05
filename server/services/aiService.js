@@ -36,6 +36,54 @@ function wrapAIError(err) {
   return wrapped;
 }
 
+// Structured Outputs (response_format: json_schema, strict: true) removes JSON-parse
+// failures as a practical concern, but introduces terminal states that aren't parse
+// errors: a moderation refusal (message.refusal populated), or the response ending for
+// any reason other than 'stop' — most commonly 'length' (truncated before the JSON
+// closed), but also e.g. 'content_filter'. Both classes must be checked before
+// `safeParseJSON` ever sees `message.content` — on refusal, content is typically null;
+// on a non-'stop' finish reason, content may be a truncated/blocked fragment that would
+// otherwise fail JSON.parse for the wrong, harder-to-diagnose reason.
+function extractStructuredContent(response) {
+  const choice = response.choices[0];
+  if (choice.message.refusal) return { status: 'refusal', content: null };
+  if (choice.finish_reason !== 'stop') return { status: choice.finish_reason, content: null };
+  return { status: 'ok', content: choice.message.content };
+}
+
+// Module-level sentinel so "JSON.parse produced no usable result" is distinguishable
+// from "the model's actual output happened to be null/[]".
+const PARSE_FAILED = Symbol('parse_failed');
+
+// One call per call site instead of the extract/parse/derive-status sequence repeated
+// 6 times. `fallback` is the function's own existing fallback value ([], null, etc.) —
+// `result` is either the successfully parsed content or that fallback; `structuredStatus`
+// is always one of 'ok' / 'refusal' / 'length' / 'content_filter' / 'parse_failed', for a
+// uniform log line across all 6 functions.
+function parseStructuredResponse(response, fallback) {
+  const structured = extractStructuredContent(response);
+  const parsed =
+    structured.status === 'ok' ? safeParseJSON(structured.content, PARSE_FAILED) : PARSE_FAILED;
+  const structuredStatus =
+    structured.status !== 'ok' ? structured.status : parsed === PARSE_FAILED ? 'parse_failed' : 'ok';
+  return { result: parsed === PARSE_FAILED ? fallback : parsed, structuredStatus };
+}
+
+// The 10 pantry categories used by both PANTRY_TOOLS' add/update-item tools and
+// PARSE_RECEIPT_SCHEMA below — a single shared list instead of 3 copies.
+const PANTRY_CATEGORIES = [
+  'Produce',
+  'Dairy',
+  'Meat',
+  'Seafood',
+  'Bakery',
+  'Frozen',
+  'Pantry',
+  'Beverages',
+  'Condiments',
+  'Other',
+];
+
 // PANTRY_TOOLS in OpenAI tools format.
 const PANTRY_TOOLS = [
   {
@@ -65,18 +113,7 @@ const PANTRY_TOOLS = [
           },
           category: {
             type: 'string',
-            enum: [
-              'Produce',
-              'Dairy',
-              'Meat',
-              'Seafood',
-              'Bakery',
-              'Frozen',
-              'Pantry',
-              'Beverages',
-              'Condiments',
-              'Other',
-            ],
+            enum: PANTRY_CATEGORIES,
             description: 'Best-fit category. Default "Other".',
           },
           shelfLifeDays: {
@@ -118,18 +155,7 @@ const PANTRY_TOOLS = [
           unit: { type: 'string' },
           category: {
             type: 'string',
-            enum: [
-              'Produce',
-              'Dairy',
-              'Meat',
-              'Seafood',
-              'Bakery',
-              'Frozen',
-              'Pantry',
-              'Beverages',
-              'Condiments',
-              'Other',
-            ],
+            enum: PANTRY_CATEGORIES,
           },
           expiryDate: { type: 'string', description: 'ISO 8601 date string.' },
           notes: { type: 'string' },
@@ -261,6 +287,33 @@ const PANTRY_TOOLS = [
   },
 ];
 
+export const EAT_THIS_NOW_SCHEMA = {
+  name: 'eat_this_now_suggestions',
+  strict: true,
+  schema: {
+    type: 'object',
+    properties: {
+      suggestions: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            description: { type: 'string', description: 'One sentence.' },
+            usesExpiring: { type: 'array', items: { type: 'string' } },
+            estimatedMinutes: { type: 'number' },
+            difficulty: { type: 'string', enum: ['easy', 'medium', 'hard'] },
+          },
+          required: ['name', 'description', 'usesExpiring', 'estimatedMinutes', 'difficulty'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['suggestions'],
+    additionalProperties: false,
+  },
+};
+
 /**
  * Returns 2-3 meal suggestions as an array, or [] if AI returns malformed JSON.
  * Shape: { name, description, usesExpiring: string[], estimatedMinutes, difficulty }
@@ -279,8 +332,7 @@ export async function eatThisNow(
   const prompt =
     `${pantrySection}\n\n` +
     `Suggest 2-3 meals using these pantry items, prioritising items that expire soonest.\n` +
-    `Respond with a JSON array:\n` +
-    `[{"name":"string","description":"string (one sentence)","usesExpiring":["ingredient name"],"estimatedMinutes":number,"difficulty":"easy"|"medium"|"hard"}]`;
+    `Respond with 2-3 suggestions.`;
 
   let response;
   try {
@@ -294,24 +346,64 @@ export async function eatThisNow(
         },
         { role: 'user', content: prompt },
       ],
-      response_format: { type: 'json_object' },
+      response_format: { type: 'json_schema', json_schema: EAT_THIS_NOW_SCHEMA },
       max_tokens: 1000,
     });
   } catch (err) {
     throw wrapAIError(new AIProviderError('OpenAI API error', err));
   }
 
-  const text = response.choices[0].message.content ?? '{}';
+  const { result: parsed, structuredStatus } = parseStructuredResponse(response, []);
   console.log(
     `[kitchen-keeper] request_id=${requestId} function=eatThisNow model=gpt-4o-mini` +
+      ` structured_status=${structuredStatus}` +
       ` response_tokens=${response.usage?.completion_tokens} prompt_tokens=${response.usage?.prompt_tokens}` +
       ` total_tokens=${response.usage?.total_tokens} cached_tokens=${response.usage?.prompt_tokens_details?.cached_tokens ?? 0}`
   );
-  const parsed = safeParseJSON(text, []);
   return Array.isArray(parsed)
     ? parsed
     : (parsed.suggestions ?? parsed.meals ?? []);
 }
+
+export const EXPAND_SUGGESTION_SCHEMA = {
+  name: 'expanded_recipe',
+  strict: true,
+  schema: {
+    type: 'object',
+    properties: {
+      name: { type: 'string' },
+      description: { type: 'string' },
+      ingredients: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            quantity: { type: ['number', 'null'] },
+            unit: { type: ['string', 'null'] },
+            substitute: {
+              type: ['string', 'null'],
+              description:
+                'null if the ingredient is semantically present in the pantry; otherwise the single ' +
+                'best pantry item that could realistically replace it, or null if none exists.',
+            },
+          },
+          required: ['name', 'quantity', 'unit', 'substitute'],
+          additionalProperties: false,
+        },
+      },
+      steps: { type: 'array', items: { type: 'string' } },
+      servings: { type: 'number' },
+      prepMins: { type: 'number' },
+      cookMins: { type: 'number' },
+      tags: { type: 'array', items: { type: 'string' } },
+    },
+    required: [
+      'name', 'description', 'ingredients', 'steps', 'servings', 'prepMins', 'cookMins', 'tags',
+    ],
+    additionalProperties: false,
+  },
+};
 
 /**
  * Expands a suggestion into a full saved recipe, or returns null if AI returns malformed JSON.
@@ -336,9 +428,7 @@ export async function expandSuggestion(
     `For each ingredient: if it is semantically present in the pantry (e.g. "Butter" ` +
     `matches "Unsalted Butter"), set "substitute" to null. If it is NOT in the pantry, ` +
     `set "substitute" to the name of the single best pantry item that could realistically ` +
-    `replace it in the recipe steps — or null if no reasonable pantry substitute exists.\n\n` +
-    `Respond with this exact JSON:\n` +
-    `{"name":"string","description":"string","ingredients":[{"name":"string","quantity":number|null,"unit":"string|null","substitute":"string|null"}],"steps":["string"],"servings":number,"prepMins":number,"cookMins":number,"tags":["string"]}`;
+    `replace it in the recipe steps — or null if no reasonable pantry substitute exists.`;
 
   let response;
   try {
@@ -352,21 +442,53 @@ export async function expandSuggestion(
         },
         { role: 'user', content: prompt },
       ],
-      response_format: { type: 'json_object' },
+      response_format: { type: 'json_schema', json_schema: EXPAND_SUGGESTION_SCHEMA },
       max_tokens: 1500,
     });
   } catch (err) {
     throw wrapAIError(new AIProviderError('OpenAI API error', err));
   }
 
-  const text = response.choices[0].message.content ?? 'null';
+  const { result, structuredStatus } = parseStructuredResponse(response, null);
   console.log(
     `[kitchen-keeper] request_id=${requestId} function=expandSuggestion model=gpt-4o-mini` +
+      ` structured_status=${structuredStatus}` +
       ` response_tokens=${response.usage?.completion_tokens} prompt_tokens=${response.usage?.prompt_tokens}` +
       ` total_tokens=${response.usage?.total_tokens} cached_tokens=${response.usage?.prompt_tokens_details?.cached_tokens ?? 0}`
   );
-  return safeParseJSON(text, null);
+  return result;
 }
+
+export const PARSE_RECEIPT_SCHEMA = {
+  name: 'receipt_items',
+  strict: true,
+  schema: {
+    type: 'object',
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            category: { type: 'string', enum: PANTRY_CATEGORIES },
+            quantity: { type: 'number' },
+            unit: { type: 'string' },
+            estimatedExpiryDays: { type: ['integer', 'null'] },
+            classification: {
+              type: 'string',
+              enum: ['produce', 'dairy', 'meat', 'packaged', 'beverage', 'non_food', 'uncertain'],
+            },
+          },
+          required: ['name', 'category', 'quantity', 'unit', 'estimatedExpiryDays', 'classification'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['items'],
+    additionalProperties: false,
+  },
+};
 
 /**
  * Parses a grocery receipt image using OpenAI vision.
@@ -390,10 +512,6 @@ export async function parseReceipt(imageBase64, mimeType, requestId = 'n/a') {
               type: 'text',
               text:
                 'Extract every line item from this grocery receipt. ' +
-                'Return a JSON array. Each element: ' +
-                '{ "name": string, "category": one of [Produce|Dairy|Meat|Seafood|Bakery|Frozen|Pantry|Beverages|Condiments|Other], ' +
-                '"quantity": number, "unit": string, "estimatedExpiryDays": integer|null, ' +
-                '"classification": one of [produce|dairy|meat|packaged|beverage|non_food|uncertain] }. ' +
                 'estimatedExpiryDays is days from today. null if non-perishable or unknown. ' +
                 'classification: classify each item. Use "non_food" whenever the item is not intended for human consumption or pantry/kitchen storage, even when purchased at a grocery or warehouse-club store alongside groceries — warehouse-club and grocery-store receipts often mix arbitrary general merchandise in among food purchases, so do not assume a line is food just because of where it was purchased. ' +
                 'Pet food and pet treats are "non_food": they are edible, but "edible" does not mean "human food" — the test is whether the item belongs in a human pantry, not whether it is technically food for something. ' +
@@ -406,21 +524,20 @@ export async function parseReceipt(imageBase64, mimeType, requestId = 'n/a') {
                 '- Preserve brand names when clearly and unambiguously present; do not guess an unfamiliar brand abbreviation.\n' +
                 '- Do not add marketing, freshness, or quality adjectives not present on the receipt (e.g. do not turn "MILK" into "Fresh Milk").\n' +
                 '- Do not infer package size or quantity descriptors not present on the receipt (e.g. do not turn "MILK" into "1 Gallon Milk").\n' +
-                '- If an abbreviation cannot be confidently expanded, return the original printed text unchanged.\n' +
-                'Return ONLY a raw JSON array. No markdown, no explanation.',
+                '- If an abbreviation cannot be confidently expanded, return the original printed text unchanged.',
             },
           ],
         },
       ],
+      response_format: { type: 'json_schema', json_schema: PARSE_RECEIPT_SCHEMA },
       max_tokens: 2000,
     });
   } catch (err) {
     throw wrapAIError(new AIProviderError('OpenAI vision API error', err));
   }
 
-  const text = response.choices[0].message.content ?? '[]';
-  const parsed = safeParseJSON(text, []);
-  const items = Array.isArray(parsed) ? parsed : (parsed.items ?? []);
+  const { result: parsed, structuredStatus } = parseStructuredResponse(response, []);
+  const items = parsed.items ?? [];
 
   const food = items.filter((i) => i.classification !== 'non_food');
   const dropped = items.filter((i) => i.classification === 'non_food');
@@ -435,13 +552,49 @@ export async function parseReceipt(imageBase64, mimeType, requestId = 'n/a') {
 
   console.log(
     `[kitchen-keeper] request_id=${requestId} function=parseReceipt` +
-      ` model=gpt-4o-mini item_count_extracted=${items.length} item_count_food=${food.length}` +
+      ` model=gpt-4o-mini structured_status=${structuredStatus} item_count_extracted=${items.length} item_count_food=${food.length}` +
       ` item_count_non_food=${dropped.length} item_count_uncertain=${uncertain.length}` +
       ` prompt_tokens=${response.usage?.prompt_tokens} completion_tokens=${response.usage?.completion_tokens}` +
       ` total_tokens=${response.usage?.total_tokens} cached_tokens=${response.usage?.prompt_tokens_details?.cached_tokens ?? 0}`
   );
   return food;
 }
+
+// Shared by parseRecipeImage (vision) and parseRecipeText (text) — the code already
+// documents these two as mirroring the same JSON contract (see parseRecipeText's docblock).
+export const PARSED_RECIPE_SCHEMA = {
+  name: 'parsed_recipe',
+  strict: true,
+  schema: {
+    type: 'object',
+    properties: {
+      name: { type: 'string' },
+      description: { type: ['string', 'null'] },
+      ingredients: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            quantity: { type: ['number', 'string', 'null'] },
+            unit: { type: ['string', 'null'] },
+          },
+          required: ['name', 'quantity', 'unit'],
+          additionalProperties: false,
+        },
+      },
+      steps: { type: 'array', items: { type: 'string' } },
+      servings: { type: ['number', 'null'] },
+      prepMins: { type: ['number', 'null'] },
+      cookMins: { type: ['number', 'null'] },
+      tags: { type: 'array', items: { type: 'string' } },
+    },
+    required: [
+      'name', 'description', 'ingredients', 'steps', 'servings', 'prepMins', 'cookMins', 'tags',
+    ],
+    additionalProperties: false,
+  },
+};
 
 /**
  * Parses a recipe image or card using OpenAI vision.
@@ -491,43 +644,41 @@ export async function parseRecipeImage(
         ],
       },
     ],
+    response_format: { type: 'json_schema', json_schema: PARSED_RECIPE_SCHEMA },
     max_tokens: 3000,
   };
 
   async function callOnce() {
     const response = await openaiClient.chat.completions.create(requestOptions);
-    return { content: response.choices[0].message.content ?? 'null', usage: response.usage };
+    const { result, structuredStatus } = parseStructuredResponse(response, null);
+    return { result, structuredStatus, usage: response.usage };
   }
 
-  let text, usage;
+  const RETRYABLE_STATUSES = new Set(['length', 'parse_failed']);
+  let result, structuredStatus, usage;
   try {
-    ({ content: text, usage } = await callOnce());
+    ({ result, structuredStatus, usage } = await callOnce());
   } catch (err) {
     throw wrapAIError(new AIProviderError('OpenAI vision API error', err));
   }
 
-  const PARSE_FAILED = Symbol('parse_failed');
-  let result = safeParseJSON(text, PARSE_FAILED);
   let retried = false;
-
-  if (result === PARSE_FAILED && Date.now() - startedAt < RETRY_BUDGET_MS) {
+  if (RETRYABLE_STATUSES.has(structuredStatus) && Date.now() - startedAt < RETRY_BUDGET_MS) {
     retried = true;
     try {
-      ({ content: text, usage } = await callOnce());
+      ({ result, structuredStatus, usage } = await callOnce());
     } catch (err) {
       throw wrapAIError(new AIProviderError('OpenAI vision API error', err));
     }
-    result = safeParseJSON(text, PARSE_FAILED);
   }
 
-  const parseFailed = result === PARSE_FAILED;
   console.log(
     `[kitchen-keeper] request_id=${requestId} function=parseRecipeImage model=${model}` +
-      ` detail=high retried=${retried} parse_failed=${parseFailed}` +
+      ` detail=high retried=${retried} structured_status=${structuredStatus}` +
       ` prompt_tokens=${usage?.prompt_tokens} completion_tokens=${usage?.completion_tokens}` +
       ` total_tokens=${usage?.total_tokens} cached_tokens=${usage?.prompt_tokens_details?.cached_tokens ?? 0}`
   );
-  return parseFailed ? null : result;
+  return result;
 }
 
 /**
@@ -557,28 +708,30 @@ export async function parseRecipeText(pageText, sourceUrl, requestId = 'n/a') {
           '"steps": [string], "servings": number|null, "prepMins": number|null, ' +
           '"cookMins": number|null, "tags": [string] }. ' +
           'If this page does not contain a recipe at all, return ' +
-          '{ "name": "", "ingredients": [], "steps": [] }. ' +
+          '{ "name": "", "description": null, "ingredients": [], "steps": [], "servings": null, ' +
+          '"prepMins": null, "cookMins": null, "tags": [] }. ' +
           'Return ONLY a raw JSON object. No markdown, no explanation.\n\n' +
           `PAGE TEXT:\n${pageText}`,
       },
     ],
+    response_format: { type: 'json_schema', json_schema: PARSED_RECIPE_SCHEMA },
     max_tokens: 2000,
   };
 
-  let text, usage;
+  let response;
   try {
-    const response = await openaiClient.chat.completions.create(requestOptions);
-    text = response.choices[0].message.content ?? 'null';
-    usage = response.usage;
+    response = await openaiClient.chat.completions.create(requestOptions);
   } catch (err) {
     throw wrapAIError(new AIProviderError('OpenAI text extraction error', err));
   }
 
-  const result = safeParseJSON(text, null);
+  const { result, structuredStatus } = parseStructuredResponse(response, null);
+  const usage = response.usage;
   const usable =
     result && (result.name || result.ingredients?.length || result.steps?.length);
   console.log(
     `[kitchen-keeper] request_id=${requestId} function=parseRecipeText model=${model}` +
+      ` structured_status=${structuredStatus}` +
       ` usable=${!!usable} prompt_tokens=${usage?.prompt_tokens} completion_tokens=${usage?.completion_tokens}` +
       ` total_tokens=${usage?.total_tokens} cached_tokens=${usage?.prompt_tokens_details?.cached_tokens ?? 0}`
   );
@@ -609,6 +762,23 @@ export const RECIPE_ENRICHABLE_FIELDS = [
  * layered on an already-successful extraction, so a failure here must never
  * fail the overall import (architect review round 1).
  */
+export const ENRICH_RECIPE_FIELDS_SCHEMA = {
+  name: 'recipe_field_enrichment',
+  strict: true,
+  schema: {
+    type: 'object',
+    properties: {
+      description: { type: ['string', 'null'] },
+      servings: { type: ['number', 'null'] },
+      prepMins: { type: ['number', 'null'] },
+      cookMins: { type: ['number', 'null'] },
+      tags: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['description', 'servings', 'prepMins', 'cookMins', 'tags'],
+    additionalProperties: false,
+  },
+};
+
 export async function enrichRecipeFields(
   partialRecipe,
   missingFields,
@@ -632,23 +802,25 @@ export async function enrichRecipeFields(
           'filling in metadata (servings, times, description, tags), not re-extracting ' +
           'ingredients or steps. Do not include "name", "ingredients", or "steps" in ' +
           'your response even if you can infer them — they are already correct. ' +
-          'Return JSON containing only whichever of these you can confidently determine: ' +
+          'Return JSON containing these fields: ' +
           '{ "description": string, "servings": number, "prepMins": number, ' +
-          '"cookMins": number, "tags": [string] }. Omit any field you cannot determine ' +
-          "rather than guessing. Return ONLY a raw JSON object. No markdown, no explanation.\n\n" +
+          '"cookMins": number, "tags": [string] }. Set any field you cannot confidently ' +
+          'determine to null (or [] for tags), rather than guessing. For any field not in ' +
+          'that list, always return null (or [] for tags) without attempting to determine it. ' +
+          "Return ONLY a raw JSON object. No markdown, no explanation.\n\n" +
           `PAGE TEXT:\n${pageText}`,
       },
     ],
+    response_format: { type: 'json_schema', json_schema: ENRICH_RECIPE_FIELDS_SCHEMA },
     max_tokens: 500,
   };
 
   try {
     const response = await openaiClient.chat.completions.create(requestOptions);
-    const text = response.choices[0].message.content ?? 'null';
-    const result = safeParseJSON(text, null);
+    const { result, structuredStatus } = parseStructuredResponse(response, null);
     console.log(
       `[kitchen-keeper] request_id=${requestId} function=enrichRecipeFields model=${model}` +
-        ` found=${result ? Object.keys(result).join(',') : 'none'}` +
+        ` structured_status=${structuredStatus} found=${result ? Object.keys(result).join(',') : 'none'}` +
         ` prompt_tokens=${response.usage?.prompt_tokens} completion_tokens=${response.usage?.completion_tokens}` +
         ` total_tokens=${response.usage?.total_tokens} cached_tokens=${response.usage?.prompt_tokens_details?.cached_tokens ?? 0}`
     );

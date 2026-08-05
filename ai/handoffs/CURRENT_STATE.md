@@ -1,5 +1,127 @@
 # Task
 
+TASK-052 implementation session: implemented `ai/tasks/TASK-052-spec.md` (DRAFT-3, 9.9/10, APPROVED FOR
+IMPLEMENTATION) end to end — migrated all 6 JSON-producing AI calls in `aiService.js` from
+prompt-instructed JSON / `json_object` mode onto OpenAI Structured Outputs (`response_format: json_schema`,
+`strict: true`). **Implemented, tested, live-verified against the real OpenAI API. Not yet committed** —
+working tree has all changes, no commit made (only commit on explicit request, per session convention).
+
+## What was done this session
+
+- Implemented exactly per the spec's Allowed Files list, Design sections 1-9, and Constraints — no scope
+  drift beyond one test-infrastructure fix (below).
+- [aiService.js](../../server/services/aiService.js): added `extractStructuredContent` and
+  `parseStructuredResponse` helpers plus the shared `PARSE_FAILED` sentinel (Design 1); added
+  `PANTRY_CATEGORIES` (Design 2/D-7) and pointed `PANTRY_TOOLS`'s two existing category `enum` arrays at
+  it, net removing a duplicate rather than adding one; added the 6 named-export schema constants
+  (`EAT_THIS_NOW_SCHEMA`, `EXPAND_SUGGESTION_SCHEMA`, `PARSE_RECEIPT_SCHEMA`, `PARSED_RECIPE_SCHEMA` —
+  shared by `parseRecipeImage`/`parseRecipeText` per D-3 — `ENRICH_RECIPE_FIELDS_SCHEMA`), each placed
+  just above the function(s) that use it, matching `PANTRY_TOOLS`'s existing in-file convention (D-2).
+- Wired `response_format: { type: 'json_schema', json_schema: ... }` into all 6 functions (Design 3-8);
+  every function's log line gained `structured_status` (one of `ok`/`refusal`/`length`/`content_filter`/
+  `parse_failed`); `eatThisNow`/`expandSuggestion`'s prose shape-instructions were trimmed since the
+  schema now carries that contract (Design 3-4); `parseReceipt`'s unwrap changed to explicit `parsed.items
+  ?? []` (Design 5); `parseRecipeImage`'s retry loop retargeted to a `RETRYABLE_STATUSES = new
+  Set(['length', 'parse_failed'])` gate, excluding `refusal`/`content_filter` (Design 6/D-4);
+  `parseRecipeText`'s "no recipe found" escape hatch extended to the full null/empty shape `strict: true`
+  now requires (Design 7); `enrichRecipeFields`'s prompt wording changed from "omit" to "set null" with no
+  caller-side merge-logic change (Design 8/D-6).
+- [routes/ai.js](../../server/routes/ai.js): `parsedRecipeSchema` given a one-word `export` (Design 9) —
+  no other change, route handlers untouched.
+- New [aiService.schemas.test.js](../../server/services/aiService.schemas.test.js) (Testing Plan steps
+  1-3): a recursive walker asserting `additionalProperties: false` and a full `required` list at every
+  object node for all 6 schemas; a `JSON.stringify`/`parse` round-trip check on each schema's exact
+  `response_format` request shape; the `PARSED_RECIPE_SCHEMA`/Zod `parsedRecipeSchema` key-set cross-check
+  (top-level fields and the `ingredients` sub-schema) from Design 9's own excerpt — that excerpt assumed
+  `parsedRecipeSchema.shape.ingredients.element` worked directly, but Zod v3 wraps a `.default([])` array
+  in `ZodDefault`, so `.element` is only reachable via `.removeDefault().element` (verified by direct
+  experiment before writing the assertion, not assumed from the spec text). 12/12 new tests passing.
+- **One test-infrastructure fix not anticipated by the spec's Design 9 excerpt (self-contained, no source
+  changes):** this is the first test file in the repo to import `aiService.js` or `routes/ai.js`. Both
+  transitively construct clients at module load time — `aiService.js` (via `recipeSearchService.js`) hits
+  `db/client.js`'s `neon(process.env.DATABASE_URL)`, and `aiService.js` itself constructs `new
+  OpenAI({apiKey: process.env.OPENAI_API_KEY})` — both throw synchronously if their env var is unset, which
+  it is under the bare `node --experimental-test-module-mocks --test` script. Fixed by setting placeholder
+  values for both (`process.env.DATABASE_URL ??= ...`, `process.env.OPENAI_API_KEY ??= 'test-key'`) before
+  dynamically `import()`-ing both modules — static imports are hoisted above module-body code, so this
+  only works via dynamic import, not the spec excerpt's plain top-of-file `import`. No live DB query or
+  OpenAI call is ever made by these tests; the placeholders only satisfy each client's constructor.
+- `npm test --prefix server`: 85/85 passing (73 prior + 12 new, zero regressions). `npm run lint`: clean
+  except the same pre-existing, unrelated `react/no-unescaped-entities` error in `LandingPage.jsx` noted in
+  the TASK-051 session (still not touched by this task).
+- **Live-verified all 6 functions against the real OpenAI API** in the local dev environment (separate
+  Neon branch — see [[feedback_dev_db_is_shared]]):
+  - `eatThisNow` — Dashboard "✨ Suggest Meals" button. Log: `structured_status=ok`.
+  - `expandSuggestion` — "Save Recipe" on a suggestion card. Log: `structured_status=ok`. (This route only
+    returns the expanded recipe, it doesn't persist — confirmed the household's saved-recipe count was
+    unchanged before/after, so no cleanup was needed.)
+  - `parseRecipeText` — "Import from URL" against a JSON-LD-less page (a Foodista recipe). Log:
+    `structured_status=ok usable=true`. Separately confirmed the "no recipe found" escape hatch stays
+    schema-valid by calling the function directly with non-recipe page text: `structured_status=ok
+    usable=false`, returns `null` to the caller exactly as before.
+  - `parseRecipeImage` — the file `<input>` can't be scripted in this sandboxed browser, so a synthetic
+    recipe image was drawn on an in-page `<canvas>` and POSTed directly to `/api/ai/parse-recipe-image` via
+    `fetch`/`FormData` (same-origin, real session cookies). Log: `structured_status=ok retried=false`;
+    response correctly transcribed all ingredients/steps/servings/times.
+  - `parseReceipt` — same canvas approach, a synthetic receipt image including one non-food line ("DOG FOOD
+    5LB"). Log: `structured_status=ok`; response correctly dropped the dog food line
+    (`dropped_non_food_count=1`) and expanded grocery abbreviations on the other 5
+    ("ORG AVO" → "Organic avocados", "WHL MLK 1GAL" → "Whole milk 1 gallon", etc.).
+  - `enrichRecipeFields` — two real external recipe sites (allrecipes.com, simplyrecipes.com) returned 422
+    on `/api/ai/parse-recipe-url` in local dev, consistent with server-side scraping getting bot-blocked
+    (no `function=` log line appeared at all, meaning the failure was in the page fetch, before either AI
+    tier ran) — unrelated to this task's code. Verified the function itself directly instead (a Node
+    one-liner calling `enrichRecipeFields` against the real OpenAI API with a synthetic partial recipe/page
+    text): `structured_status=ok found=description,servings,prepMins,cookMins,tags`, all 5 fields correctly
+    filled. Tier 1b's live route behavior (JSON-LD extraction + this function's merge) was not confirmed
+    end-to-end through a real URL this session — see Known Risks.
+  - Refusal/`content_filter` paths: not live-reproduced (rare, hard to trigger deliberately) — verified by
+    code inspection against `extractStructuredContent`'s branches and `parseRecipeImage`'s
+    `RETRYABLE_STATUSES` gate, per the spec's own Testing Plan step 8 and the TASK-050/051 precedent for
+    this class of edge case.
+
+# Decisions Made
+
+All design decisions are captured in the spec itself (D-1 through D-9) — implemented as designed, with the
+one addition above (test-file env-var placeholders) needed to make Design 9's test excerpt actually runnable
+in this repo's test setup, not a deviation from any design decision.
+
+# Known Risks
+
+- **Not yet committed.** Working tree has all Allowed Files changes (`aiService.js`, `routes/ai.js`, new
+  `aiService.schemas.test.js`); nothing committed or pushed this session.
+- **Tier 1b's live route path (`/parse-recipe-url` → JSON-LD extraction → `enrichRecipeFields` merge) was
+  not confirmed end-to-end against a real URL.** Two real sites tried both failed at the page-fetch step
+  (likely bot-blocking, not a code issue) — `enrichRecipeFields` itself was confirmed working directly
+  against the live OpenAI API, and Tier 1b's merge logic is untouched by this task (Design 8 is a
+  prompt-wording change only, D-6 confirmed the merge already treats `null`/absent identically) — but worth
+  a live end-to-end check on a real recipe URL with working JSON-LD if that tier gets touched again.
+- Carried forward, unrelated to this session: OpenAI prepaid billing / auto-recharge-off confirmation is
+  still open — see [[project_go_public_readiness]] — and remains the biggest open risk given
+  `publicAiAccessEnabled` is live in production.
+
+# Context Notes
+
+- branch: `staging`.
+- Dev servers were started via the project's `.claude/launch.json` configs (`server` on 3001, `client` on
+  5183) for live verification; both stopped cleanly at the end of the session.
+- The browser preview session was already Clerk-authenticated as Connor's owner household from a prior
+  session's cookies — no fresh sign-in was needed or performed.
+
+# Recommended Next Action
+
+1. Review the diff, then let Claude know if/when to commit — no commit was made this session per the
+   commit-only-on-request convention.
+2. Optional: a live end-to-end check of Tier 1b (`parse-recipe-url` JSON-LD path) against a real recipe URL
+   with working schema.org markup, since this session could only verify `enrichRecipeFields` directly, not
+   through the route (Known Risks).
+3. Unrelated carry-forward, not blocking TASK-052: OpenAI billing confirmation is still open per
+   [[project_go_public_readiness]].
+
+---
+
+# Prior Handoff (TASK-052 spec-drafting session, now superseded above)
+
 TASK-052 spec-drafting session: drafted `ai/tasks/TASK-052-spec.md` — migrates the 6 JSON-producing AI
 calls in `aiService.js` (`eatThisNow`, `expandSuggestion`, `parseReceipt`, `parseRecipeImage`,
 `parseRecipeText`, `enrichRecipeFields`) from prompt-instructed JSON / `json_object` mode onto OpenAI
