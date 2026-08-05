@@ -89,13 +89,17 @@ export default function BuildListModal({ onClose, onBuild }) {
             <div className="p-4 space-y-3 overflow-y-auto flex-1">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  List name
+                  List name{' '}
+                  <span className="text-red-500" aria-hidden="true" title="Required">
+                    *
+                  </span>
                 </label>
                 <input
                   type="text"
                   value={listName}
                   onChange={(e) => setListName(e.target.value)}
                   placeholder="e.g. This week's meals"
+                  aria-required="true"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                 />
               </div>
