@@ -1,10 +1,122 @@
 # Task
 
+TASK-053 spec-drafting session: drafted `ai/tasks/TASK-053-spec.md` — streaming chat responses
+(`POST /api/ai/chat` moves from one blocking JSON response to an NDJSON stream of the assistant's reply
+text as OpenAI generates it). This is deferred finding #4 of the 4 TASK-051 findings left queued after
+TASK-052 addressed finding #1 (structured outputs). **Spec only — DRAFT-2, APPROVED FOR IMPLEMENTATION
+after one review round. No code was written this session.**
+
+## What was done this session
+
+- Presented all 4 remaining TASK-051-deferred findings (vision-model eval, content-hash caching, chat
+  streaming, context-size cap) with their tradeoffs; Connor picked chat streaming.
+- Researched before drafting: OpenAI Chat Completions streaming event/delta shape; verified the *exact*
+  SDK call path against this repo's installed `openai@4.104.0` (`client.beta.chat.completions.stream()`,
+  not `client.chat.completions.stream()` — the latter is where the SDK's current docs show it, for a later
+  major version not installed here); confirmed by reading `ChatCompletionStream.js`'s internals directly
+  that `finalChatCompletion()` returns a `ChatCompletion` shape compatible with the existing
+  `extractToolCalls`/`extractText`/`buildToolResult` provider methods with zero changes, and that
+  `stream_options: { include_usage: true }` populates `.usage` on that final object (no regression to
+  TASK-051's token-cost logging); researched Vercel's streaming support for this app's exact deployment
+  shape (Express wrapped as a raw Node.js Vercel Function via `api/index.js`, not Next.js/Edge) and found
+  no official confirmation of this specific shape — flagged as the spec's single biggest open risk,
+  requiring a live Preview-deployment check before this is considered done.
+- Drafted [TASK-053-spec.md](../tasks/TASK-053-spec.md): keeps `chat()`'s existing multi-turn tool-calling
+  loop and the provider abstraction entirely intact — only `openaiProvider.js` gains a new `streamMessage`
+  method (parallel to the untouched `sendMessage`), `chat()` gains an `onToken` callback parameter, and
+  `routes/ai.js`'s `/chat` handler becomes an NDJSON stream instead of one `res.json()` call. Client gets a
+  small hand-rolled NDJSON reader (`splitNdjsonLines` + `postStream` in `client/src/api/index.js`) rather
+  than pulling the `openai` package into the bundle.
+- One round of GPT architect review (9.4/10, "approve after revisions," 5 required changes) — assessed
+  critically rather than applied mechanically:
+  - Agreed and applied: explicit `res.flushHeaders()` timing (D-8); explicit backpressure reasoning,
+    documented as an intentional non-issue given GPT's token rate vs. socket drain rate (D-9); NDJSON
+    framing/parsing separation (D-12).
+  - Agreed with the underlying concern but found a bigger issue than the one raised: the review asked for
+    abort semantics to be clarified around in-flight persistence; investigating that surfaced that DRAFT-1
+    had **no guard against writing to the response after client disconnect** — `res.write()` on a closed
+    socket throws, and that throw would have occurred inside the route's own `catch` block with nothing to
+    catch it (an unhandled rejection, since this app runs Express 4, confirmed in `server/package.json`,
+    which doesn't auto-catch async-handler rejections). Fixed with a `clientDisconnected` guard (D-10), not
+    just documented.
+  - Pushed back on two points: callback injection (`onToken`) vs. an async-iterable/event-emitter
+    abstraction — the reviewer's alternatives relocate the same information through a different mechanism
+    and would force `chat()`'s existing side-effecting return-value contract into generator semantics, a
+    bigger change than one callback parameter (D-7); envelope versioning — declined as premature for a
+    same-repo, same-deploy client/server pair with no independent consumer (D-11).
+  - **Found a better solution than either side offered** for the recipe-suggestion "flash" the reviewer
+    objected to (D-5): rather than the original recommendation (stream then retroactively hide, a brief
+    visible flash) or the reviewer's alternative (keep the bubble and show cards underneath, which reverses
+    TASK-034's deliberate "cards only" convention), tracing the tool loop's actual turn order showed the
+    route already knows — before the first token of a reply streams — whether that reply will end in
+    recipe cards, since the tool handler populates `ctx.result.recipeSuggestions` in the turn *before* the
+    text-generating turn. The route's `onToken` now simply never forwards that one turn's deltas — zero
+    flash, no relitigating TASK-034, no client-side change needed.
+  - One self-initiated addition beyond the review's required list: client-side token batching via
+    `requestAnimationFrame` (D-13) — the review flagged per-token `setState`/`ReactMarkdown` re-parsing as
+    a non-blocking observation; treated as real anyway given this app's genuine mobile/PWA usage elsewhere
+    in the same file.
+- Connor approved the spec for implementation after this one round (DRAFT-2 — APPROVED FOR
+  IMPLEMENTATION) without a second review round.
+
+# Decisions Made
+
+All design decisions are captured in the spec itself (D-1 through D-13) — see
+[TASK-053-spec.md](../tasks/TASK-053-spec.md) rather than duplicating them here. Notably: the provider
+abstraction and `chat()`'s existing tool-calling loop are both preserved untouched, only `streamMessage`
+and an `onToken` parameter are added (D-1 through D-3, D-7); NDJSON over `fetch`, not native
+`EventSource`/SSE, since this app's Bearer-token auth can't use `EventSource` (D-3); the SDK's own
+`ChatCompletionStream.fromReadableStream()` is deliberately not reused client-side to avoid pulling `openai`
+into the client bundle (D-4); recipe-suggestion replies are suppressed at the point of streaming, not
+retroactively hidden after the fact (D-5); Chat Completions streaming, not a Responses API migration (D-6).
+
+# Known Risks
+
+- **Nothing implemented yet** — this session produced only the approved spec. `POST /api/ai/chat`'s actual
+  behavior (blocking, one JSON response) is unchanged in the live app until a future session implements
+  TASK-053.
+- **Vercel's streaming behavior for this app's exact deployment shape (Express wrapped as a raw Node.js
+  Vercel Function, not Next.js/Edge) is not confirmed by any official documentation** — the spec's own
+  Research/Known Risks sections call this the single biggest open risk and make a live Preview-deployment
+  check (with the browser's real Network tab, not `curl`) a go/no-go gate in the Testing Plan, not just a
+  local-dev confirmation. **Whoever implements this should run that check early, not last** — if it fails,
+  the whole approach needs to be reassessed before sinking more implementation time into it.
+- **`stream_options.include_usage`'s effect on `finalChatCompletion().usage` was confirmed by reading SDK
+  source, not by a live call, at spec-drafting time** — high confidence (traced through the exact
+  accumulation logic), but the spec's own Testing Plan step 3 calls for a live confirmation before trusting
+  it in production, per this project's established preference for verifying rather than assuming.
+- Carried forward, unrelated to this session: OpenAI prepaid billing / auto-recharge-off confirmation is
+  still open — see [[project_go_public_readiness]] — and remains the biggest open risk given
+  `publicAiAccessEnabled` is live in production.
+
+# Context Notes
+
+- branch: `staging`.
+- No dev servers were started this session — spec-drafting and (self-conducted, single-round) architect
+  review only, no live verification performed or needed.
+
+# Recommended Next Action
+
+1. Implement TASK-053 per its own Allowed Files list, Design sections 1-6, and Constraints — the spec is
+   DRAFT-2, APPROVED FOR IMPLEMENTATION. Run the Testing Plan's live Vercel Preview streaming check (step 9)
+   early rather than last, given it's the spec's own identified biggest risk.
+2. Follow the spec's own Testing/Verification Plan (11 steps) before considering the task done, including
+   the new unit test for `splitNdjsonLines` and the client render-rate sanity check for the rAF batching.
+3. Unrelated carry-forward, not blocking TASK-053: OpenAI billing confirmation is still open per
+   [[project_go_public_readiness]].
+
+---
+
+# Prior Handoff (TASK-052 implementation session, now superseded above)
+
 TASK-052 implementation session: implemented `ai/tasks/TASK-052-spec.md` (DRAFT-3, 9.9/10, APPROVED FOR
 IMPLEMENTATION) end to end — migrated all 6 JSON-producing AI calls in `aiService.js` from
 prompt-instructed JSON / `json_object` mode onto OpenAI Structured Outputs (`response_format: json_schema`,
-`strict: true`). **Implemented, tested, live-verified against the real OpenAI API. Not yet committed** —
-working tree has all changes, no commit made (only commit on explicit request, per session convention).
+`strict: true`). **Implemented, tested, live-verified against the real OpenAI API, and committed
+(`e58dbb7`)** — this section previously described it as not yet committed at the end of that session; that
+was stale as of this correction (confirmed via `git log`/`git show --stat e58dbb7`, which shows exactly
+this task's 3 files: `server/services/aiService.js`, `server/services/aiService.schemas.test.js`,
+`server/routes/ai.js`).
 
 ## What was done this session
 
