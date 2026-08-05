@@ -3,9 +3,9 @@
 TASK-051 implementation session: built `ai/tasks/TASK-051-spec.md` (DRAFT-2, 9.9/10, approved) end to
 end — removed BYOK entirely, unified AI access gating behind a single `requireAiAccess` middleware
 covering all 7 AI endpoints, and shipped the 3 bundled low-risk AI-efficiency fixes (prompt-cache
-reordering, token-usage logging, shared OpenAI client). **Implemented, tested, and live-verified this
-session. Not yet committed** — working tree has all 18 Allowed Files changes (15 modified, 3 new, 3
-deleted), no commit made (only commit on explicit request, per session convention).
+reordering, token-usage logging, shared OpenAI client). **Implemented, tested, live-verified, committed
+(`46c2549`), and pushed to `origin/staging`. The `0021_drop_byok.sql` migration has since been applied by
+Connor to all three environments (local, staging, production).**
 
 ## What was done this session
 
@@ -59,14 +59,19 @@ deleted), no commit made (only commit on explicit request, per session conventio
 - Live-verified in the local dev environment (separate Neon branch — see
   [[feedback_dev_db_is_shared]]): ran the mandatory pre-drop query
   (`SELECT id, clerk_user_id FROM households WHERE openai_api_key IS NOT NULL`) directly against the local
-  DB — **zero rows**, confirmed safe to eventually apply `0021_drop_byok.sql` there (not yet applied to
-  any environment — see Known Risks); confirmed the server boots cleanly with `ENCRYPTION_KEY` fully
-  absent from `.env.local` (Verification Step 7, tested by temporarily stripping and restoring the real
-  file); loaded the Household page as the owner and confirmed the new copy renders with no BYOK language
-  and no broken UI from the removed `maskedKey` field (Steps 5-6); sent two live chat messages in the same
-  session and confirmed the **prompt-caching fix is actually working**, not just theoretically correct —
-  first call logged `cached_tokens=0`, second call (same pantry/recipe state) logged
-  `cached_tokens=2816` out of `prompt_tokens=4489` (Step 11).
+  DB — **zero rows**; confirmed the server boots cleanly with `ENCRYPTION_KEY` fully absent from
+  `.env.local` (Verification Step 7, tested by temporarily stripping and restoring the real file); loaded
+  the Household page as the owner and confirmed the new copy renders with no BYOK language and no broken
+  UI from the removed `maskedKey` field (Steps 5-6); sent two live chat messages in the same session and
+  confirmed the **prompt-caching fix is actually working**, not just theoretically correct — first call
+  logged `cached_tokens=0`, second call (same pantry/recipe state) logged `cached_tokens=2816` out of
+  `prompt_tokens=4489` (Step 11).
+- Committed (`46c2549`) and pushed to `origin/staging`, staged deliberately excluding
+  `.claude/settings.local.json` (local tool-permission noise accumulated during the session, unrelated to
+  the feature).
+- Connor ran `0021_drop_byok.sql` against **all three environments** (local, staging, production) after
+  this session's local-only pre-drop check — the staging/production pre-drop verification and the actual
+  `DROP COLUMN` execution were Connor's own action, not re-verified by Claude in this session.
 
 - Full codebase read of the AI integration surface (`aiService.js`, `routes/ai.js`,
   `resolveProvider.js`, `openaiProvider.js`, `transcribe.js`) plus external research on LLM cost/accuracy
@@ -119,15 +124,18 @@ Node flag.
 
 # Known Risks
 
-- **Migration not yet applied to any environment.** `0021_drop_byok.sql` has been created but not run
-  against local, staging, or production — the mandatory pre-drop `SELECT` was run against the local DB
-  this session (zero rows, safe there), but staging/production have not been checked. Run the same query
-  against each environment before ever applying the `DROP COLUMN` there.
+- **Migration applied everywhere, but not re-verified by Claude on staging/production.** Connor reports
+  `0021_drop_byok.sql` has been run against local, staging, and production. Claude only directly verified
+  the pre-drop `SELECT` (zero rows) against local dev this session — the staging/production pre-flight
+  checks and the actual `DROP COLUMN` on those two environments were Connor's own action. If either
+  environment turns out to have had a real stored key, it's gone now (BYOK was deleted, not archived,
+  per D-1) — worth a quick confirmation from Connor that he actually ran the pre-flight `SELECT` first on
+  both, not just the `DROP COLUMN`.
 - **`publicAiAccessEnabled` is currently off in local dev** (confirmed live this session — the Household
   page showed "Enable public AI access", not "Disable"). Per the spec's Known Risks, production has this
-  set to `true` deliberately (post-TASK-037 incident) — confirm production's actual toggle state before
-  this ships, since if it's ever `false` in an environment, this change correctly (not a regression) cuts
-  off all 5 previously-ungated endpoints for non-owner households the moment it deploys.
+  set to `true` deliberately (post-TASK-037 incident) — since it's now enforced on 5 endpoints that
+  previously ignored it entirely, confirm production's actual toggle state wasn't flipped or missed
+  during the environment-wide migration pass above.
 - Carried forward, unrelated to this session: OpenAI prepaid billing / auto-recharge-off confirmation is
   still open — see [[project_go_public_readiness]] — and remains the biggest open risk given
   `publicAiAccessEnabled` is live in production.
@@ -142,13 +150,10 @@ Node flag.
 
 # Recommended Next Action
 
-1. Review the diff, then let Claude know if/when to commit — no commit was made this session per the
-   commit-only-on-request convention.
-2. Before applying `0021_drop_byok.sql` to staging or production: run
-   `SELECT id, clerk_user_id FROM households WHERE openai_api_key IS NOT NULL;` against that environment
-   first and confirm it's empty (per the spec's Constraints — local dev is already confirmed empty, but
-   staging/production have not been checked).
-3. Unrelated carry-forward, not blocking TASK-051: OpenAI billing confirmation is still open per
+1. TASK-051 is fully shipped: committed, pushed to `origin/staging`, and the migration has been applied
+   to local, staging, and production. Nothing left to do on this task unless the pre-flight-check concern
+   in Known Risks turns up something.
+2. Unrelated carry-forward, not blocking TASK-051: OpenAI billing confirmation is still open per
    [[project_go_public_readiness]].
 
 ---
