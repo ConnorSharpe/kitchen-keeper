@@ -1,14 +1,105 @@
 # Task
 
+Spec-drafting session for `ai/tasks/TASK-051-spec.md`: Connor asked for an AI-efficiency review of the
+app (more accurate, better token efficiency), then — after seeing the findings — asked to remove BYOK
+(bring-your-own-key) entirely, keeping only the platform key with a single on/off switch for cost
+control if usage ever gets expensive.
+
+# Current Status
+
+**Spec drafted, reviewed, and APPROVED FOR IMPLEMENTATION (DRAFT-2, 9.9/10). No code written this
+session — spec only, per session convention (commit only on explicit request).**
+
+## What was done this session
+
+- Full codebase read of the AI integration surface (`aiService.js`, `routes/ai.js`,
+  `resolveProvider.js`, `openaiProvider.js`, `transcribe.js`) plus external research on LLM cost/accuracy
+  practices, at Connor's request, before any spec was drafted.
+- That investigation surfaced a live inconsistency directly relevant to BYOK removal: `resolveProvider`
+  (BYOK/toggle gating) is only actually called by 2 of the app's 7 AI endpoints
+  (`/api/ai/chat`, `/api/transcribe`) — the other 5 (`eat-this-now`, `expand-suggestion`, `parse-receipt`,
+  `parse-recipe-image`, `parse-recipe-url`) call straight into `aiService.js` with no owner/toggle check
+  at all. Connor confirmed the spec should fix both — delete BYOK, and make the existing
+  `publicAiAccessEnabled` toggle actually cover every AI endpoint.
+- Drafted [TASK-051-spec.md](../tasks/TASK-051-spec.md): new `requireAiAccess` middleware applied to all
+  7 endpoints; `resolveProvider` collapsed to a trivial platform-key wrapper; full BYOK data-path deletion
+  (`openai_api_key` column + migration, both BYOK-only encryption utility files, the key-management
+  route/UI-adjacent service methods — confirmed via full-file search that no client UI ever actually
+  exposed BYOK, so real risk was low); plus 3 low-risk AI-efficiency fixes Connor asked to bundle into the
+  same spec (chat system-prompt reordering for OpenAI's automatic prompt caching, cost/token-usage logging
+  on all 7 AI calls, one shared OpenAI client instead of six per-call instantiations). 5 other efficiency
+  findings (structured outputs, a vision-model accuracy eval, streaming, a context-size cap, content-hash
+  caching for recipe-URL parsing) were deliberately deferred — each needs a design decision or measurement
+  this session didn't have — and are recorded in full in the spec's Out of Scope section for future tasks.
+- Two rounds of GPT architect review: DRAFT-1 (9.6/10, one required change) → DRAFT-2 (9.9/10, APPROVED).
+  The required change: `requireAiAccess` was doing a fresh `householdService.getById()` DB lookup on every
+  AI request; the reviewer asked whether the household was already available in the request pipeline
+  before accepting a new lookup. Investigated rather than assumed: `clerkAuth` already fetches the
+  household via `getOrCreate` on every request but discards everything except `.id`, and `getOrCreate`'s
+  non-owner-member branch didn't even fetch `clerkUserId` in the first place — so the data was only
+  partially already available. Fixed by widening that one narrow query (a single indexed join, `getOrCreate`
+  has exactly one caller) and attaching `req.user.householdOwnerClerkId`, eliminating the duplicate lookup
+  without expanding `clerkAuth`'s blast radius further than needed. Full reasoning in the spec's D-11 and
+  the Architect Review History table at the top of the file.
+- Two non-blocking round-2 naming observations (`getOrCreate` → `resolveHousehold`-style rename;
+  `NoApiKeyError` → something like `AiAccessDeniedError`) were explicitly declined by the reviewer as
+  not worth churning in this task — left as-is, logged in the review history in case worth revisiting later.
+
+# Decisions Made
+
+All design decisions are captured in the spec itself (D-1 through D-11) — see
+[TASK-051-spec.md](../tasks/TASK-051-spec.md) rather than duplicating them here. Notably: `DROP COLUMN`
+rather than deprecate-in-place (D-1); the owner check stays household-scoped, not request-scoped (D-3,
+carried through D-11's fix); `resolveProvider.test.js` deleted rather than kept (D-4); the 3 AI-efficiency
+items bundled into this same spec rather than split out (D-6).
+
+# Known Risks
+
+- **Not yet implemented.** The spec is approved but no code has been written — the next session should
+  implement it directly against `ai/tasks/TASK-051-spec.md`'s Allowed Files, Design 1-8, Constraints, and
+  Verification Steps, in order.
+- **The spec's own mandatory pre-drop check must not be skipped**: before applying
+  `0021_drop_byok.sql` to any environment, run the `SELECT ... WHERE openai_api_key IS NOT NULL` query
+  from the spec's Constraints and confirm it's empty before dropping the column — BYOK is being deleted
+  entirely, not archived, so a skipped check risks permanent data loss for any household that has a
+  stored key (believed unlikely — see the spec's Current Behavior — but not yet verified against a real
+  environment).
+- Carried forward, unrelated to this session: OpenAI prepaid billing / auto-recharge-off confirmation is
+  still open — see [[project_go_public_readiness]] — and remains the biggest open risk given
+  `publicAiAccessEnabled` is live in production.
+
+# Context Notes
+
+- branch: `staging`.
+- No dev servers were started this session — pure investigation and spec-drafting, no code changes to
+  verify live.
+
+# Recommended Next Action
+
+1. Implement `ai/tasks/TASK-051-spec.md` exactly per its Allowed Files list, Design sections 1-8, and
+   Constraints — run its Verification Steps (1-15) in order, especially Step 8 (the pre-drop DB check)
+   before applying the migration to any real environment.
+2. Unrelated carry-forward, not blocking TASK-051: OpenAI billing confirmation is still open per
+   [[project_go_public_readiness]].
+
+---
+
+# Prior Handoff (TASK-050 implementation session, now superseded above)
+
+TASK-050 implementation session: built `ai/tasks/TASK-050-spec.md` (DRAFT-2, approved) end to end —
+suggest-recipes button, recipe-to-list entry point, read more/less. **Implemented and committed
+(`23357d6`)** — this file previously described this session's own status inline; the work is complete
+and shipped as of that commit. Full design detail preserved in `ai/tasks/TASK-050-spec.md` and this
+commit's history if ever needed again.
+
+---
+
+# Prior-Prior Handoff (TASK-049 implementation session, now superseded above)
+
 TASK-049 implementation session: built `ai/tasks/TASK-049-spec.md` (DRAFT-3, approved) end to end —
 blank-list creation, and the new add-recipe(s)-to-an-existing-list capability. **Implemented and
 live-verified this session. Not yet committed** — working tree has the changes, no commit made (only
 commit on explicit request, per session convention).
-
-# Current Status
-
-**Implementation complete, live-verified in the local dev environment, test data cleaned up. Awaiting
-Connor's go-ahead to commit.**
 
 ## What was done this session
 
@@ -84,7 +175,7 @@ Connor's go-ahead to commit.**
 
 ---
 
-# Prior Handoff (TASK-049 spec-drafting session, now superseded above)
+# Prior-Prior-Prior Handoff (TASK-049 spec-drafting session, now superseded above)
 
 Spec-drafting session for `ai/tasks/TASK-049-spec.md`: let a user create a shopping list from scratch (no
 recipe required), preserve the existing start-from-recipe flow, and add a new capability — add saved
@@ -100,7 +191,7 @@ only the spec — implemented, live-verified, and documented in the session desc
 
 ---
 
-# Prior Handoff (Production AI chat 403 fix for new public sign-ups)
+# Prior-Prior-Prior-Prior Handoff (Production AI chat 403 fix for new public sign-ups)
 
 Production support investigation, no prior spec: Connor's father John Sharpe signed up as a real public
 user and hit a 403 on in-app AI chat. Traced through `ChatPage.jsx` → `api/index.js` → `routes/ai.js` →
@@ -119,7 +210,9 @@ open carry-forward**: OpenAI prepaid billing / auto-recharge-off was never confi
 AI access is now live in production — see [[project_go_public_readiness]]. Full detail in git history at
 commit `561d0da` if ever needed again.
 
-# Prior-Prior Handoff (TASK-048 spec + implementation, now superseded above)
+---
+
+# Prior-Prior-Prior-Prior-Prior Handoff (TASK-048 spec + implementation, now superseded above)
 
 Spec-drafting session for `ai/tasks/TASK-048-spec.md` — a public landing page shown to signed-out visitors
 at `/`, with "Create account" and "Log in" buttons, per two rounds of GPT architect review (9.7/10 →
@@ -133,7 +226,7 @@ described it as not-yet-implemented; that was stale as of the correction above. 
 preserved in `ai/tasks/TASK-048-spec.md` and this file's git history as of the spec-approval commit
 (`96c671e`) if ever needed again.
 
-# Prior-Prior-Prior Handoff (TASK-047 implementation session)
+# Prior-Prior-Prior-Prior-Prior-Prior Handoff (TASK-047 implementation session)
 
 Private, owner-only "Suggest an Improvement" feedback box on the Dashboard. Two rounds of GPT architect
 review (9.6/10 → 9.9/10 APPROVED) before implementation, plus two scope questions resolved directly with
