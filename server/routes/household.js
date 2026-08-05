@@ -6,26 +6,20 @@ import { clerkAuth } from '../middleware/clerkAuth.js';
 import { validate } from '../middleware/validate.js';
 import { joinRateLimit } from '../middleware/joinRateLimit.js';
 import { sendHouseholdInvite } from '../services/emailService.js';
-import { maskKey } from '../utils/keyEncryption.js';
 
 const router = express.Router();
 router.use(clerkAuth);
 
-// GET /api/household — household info + join code + AI key preview
+// GET /api/household — household info + join code
 router.get('/', async (req, res) => {
   const household = await householdService.getById(req.user.householdId);
   if (!household) return res.status(404).json({ error: 'Household not found' });
-
-  const aiPreview = await householdService.getAiKeyPreview(
-    req.user.householdId
-  );
 
   res.json({
     household: {
       id: household.id,
       name: household.name,
       joinCode: household.joinCode,
-      maskedKey: aiPreview.maskedKey,
     },
     viewerIsOwner: req.user.id === process.env.OWNER_CLERK_ID,
   });
@@ -42,23 +36,6 @@ const updateNameSchema = z.object({
 router.patch('/', validate(updateNameSchema), async (req, res) => {
   await householdService.updateName(req.user.householdId, req.body.name);
   res.json({ ok: true });
-});
-
-// PATCH /api/household/ai-key — set or remove BYOK OpenAI key
-const aiKeySchema = z.object({
-  key: z.string().min(1).nullable(),
-});
-
-router.patch('/ai-key', validate(aiKeySchema), async (req, res) => {
-  const { key } = req.body;
-
-  if (key === null) {
-    await householdService.removeAiApiKey(req.user.householdId);
-    return res.json({ maskedKey: null });
-  }
-
-  await householdService.setAiApiKey(req.user.householdId, key);
-  res.json({ maskedKey: maskKey(key) });
 });
 
 // GET /api/household/members — all users in this household

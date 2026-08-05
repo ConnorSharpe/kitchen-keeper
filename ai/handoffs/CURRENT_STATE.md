@@ -1,16 +1,72 @@
 # Task
 
-Spec-drafting session for `ai/tasks/TASK-051-spec.md`: Connor asked for an AI-efficiency review of the
-app (more accurate, better token efficiency), then — after seeing the findings — asked to remove BYOK
-(bring-your-own-key) entirely, keeping only the platform key with a single on/off switch for cost
-control if usage ever gets expensive.
-
-# Current Status
-
-**Spec drafted, reviewed, and APPROVED FOR IMPLEMENTATION (DRAFT-2, 9.9/10). No code written this
-session — spec only, per session convention (commit only on explicit request).**
+TASK-051 implementation session: built `ai/tasks/TASK-051-spec.md` (DRAFT-2, 9.9/10, approved) end to
+end — removed BYOK entirely, unified AI access gating behind a single `requireAiAccess` middleware
+covering all 7 AI endpoints, and shipped the 3 bundled low-risk AI-efficiency fixes (prompt-cache
+reordering, token-usage logging, shared OpenAI client). **Implemented, tested, and live-verified this
+session. Not yet committed** — working tree has all 18 Allowed Files changes (15 modified, 3 new, 3
+deleted), no commit made (only commit on explicit request, per session convention).
 
 ## What was done this session
+
+- Implemented exactly per the spec's Allowed Files list, Design sections 1-8, and Constraints — no scope
+  drift beyond one necessary addition (below).
+- New [requireAiAccess.js](../../server/middleware/requireAiAccess.js): the actual single switch, exactly
+  matching Design 1 — owner households bypass with zero DB calls, everyone else gated by the existing
+  cached `isPublicAiAccessEnabled()`. New
+  [requireAiAccess.test.js](../../server/middleware/requireAiAccess.test.js) covers all three branches
+  (owner bypass with an explicit assertion that the toggle check is never called; non-owner+toggle-on;
+  non-owner+toggle-off) using `node:test`'s `mock.module` to stub `platformSettingsService` — this
+  requires Node's `--experimental-test-module-mocks` flag, which **was added to
+  [server/package.json](../../server/package.json)'s `test` script** (not in the spec's Allowed Files, but
+  needed to unit-test the DB-adjacent branching D-4 calls for; zero new npm dependencies, a built-in Node
+  flag only).
+- [clerkAuth.js](../../server/middleware/clerkAuth.js) attaches `req.user.householdOwnerClerkId`;
+  [householdService.js](../../server/services/householdService.js)'s `getOrCreate` Step 1 query widened
+  with the join per Design 2/D-11 — verified via the unit tests and a live non-owner-unaffected check
+  wasn't needed since this household has no second member to test with (documented as a code-inspection
+  verification in the spec's Step 1, same as the spec anticipated).
+- [resolveProvider.js](../../server/services/ai/resolveProvider.js) collapsed to the one-line wrapper;
+  `resolveProvider.test.js` deleted (D-4).
+- Full BYOK deletion: `server/utils/encryption.js`, `server/utils/keyEncryption.js` +
+  `.test.js` deleted; `getAiConfig`/`getAiKeyPreview`/`setAiApiKey`/`removeAiApiKey` removed from
+  `householdService.js`; the `PATCH /ai-key` route, `aiKeySchema`, and `maskedKey` response field removed
+  from [household.js](../../server/routes/household.js); `openaiApiKey` dropped from
+  [schema.js](../../server/db/schema.js); new
+  [0021_drop_byok.sql](../../server/db/migrations/0021_drop_byok.sql) with the mandatory pre-flight
+  `SELECT` baked into the same file (commented as must-run-first); `ENCRYPTION_KEY` removed from
+  `app.js`'s `REQUIRED_ENV` and from `.env.example`.
+- `requireAiAccess` wired into [ai.js](../../server/routes/ai.js) (`router.use`, covering all 7 endpoints
+  uniformly for the first time) and [transcribe.js](../../server/routes/transcribe.js) (explicit chain);
+  `aiConfig`/`getAiConfig` removed from both the `/chat` and transcribe handlers; `resolveProvider()` now
+  called with no arguments everywhere.
+- [aiService.js](../../server/services/aiService.js): chat's system prompt reordered
+  content-neutrally (Design 5) — static instructions first, `=== CURRENT CONTEXT ===` (today's date,
+  pantry, recipes, dietary) appended after; `chat()` drops the `aiConfig` param and threads `requestId`
+  into `startChatSession`; one module-level `openaiClient` replaces all six inline `new OpenAI(...)`
+  calls (Design 7); `eatThisNow`/`expandSuggestion` renamed `_requestId`→`requestId` and all six
+  functions' log lines extended with `prompt_tokens`/`completion_tokens`/`total_tokens`/`cached_tokens`
+  (Design 6); `parseRecipeImage`'s `callOnce()` now returns `{ content, usage }` per D-9 (retry path logs
+  only the final call's usage).
+  [openaiProvider.js](../../server/services/ai/openaiProvider.js): `startChatSession` takes an optional
+  `requestId`; `sendMessage` adds `prompt_cache_key: 'kitchen-keeper-chat-v1'` and logs token usage once
+  per underlying API call.
+- [HouseholdPage.jsx](../../client/src/pages/HouseholdPage.jsx): platform-settings description and toggle
+  button labels reworded to drop all BYOK-fallback language (Design 8).
+- `npm test --prefix server`: 73/73 passing (82 prior − 9 from the two deleted test files + 3 new
+  `requireAiAccess` tests, net expected). `npm run lint`: clean except one pre-existing, unrelated
+  `react/no-unescaped-entities` error in `LandingPage.jsx` (not touched this session).
+- Live-verified in the local dev environment (separate Neon branch — see
+  [[feedback_dev_db_is_shared]]): ran the mandatory pre-drop query
+  (`SELECT id, clerk_user_id FROM households WHERE openai_api_key IS NOT NULL`) directly against the local
+  DB — **zero rows**, confirmed safe to eventually apply `0021_drop_byok.sql` there (not yet applied to
+  any environment — see Known Risks); confirmed the server boots cleanly with `ENCRYPTION_KEY` fully
+  absent from `.env.local` (Verification Step 7, tested by temporarily stripping and restoring the real
+  file); loaded the Household page as the owner and confirmed the new copy renders with no BYOK language
+  and no broken UI from the removed `maskedKey` field (Steps 5-6); sent two live chat messages in the same
+  session and confirmed the **prompt-caching fix is actually working**, not just theoretically correct —
+  first call logged `cached_tokens=0`, second call (same pantry/recipe state) logged
+  `cached_tokens=2816` out of `prompt_tokens=4489` (Step 11).
 
 - Full codebase read of the AI integration surface (`aiService.js`, `routes/ai.js`,
   `resolveProvider.js`, `openaiProvider.js`, `transcribe.js`) plus external research on LLM cost/accuracy
@@ -53,17 +109,25 @@ rather than deprecate-in-place (D-1); the owner check stays household-scoped, no
 carried through D-11's fix); `resolveProvider.test.js` deleted rather than kept (D-4); the 3 AI-efficiency
 items bundled into this same spec rather than split out (D-6).
 
+One implementation-level decision not in the spec itself: `server/package.json`'s `test` script gained
+`--experimental-test-module-mocks` so `requireAiAccess.test.js` could stub `platformSettingsService`
+without a real DB connection. The spec's D-4 explicitly expected "the real branching logic" to live in a
+testable unit file; without this flag, `node:test` cannot mock an ESM named export at all (confirmed by
+direct experiment — `mock.module`/`mock.method` both throw without it), so there was no way to unit-test
+the toggle-on/toggle-off branches deterministically otherwise. Zero new npm dependencies — it's a built-in
+Node flag.
+
 # Known Risks
 
-- **Not yet implemented.** The spec is approved but no code has been written — the next session should
-  implement it directly against `ai/tasks/TASK-051-spec.md`'s Allowed Files, Design 1-8, Constraints, and
-  Verification Steps, in order.
-- **The spec's own mandatory pre-drop check must not be skipped**: before applying
-  `0021_drop_byok.sql` to any environment, run the `SELECT ... WHERE openai_api_key IS NOT NULL` query
-  from the spec's Constraints and confirm it's empty before dropping the column — BYOK is being deleted
-  entirely, not archived, so a skipped check risks permanent data loss for any household that has a
-  stored key (believed unlikely — see the spec's Current Behavior — but not yet verified against a real
-  environment).
+- **Migration not yet applied to any environment.** `0021_drop_byok.sql` has been created but not run
+  against local, staging, or production — the mandatory pre-drop `SELECT` was run against the local DB
+  this session (zero rows, safe there), but staging/production have not been checked. Run the same query
+  against each environment before ever applying the `DROP COLUMN` there.
+- **`publicAiAccessEnabled` is currently off in local dev** (confirmed live this session — the Household
+  page showed "Enable public AI access", not "Disable"). Per the spec's Known Risks, production has this
+  set to `true` deliberately (post-TASK-037 incident) — confirm production's actual toggle state before
+  this ships, since if it's ever `false` in an environment, this change correctly (not a regression) cuts
+  off all 5 previously-ungated endpoints for non-owner households the moment it deploys.
 - Carried forward, unrelated to this session: OpenAI prepaid billing / auto-recharge-off confirmation is
   still open — see [[project_go_public_readiness]] — and remains the biggest open risk given
   `publicAiAccessEnabled` is live in production.
@@ -71,15 +135,20 @@ items bundled into this same spec rather than split out (D-6).
 # Context Notes
 
 - branch: `staging`.
-- No dev servers were started this session — pure investigation and spec-drafting, no code changes to
-  verify live.
+- Dev servers were started via the project's `.claude/launch.json` configs (`server` on 3001, `client` on
+  5183) for live verification; both stopped cleanly at the end of the session.
+- The browser preview session was already Clerk-authenticated as Connor's owner household from a prior
+  session's cookies — no fresh sign-in was needed or performed.
 
 # Recommended Next Action
 
-1. Implement `ai/tasks/TASK-051-spec.md` exactly per its Allowed Files list, Design sections 1-8, and
-   Constraints — run its Verification Steps (1-15) in order, especially Step 8 (the pre-drop DB check)
-   before applying the migration to any real environment.
-2. Unrelated carry-forward, not blocking TASK-051: OpenAI billing confirmation is still open per
+1. Review the diff, then let Claude know if/when to commit — no commit was made this session per the
+   commit-only-on-request convention.
+2. Before applying `0021_drop_byok.sql` to staging or production: run
+   `SELECT id, clerk_user_id FROM households WHERE openai_api_key IS NOT NULL;` against that environment
+   first and confirm it's empty (per the spec's Constraints — local dev is already confirmed empty, but
+   staging/production have not been checked).
+3. Unrelated carry-forward, not blocking TASK-051: OpenAI billing confirmation is still open per
    [[project_go_public_readiness]].
 
 ---

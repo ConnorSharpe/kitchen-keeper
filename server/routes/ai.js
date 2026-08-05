@@ -4,7 +4,6 @@ import { z } from 'zod';
 import { clerkAuth } from '../middleware/clerkAuth.js';
 import { validate } from '../middleware/validate.js';
 import { upload } from '../middleware/upload.js';
-import * as householdService from '../services/householdService.js';
 import * as pantryService from '../services/pantryService.js';
 import * as recipeService from '../services/recipeService.js';
 import * as chatService from '../services/chatService.js';
@@ -17,8 +16,10 @@ import { createToolHandlers } from '../services/chat/createToolHandlers.js';
 import { getExpiryDays, getExpiryStatus } from '../../shared/expiry.js';
 import { getDefaultStorageLocation } from '../../shared/pantryDefaults.js';
 import { aiRateLimit } from '../middleware/aiRateLimit.js';
+import { requireAiAccess } from '../middleware/requireAiAccess.js';
 const router = express.Router();
 router.use(clerkAuth);
+router.use(requireAiAccess);
 router.use(aiRateLimit);
 
 // POST /api/ai/eat-this-now
@@ -449,7 +450,6 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
   };
   const toolHandlers = createToolHandlers(ctx);
 
-  const aiConfig = await householdService.getAiConfig(householdId);
   const { reply, itemsAdded } = await aiService.chat(
     pantrySummary,
     recipeSummary,
@@ -457,7 +457,6 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
     message,
     toolHandlers,
     dietaryContext,
-    aiConfig,
     requestId
   );
 

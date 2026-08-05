@@ -299,10 +299,10 @@ export default function HouseholdPage() {
             Platform AI settings (owner only)
           </h2>
           <p className="text-xs text-gray-500 mb-4">
-            When public AI access is enabled, every household without their own
-            OpenAI key uses your platform key. Turn this off instantly if usage
-            spikes — households without their own key will need to add one to
-            keep using AI features.
+            When public AI access is enabled, every household besides yours
+            uses your platform key for AI features. Turn this off instantly if
+            usage spikes — non-owner households will lose AI access until
+            it&rsquo;s re-enabled.
           </p>
           {platformSettingsLoading && (
             <p className="text-sm text-gray-400">Loading…</p>
@@ -321,7 +321,7 @@ export default function HouseholdPage() {
                 {platformSettingsSaving
                   ? 'Saving…'
                   : platformSettings.publicAiAccessEnabled
-                    ? 'Disable public AI access (require BYOK)'
+                    ? 'Disable public AI access (owner only)'
                     : 'Enable public AI access (use platform key for all)'}
               </button>
 

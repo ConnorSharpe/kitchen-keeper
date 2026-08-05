@@ -10,7 +10,11 @@ export async function clerkAuth(req, res, next) {
   }
   try {
     const household = await householdService.getOrCreate(userId);
-    req.user = { id: userId, householdId: household.id };
+    req.user = {
+      id: userId,
+      householdId: household.id,
+      householdOwnerClerkId: household.clerkUserId,
+    };
     next();
   } catch (err) {
     next(err);
