@@ -46,6 +46,43 @@ export class OpenAIProvider extends AIProvider {
     return response;
   }
 
+  async streamMessage(session, message, onToken, { signal } = {}) {
+    if (typeof message === 'string') {
+      session.messages.push({ role: 'user', content: message });
+    } else {
+      for (const part of message) {
+        session.messages.push(part);
+      }
+    }
+
+    let response;
+    try {
+      const stream = this.client.beta.chat.completions.stream(
+        {
+          model: 'gpt-4o-mini',
+          messages: session.messages,
+          tools: session.tools?.length ? session.tools : undefined,
+          prompt_cache_key: 'kitchen-keeper-chat-v1',
+          stream_options: { include_usage: true },
+        },
+        { signal }
+      );
+      stream.on('content', (delta) => onToken(delta));
+      response = await stream.finalChatCompletion();
+    } catch (err) {
+      throw new AIProviderError(err.message, err);
+    }
+
+    console.log(
+      `[kitchen-keeper] request_id=${session.requestId} function=chat model=gpt-4o-mini` +
+        ` prompt_tokens=${response.usage?.prompt_tokens} completion_tokens=${response.usage?.completion_tokens}` +
+        ` total_tokens=${response.usage?.total_tokens} cached_tokens=${response.usage?.prompt_tokens_details?.cached_tokens ?? 0}`
+    );
+
+    session.messages.push(response.choices[0].message);
+    return response;
+  }
+
   extractToolCalls(response) {
     const toolCalls = response.choices[0].message.tool_calls ?? [];
     return toolCalls.map((tc) => ({

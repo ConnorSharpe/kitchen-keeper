@@ -450,31 +450,72 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
   };
   const toolHandlers = createToolHandlers(ctx);
 
-  const { reply, itemsAdded } = await aiService.chat(
-    pantrySummary,
-    recipeSummary,
-    history,
-    message,
-    toolHandlers,
-    dietaryContext,
-    requestId
-  );
-
-  await chatService.savePair(
-    householdId,
-    message,
-    reply,
-    ctx.result.recipeSuggestions.length > 0
-      ? { version: 1, recipeSuggestions: ctx.result.recipeSuggestions }
-      : null
-  );
-  await chatService.trimHistory(householdId, 50);
-
-  res.json({
-    reply,
-    itemsAdded,
-    recipeSuggestions: ctx.result.recipeSuggestions,
+  res.writeHead(200, {
+    'Content-Type': 'application/x-ndjson',
+    'Cache-Control': 'no-cache, no-transform',
+    'X-Accel-Buffering': 'no',
   });
+  res.flushHeaders();
+
+  const abortController = new AbortController();
+  let clientDisconnected = false;
+  req.on('close', () => {
+    clientDisconnected = true;
+    abortController.abort();
+  });
+
+  const onToken = (delta) => {
+    if (clientDisconnected || ctx.result.recipeSuggestions.length > 0) return;
+    res.write(JSON.stringify({ type: 'token', delta }) + '\n');
+  };
+
+  try {
+    const { reply, itemsAdded } = await aiService.chat(
+      pantrySummary,
+      recipeSummary,
+      history,
+      message,
+      toolHandlers,
+      dietaryContext,
+      requestId,
+      onToken,
+      { signal: abortController.signal }
+    );
+
+    await chatService.savePair(
+      householdId,
+      message,
+      reply,
+      ctx.result.recipeSuggestions.length > 0
+        ? { version: 1, recipeSuggestions: ctx.result.recipeSuggestions }
+        : null
+    );
+    await chatService.trimHistory(householdId, 50);
+
+    if (!clientDisconnected) {
+      res.write(
+        JSON.stringify({
+          type: 'done',
+          itemsAdded,
+          recipeSuggestions: ctx.result.recipeSuggestions,
+        }) + '\n'
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[kitchen-keeper] request_id=${requestId} function=chat error=${err.message}`
+    );
+    if (!clientDisconnected) {
+      res.write(
+        JSON.stringify({
+          type: 'error',
+          message: 'Something went wrong. Please try again.',
+        }) + '\n'
+      );
+    }
+  } finally {
+    if (!res.writableEnded) res.end();
+  }
 });
 
 export default router;

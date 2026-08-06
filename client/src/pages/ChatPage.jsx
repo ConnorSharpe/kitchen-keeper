@@ -32,7 +32,10 @@ export default function ChatPage() {
   const [showCapabilities, setShowCapabilities] = useState(false);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
+  const abortRef = useRef(null);
   const { addBlock } = useRecipeBlocklist();
+
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const {
     supported: micSupported,
@@ -92,31 +95,70 @@ export default function ChatPage() {
     if (!userText || loading) return;
 
     const tempKey = nextTempId();
+    const assistantKey = nextTempId();
     setInput('');
     setMessages((prev) => [
       ...prev,
       { key: tempKey, role: 'user', content: userText },
+      {
+        key: assistantKey,
+        role: 'assistant',
+        content: '',
+        itemsAdded: [],
+        recipeSuggestions: [],
+      },
     ]);
     setLoading(true);
 
-    try {
-      const { reply, itemsAdded, recipeSuggestions } = await api.post(
-        '/api/ai/chat',
-        { message: userText }
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    // Batches incoming deltas into one setState per animation frame instead of
+    // one per token — meaningfully reduces ReactMarkdown re-parse frequency on
+    // this app's mobile/PWA usage.
+    let pending = '';
+    let flushScheduled = false;
+    function flush() {
+      flushScheduled = false;
+      const delta = pending;
+      pending = '';
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.key === assistantKey ? { ...m, content: m.content + delta } : m
+        )
       );
-      setMessages((prev) => [
-        ...prev,
-        {
-          key: nextTempId(),
-          role: 'assistant',
-          content: reply,
-          itemsAdded: itemsAdded ?? [],
-          recipeSuggestions: recipeSuggestions ?? [],
-        },
-      ]);
+    }
+    function onToken(delta) {
+      pending += delta;
+      if (!flushScheduled) {
+        flushScheduled = true;
+        requestAnimationFrame(flush);
+      }
+    }
+
+    try {
+      const { itemsAdded, recipeSuggestions } = await api.postStream(
+        '/api/ai/chat',
+        { message: userText },
+        { signal: controller.signal, onToken }
+      );
+      if (flushScheduled) flush();
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.key === assistantKey
+            ? {
+                ...m,
+                itemsAdded: itemsAdded ?? [],
+                recipeSuggestions: recipeSuggestions ?? [],
+              }
+            : m
+        )
+      );
     } catch (err) {
-      // Remove the optimistic user message — it was not saved to the DB
-      setMessages((prev) => prev.filter((m) => m.key !== tempKey));
+      // Remove the optimistic user message and the streaming placeholder — neither was saved to the DB
+      setMessages((prev) =>
+        prev.filter((m) => m.key !== tempKey && m.key !== assistantKey)
+      );
       setInput(userText);
       toast.error(err.message || 'Failed to send message. Please try again.');
     } finally {
@@ -257,10 +299,16 @@ export default function ChatPage() {
           // assistant's text bubble (and avatar) is not rendered at all. Cards only.
           const hasRecipeCards =
             msg.role === 'assistant' && msg.recipeSuggestions?.length > 0;
+          // TASK-053: the streaming placeholder starts with empty content before
+          // its first token arrives (and stays empty for the whole exchange when
+          // the reply is suppressed server-side for D-5) — don't render a hollow
+          // bubble alongside the typing dots in either case.
+          const isEmptyAssistantBubble =
+            msg.role === 'assistant' && !msg.content;
 
           return (
             <div key={msg.key}>
-              {!hasRecipeCards && (
+              {!hasRecipeCards && !isEmptyAssistantBubble && (
                 <div
                   className={`flex items-end gap-2 ${
                     msg.role === 'user' ? 'justify-end' : 'justify-start'
@@ -471,8 +519,10 @@ export default function ChatPage() {
           );
         })}
 
-        {/* Typing indicator — animated dots while awaiting assistant reply */}
-        {loading && (
+        {/* Typing indicator — animated dots until the first token of the final
+            (text-producing) turn arrives; the live streaming bubble takes over
+            once the assistant message has content. */}
+        {loading && !messages[messages.length - 1]?.content && (
           <div className="flex items-end gap-2 justify-start">
             <div
               className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center text-sm flex-shrink-0"
