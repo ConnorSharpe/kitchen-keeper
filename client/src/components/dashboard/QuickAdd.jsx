@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { api } from '../../api/index.js';
 import { usePantryContext } from '../../context/PantryContext.jsx';
+import { PANTRY_CATEGORIES } from '@shared/pantryCategories.js';
 
 // Converts a YYYY-MM-DD string from a date input to a full ISO datetime string.
 // The server uses z.string().datetime() which rejects bare YYYY-MM-DD.
@@ -9,10 +10,17 @@ function toISO(dateStr) {
   return dateStr ? `${dateStr}T00:00:00.000Z` : null;
 }
 
+const LAST_CATEGORY_KEY = 'quickAdd.lastCategory';
+
 export default function QuickAdd() {
   const { refresh } = usePantryContext();
   const [name, setName] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
+  // TASK-056 Design D: defaults to the user's last-used category instead of always "Other" — a
+  // silent-miscategorization gap the spec's P1-1 identified — while staying a one-tap override.
+  const [category, setCategory] = useState(
+    () => localStorage.getItem(LAST_CATEGORY_KEY) || 'Other'
+  );
   const [saving, setSaving] = useState(false);
   const nameRef = useRef(null);
 
@@ -25,9 +33,10 @@ export default function QuickAdd() {
       await api.post('/api/pantry', {
         name: name.trim(),
         expiryDate: toISO(expiryDate),
-        category: 'Other',
+        category,
         unit: 'item',
       });
+      localStorage.setItem(LAST_CATEGORY_KEY, category);
       toast.success(`${name.trim()} added to pantry`);
       setName('');
       setExpiryDate('');
@@ -60,6 +69,20 @@ export default function QuickAdd() {
           className={`${inputCls} flex-1 min-w-0`}
           required
         />
+        <label className="flex flex-col gap-0.5 flex-shrink-0">
+          <span className="text-xs text-gray-500 leading-none">Category</span>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className={`${inputCls} w-32`}
+          >
+            {PANTRY_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="flex flex-col gap-0.5 flex-shrink-0">
           <span className="text-xs text-gray-500 leading-none">Expires</span>
           <input

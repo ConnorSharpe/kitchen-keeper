@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { useSpeechInput } from '../hooks/useSpeechInput.js';
 import { useRecipeBlocklist } from '../hooks/useRecipeBlocklist.js';
 import PageHeader from '../components/layout/PageHeader.jsx';
+import RecipeSuggestionCard from '../components/recipes/RecipeSuggestionCard.jsx';
 
 // Round to max 2 decimal places, strip trailing zeros
 function formatQty(n) {
@@ -366,76 +367,31 @@ export default function ChatPage() {
                       const prepSteps = recipe.prepSteps ?? [];
                       const ingredients = recipe.ingredients ?? [];
                       const isSaved = savedRecipeNames.has(recipe.name);
+                      const footerNote = [
+                        recipe.prepMins != null && `${recipe.prepMins} min prep`,
+                        recipe.cookMins != null && `${recipe.cookMins} min cook`,
+                        recipe.servings != null && `${recipe.servings} servings`,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ');
 
                       return (
-                        <div
+                        <RecipeSuggestionCard
                           key={recipe.name}
-                          className="w-full max-w-md sm:max-w-[75%] bg-white border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-800"
+                          className="w-full max-w-md sm:max-w-[75%]"
+                          item={recipe}
+                          name={recipe.name}
+                          sourceUrl={recipe.sourceUrl}
+                          description={recipe.description}
+                          footerNote={footerNote ? `⏱ ${footerNote}` : undefined}
+                          onSave={(r) => handleSaveRecipe(r.name)}
+                          isSaving={loading}
+                          isSaved={isSaved}
+                          onBlock={handleBlockSuggestion}
                         >
-                          {/* Header row: name + save button */}
-                          <div className="flex items-start justify-between gap-2 mb-1">
-                            <div className="font-semibold leading-snug">
-                              {recipe.sourceUrl ? (
-                                <a
-                                  href={recipe.sourceUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-orange-600 hover:underline"
-                                >
-                                  {recipe.name} <span aria-hidden>↗</span>
-                                </a>
-                              ) : (
-                                recipe.name
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1.5 flex-shrink-0">
-                              <button
-                                onClick={() => handleBlockSuggestion(recipe)}
-                                className="text-sm leading-none text-gray-300 hover:text-red-500 transition-colors"
-                                aria-label="Don't suggest again"
-                                title="Don't suggest again"
-                              >
-                                🚫
-                              </button>
-                              <button
-                                onClick={() => handleSaveRecipe(recipe.name)}
-                                disabled={isSaved || loading}
-                                className="px-3 py-1 rounded-lg bg-orange-500 text-white text-xs font-medium hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                              >
-                                {isSaved ? 'Saved' : 'Save Recipe'}
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Description */}
-                          {recipe.description && (
-                            <p className="text-gray-500 text-xs mb-2">
-                              {recipe.description}
-                            </p>
-                          )}
-
-                          {/* Time / servings metadata */}
-                          {(recipe.prepMins != null ||
-                            recipe.cookMins != null ||
-                            recipe.servings != null) && (
-                            <p className="text-xs text-gray-400 mb-3">
-                              ⏱{' '}
-                              {[
-                                recipe.prepMins != null &&
-                                  `${recipe.prepMins} min prep`,
-                                recipe.cookMins != null &&
-                                  `${recipe.cookMins} min cook`,
-                                recipe.servings != null &&
-                                  `${recipe.servings} servings`,
-                              ]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </p>
-                          )}
-
                           {/* Prep steps */}
                           {prepSteps.length > 0 && (
-                            <div className="mb-3">
+                            <div>
                               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
                                 Before You Start
                               </p>
@@ -455,7 +411,7 @@ export default function ChatPage() {
 
                           {/* Ingredients */}
                           {ingredients.length > 0 && (
-                            <div className="mb-2">
+                            <div>
                               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
                                 Ingredients
                               </p>
@@ -499,18 +455,18 @@ export default function ChatPage() {
 
                           {/* Allergy note */}
                           {recipe.allergyNote && (
-                            <p className="mt-2 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg px-2 py-1">
+                            <p className="text-xs font-medium text-amber-700 bg-amber-50 rounded-lg px-2 py-1">
                               ⚠ {recipe.allergyNote}
                             </p>
                           )}
 
                           {/* Health note */}
                           {recipe.healthNote && (
-                            <p className="mt-1.5 text-xs text-blue-600 bg-blue-50 rounded-lg px-2 py-1">
+                            <p className="text-xs text-blue-600 bg-blue-50 rounded-lg px-2 py-1">
                               ℹ {recipe.healthNote}
                             </p>
                           )}
-                        </div>
+                        </RecipeSuggestionCard>
                       );
                     })}
                   </div>

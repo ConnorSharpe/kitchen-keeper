@@ -1,141 +1,121 @@
 # Task
 
-TASK-055 implementation session: implemented `ai/tasks/TASK-055-spec.md` (DRAFT-2, APPROVED FOR
-IMPLEMENTATION, 9.9/10) end to end — the full "mechanical-only" bundle: 2 new rate limiters, a TOCTOU
-hardening fix on 7 pantry/recipe mutating functions, 3 shared-constant extractions (pantry categories,
-storage locations already existed, recipe tags), a duplicated expiry-filter helper, a duplicated
-request-ID helper, and a docs cleanup. **Implemented, unit-tested, and live-verified in local dev. Not yet
-committed** (commit-only-on-request convention, unchanged from prior sessions).
+TASK-056 implementation session: implemented `ai/tasks/TASK-056-spec.md` (DRAFT-3, APPROVED FOR
+IMPLEMENTATION, 9.6/10) — the full UI/UX redesign spec, Phases 1 and 2 together (all 7 implementation items:
+Designs A-E). Client-only, no server/shared/DB changes, per the spec's own Constraints.
+**Implemented, lint/test-verified, and live-verified in local dev across 3 widths. Not yet committed**
+(commit-only-on-request convention, unchanged from prior sessions).
 
 # What was done this session
 
-- Implemented exactly per the spec's Allowed Files list, Design sections 5-13, and Constraints — no scope
-  drift. The two **Manual Developer Actions** (deleting root `.env`, removing `ENCRYPTION_KEY`/
-  `BLOB_STORE_ID` from `server/.env.local`) were deliberately **not** performed — neither is source
-  controlled, both involve deleting real credential-bearing/gitignored files, and the spec itself scopes
-  them to Connor, not a PR. Design 3 (`server/.env.vercel` disposition) is an open question the spec itself
-  declined to resolve — also not touched.
-- Design 5: [CONVENTIONS.md](../../ai/handoffs/CONVENTIONS.md) — removed all 3 stale root-`.env` references
-  (the re-fork runbook, the "known gap" section, and the already-flagged stray-`DATABASE_URL` paragraph,
-  which was deleted outright per the spec rather than reworded).
-- Design 6-7: new [inviteRateLimit.js](../../server/middleware/inviteRateLimit.js) (10/hour, keyed by
-  `req.user.id`) wired into `POST /api/household/invite`; new
-  [pushRateLimit.js](../../server/middleware/pushRateLimit.js) (20/15min, same keying) wired into both
-  `POST /api/push/subscribe` and `/unsubscribe`. New
-  [inviteRateLimit.test.js](../../server/middleware/inviteRateLimit.test.js) — since no rate-limiter test
-  file existed yet to extend (only `aiRateLimitKeyGenerator.test.js`, which tests just the key function, not
-  actual limiting), this spins up a real tiny Express app + Node's built-in `fetch` against the middleware
-  itself (no new npm dependency — `supertest` isn't installed and the Constraints forbid adding one),
-  confirming the 11th request in the window is rejected and that two different users get independent
-  budgets.
-- Design 8: [pantryService.js](../../server/services/pantryService.js)'s `update`/`remove`/`markUsed`/
-  `toggleFreeze` (both branches) and [recipeService.js](../../server/services/recipeService.js)'s
-  `update`/`remove`/`toggleFavorite` all now repeat `eq(householdId)` on the mutating statement itself, not
-  just the pre-check `SELECT` (`and` newly imported in `recipeService.js`). New
-  [pantryService.test.js](../../server/services/pantryService.test.js) and
-  [recipeService.test.js](../../server/services/recipeService.test.js) — first tests for either service;
-  mock `../db/client.js`'s `db` export via `node:test`'s `mock.module` (needs
-  `--experimental-test-module-mocks`, already in `server/package.json`'s `test` script since TASK-051) to
-  assert `update` still returns `{status:'forbidden'}`/`{status:'not_found'}` correctly — per the spec's own
-  D-5, that return contract is the only thing independently observable through this service's shape; the
-  query-level hardening itself isn't.
-- Design 9 (D-7 revised): new [shared/pantryCategories.js](../../shared/pantryCategories.js);
-  `aiService.js` deleted its inline `PANTRY_CATEGORIES` array in favor of importing it; both chat handlers
-  (`addPantryItem.js`, `updatePantryItem.js`) replaced their hand-typed 10-value enums with the same import.
-- Design 10: `pantry.js` (both occurrences) and `ai.js` replaced hand-typed
-  `z.enum(['pantry','refrigerator','freezer'])` with the existing `shared/pantryDefaults.js` export
-  `STORAGE_LOCATIONS`.
-- Design 11 (D-8): [shared/expiry.js](../../shared/expiry.js) gained a private `isExpiringWithin` predicate
-  and exported `getExpiringItems(items, withinDays = 7)`; all 3 duplicated filter blocks in `ai.js`
-  (`/eat-this-now`, `/suggest-recipes`, `/chat`) now call it. 5 new tests added to
-  [shared/expiry.test.js](../../shared/expiry.test.js).
-- Design 12 (D-9, D-6): new [server/utils/requestId.js](../../server/utils/requestId.js) exporting
-  `generateRequestId()`; all 8 call sites (`ai.js` ×6, `clientErrors.js`, `household.js`) now use it, and
-  the now-unused `randomUUID` import was dropped from all three files (confirmed via grep: zero remaining
-  `randomUUID().split` call sites outside the new helper itself).
-- Design 13: new [shared/recipeTags.js](../../shared/recipeTags.js) exporting `RECIPE_TAGS`; `ai.js`'s
-  `TAG_ALLOWED` is now `z.enum(RECIPE_TAGS)`;
-  [RecipeReviewModal.jsx](../../client/src/components/recipes/RecipeReviewModal.jsx) imports it via the
-  existing `@shared` Vite alias (`import { RECIPE_TAGS as TAGS } from '@shared/recipeTags.js'`), aliased on
-  import per the spec's own stated implementer's-choice — no other usages in that file changed.
-- `npm run lint` (root): clean. `npm test` (root, runs `shared/*.test.js` then `npm test --prefix server`):
-  **117/117 passing** (19 shared + 98 server). Net-new this session: 5 server tests (1 `inviteRateLimit`, 2
-  `pantryService`, 2 `recipeService`) taking the server suite from TASK-054's 93 to 98, plus 5 new
-  `shared/expiry.test.js` tests for `getExpiringItems` — zero regressions.
-- `git diff --stat` after implementation matched the spec's Allowed Files list exactly (plus the two
-  pre-existing unrelated items already present at session start: `.claude/settings.local.json` and the
-  untracked `ai/tasks/TASK-055-spec.md` itself).
+- **Design A investigation (the one decision the spec explicitly left open):** the 3 recipe-suggestion data
+  shapes (pantry AI suggestion, web suggestion, chat's richer ingredients/prep-steps/notes breakdown) don't
+  unify cleanly enough for a single fixed-shape component, so new
+  [RecipeSuggestionCard.jsx](../../client/src/components/recipes/RecipeSuggestionCard.jsx) uses data-driven
+  optional sections (`badge`, `tags`, `usesExpiring`, `footerNote`, an `onSave`/`isSaving`/`isSaved` pair,
+  `onBlock`, and a `children` slot for chat's extra content) rather than `show*` boolean flags — stays under
+  the spec's ~4-5-prop smell test. Callbacks receive the original `item` object unchanged (not a
+  reconstructed subset), preserving each caller's existing save/block payload shape exactly.
+- Wired into all 3 call sites, each caller's own inline card component deleted:
+  [EatThisNow.jsx](../../client/src/components/dashboard/EatThisNow.jsx) (removed `SuggestionCard`),
+  [RecipesPage.jsx](../../client/src/pages/RecipesPage.jsx) (removed `WebSuggestionCard`),
+  [ChatPage.jsx](../../client/src/pages/ChatPage.jsx) (removed the inline recipe-card JSX block, extra
+  content passed via `children`).
+- Design C: new
+  [AddRecipeMenu.jsx](../../client/src/components/recipes/AddRecipeMenu.jsx) — no reusable menu primitive
+  existed in this codebase, so this is a small self-contained disclosure component (Enter/Space via the
+  native trigger button, `ArrowDown` on open moves focus to the first item, `Escape` closes and refocuses
+  the trigger, click-outside closes) consolidating Upload/Import/Find under one "+ Add Recipe" trigger in
+  `RecipesPage.jsx`. "Blocked Recipes" demoted to a text link in the filter bar; recipe name-search input
+  added to the same filter bar (same case-insensitive substring matching as the existing `filterTag`).
+- Design B: `PantryTable.jsx` gained an `md`-and-below card render path (`PantryCard`) reusing the existing
+  `StorageBadge`/`ExpiryBadge`/`StatusLabel` pieces and the same `onEdit`/`onMarkUsed`/`onToggleFreeze`/
+  `onSplit`/`onDelete` callbacks — desktop table unchanged, `hidden md:block` / `md:hidden` split. Edit/✓
+  Used/Freeze stay directly visible at a 44×44px touch target; Split/Delete moved behind a new
+  `ItemOverflowMenu` (`aria-haspopup`/`aria-expanded`/labelled menu, same disclosure pattern as
+  `AddRecipeMenu`). `PantryPage.jsx` added a name-filter input (same matching rule) and a `md:hidden`
+  skeleton-card loading state alongside the existing table skeleton.
+- Design D: `QuickAdd.jsx` gained a category `<select>` defaulting to the user's last-used category via
+  `localStorage` (`quickAdd.lastCategory`) instead of always POSTing `category: 'Other'` — fixes the P1-1
+  silent-miscategorization gap. Also fixed the spec's own flagged Open Question:
+  [AddItemModal.jsx](../../client/src/components/pantry/AddItemModal.jsx) had a hardcoded `CATEGORIES` array
+  byte-identical to `shared/pantryCategories.js` but never imported it — now imports
+  `PANTRY_CATEGORIES` from there via the existing `@shared` alias. (Not in the spec's original Allowed
+  Files list, but explicitly anticipated by the spec's own Open Questions section as "a one-line import fix
+  bundled into Design D.")
+- Design E: `EatThisNow.jsx`'s idle/empty state gained a "Prefer to just ask? → Chat" link to `/`.
+- `npm run lint` (root): clean. `npm test` (root): 117/117 passing (19 shared + 98 server), unchanged —
+  this spec touches no server/shared code, so zero regression risk there by construction.
+- `git status --short` after implementation: exactly the spec's Allowed Files list (`EatThisNow.jsx`,
+  `RecipesPage.jsx`, `ChatPage.jsx`, `PantryPage.jsx`, `PantryTable.jsx`, `QuickAdd.jsx`) plus 2 new files
+  (`RecipeSuggestionCard.jsx`, `AddRecipeMenu.jsx` — both anticipated by Design A/C) plus the one
+  spec-authorized addition (`AddItemModal.jsx`, see above) plus the pre-existing unrelated
+  `.claude/settings.local.json` change already present at session start. No `server/`, `shared/`, or
+  migration files touched — matches the spec's Forbidden Files exactly.
 - **Live-verified in local dev** (server on :3001, client on :5183, already-authenticated Clerk session,
   Connor's real household data):
-  - Pantry: edited an item's quantity (1→2→1, PATCH 200 both times), toggled freeze on then off (PATCH
-    .../freeze 200 both times) — confirms Design 8's atomic `WHERE` doesn't break normal same-household
-    writes.
-  - Recipes: toggled favorite on then off (PATCH .../favorite 200 both times) — same confirmation for
-    `recipeService`.
-  - Chat `add_pantry_item`: asked the assistant to add "ZZTEST Kumquats, category Produce, quantity 3" —
-    succeeded ("ZZTEST Kumquats added to pantry"), confirming Design 9's `shared/pantryCategories.js` import
-    is correctly wired end-to-end through the chat tool-calling path. Cleaned up immediately via a direct
-    `DELETE /api/pantry/:id` fetch call in-page (the item list's real Delete button uses a native
-    `window.confirm()` that this session's browser-automation tooling can't accept — no dialog-handling API
-    was available, so cleanup went through the same real endpoint the button would have called, not a UI
-    bypass) — confirmed gone via a follow-up `GET /api/pantry` (31 items, no `ZZTEST` match).
-  - **Deliberately not live-tested**: the invite-rate-limit 11-real-emails smoke test the spec's own Testing
-    Plan step 6 describes. Every `POST /api/household/invite` call sends a real Resend email with no
-    dry-run — spamming 10 of them just to watch the 11th 429 is an avoidable real-world side effect the
-    `inviteRateLimit.test.js` unit test (above) already covers with more precision, against the real
-    middleware in a real (if minimal) Express app, without sending anything. Judgment call, not an
-    oversight — flagged here rather than silently skipped.
+  - Chat: existing recipe-suggestion history rendered correctly through the new shared card (ingredients,
+    footer time metadata, "Saved" state, block button all intact).
+  - Recipes: `+ Add Recipe` menu opens with all 3 options, `Escape` closes it and returns focus to the
+    trigger (confirmed via `document.activeElement`); "Blocked Recipes" demoted correctly; existing saved
+    recipes render unchanged (they use `RecipeCard.jsx`, untouched by this spec).
+  - Pantry at 375px: table hidden, 31 item cards render, `document.body.scrollWidth === innerWidth` (no
+    horizontal scroll — the spec's own acceptance criterion); Edit/✓Used/Freeze buttons measured at
+    44×44px+; overflow menu opens with `aria-expanded="true"` and exposes Split/Delete; name-search filter
+    correctly narrowed 31 items to 1 matching item.
+  - Pantry at 768px and 1280px: table visible, card view hidden, no horizontal overflow at either width.
+  - Dashboard: cross-link renders; Quick Add's category select defaults to "Other" with no
+    `localStorage` entry present. Real end-to-end test: added "ZZTEST QuickAdd Widget" with category
+    "Produce" — POST body confirmed `category: "Produce"` (same endpoint/shape as before, only the value is
+    now dynamic), `localStorage['quickAdd.lastCategory']` correctly updated to `"Produce"` afterward.
+    Cleaned up immediately via `DELETE /api/pantry/76` — confirmed removed via a follow-up `GET
+    /api/pantry`.
+  - Console: only benign Vite HMR websocket-connection noise from this sandboxed preview environment — no
+    React/component errors on any page touched.
   - Both dev servers stopped cleanly at the end of the session.
 
 # Decisions Made
 
-Implemented as designed — Designs 5-13 and all D-numbers held with no deviation. One implementation-level
-choice not fully specified by the spec: `inviteRateLimit.test.js`'s testing approach (real Express app +
-built-in `fetch` over spinning up a fake req/res compatible with `express-rate-limit`'s internals, and over
-adding `supertest`) — chosen because express-rate-limit's actual store/window logic can't be exercised
-faithfully with a hand-rolled fake response object (it needs `res.on('finish', ...)`, `headersSent`,
-`writableEnded`, etc.), and the spec's Constraints forbid a new npm dependency.
+- Design A's composition: data-driven optional props + `children` slot, not a fixed single shape and not a
+  3-component split — see "What was done" above for the reasoning.
+- `RecipeSuggestionCard`/`AddRecipeMenu`/`ItemOverflowMenu` callbacks always receive the original data object
+  (`item`, `recipe`), never a reconstructed subset — avoids the data-loss bug caught during implementation
+  (EatThisNow's `handleSave` needs `suggestion.description`, which an earlier draft of the card would have
+  dropped).
+- `ItemOverflowMenu`'s dropdown opens upward (`bottom-full`) rather than downward — an unspecified detail;
+  chosen to avoid clipping against the viewport bottom for cards near the end of a long mobile list.
+- Chat's recipe-card time metadata moved from its own line near the top (original layout) into the shared
+  card's bottom footer slot — an intentional visual change, not an oversight: Design A's own UX requirement
+  is that recipe-suggestion metadata placement becomes *consistent* across all 3 call sites, which by
+  definition changes at least 2 of the 3 original layouts.
 
 # Known Risks
 
-- Carried forward, unchanged by this task: TASK-054's `consume_pantry_item`-on-truncated-item gap (needs its
-  own follow-up task or more usage data — see [archive/TASK-054.md](archive/TASK-054.md)); TASK-053's Vercel
-  Preview streaming verification; OpenAI billing confirmation — see [[project_go_public_readiness]].
-- **`server/.env.vercel`'s fate is still an open question for Connor** (spec's Design 3/Open Questions) —
-  not resolved or acted on this session.
-- **The two Manual Developer Actions are still outstanding**: root `.env` (confirmed dead, contains live
-  credentials) has not been deleted; `ENCRYPTION_KEY`/`BLOB_STORE_ID` are still present in
-  `server/.env.local`. Both need Connor to run them directly — see the spec's own Manual Developer Actions
-  section for exact steps.
-- **Rate-limit thresholds (10/hour invite, 20/15min push) are unmeasured proposals**, same framing as every
-  other threshold constant this project has shipped recently (TASK-054's context caps, etc.) — easy to
-  revisit if real usage needs more headroom.
+- **Design A's residual risk was process, not outcome, per the spec's own Section 7** — that risk played out
+  as expected (real implementation time on the composition decision) but did not surface a bad outcome;
+  worth a second look in a future session if any of the 3 call sites' data shapes change.
+- **Pantry overflow menu hides Split/Delete one tap deeper** — the spec (Section 7) flagged this as a
+  judgment call for Connor to review, not decided unilaterally; unchanged by this session.
+- Carried forward, unrelated to this task: TASK-054's `consume_pantry_item`-on-truncated-item gap; TASK-053's
+  Vercel Preview streaming verification; OpenAI billing confirmation; `server/.env.vercel`'s fate; the two
+  outstanding Manual Developer Actions (root `.env` deletion, `server/.env.local` cleanup) from TASK-055 —
+  see [archive/TASK-055.md](archive/TASK-055.md) and [[project_go_public_readiness]].
+- Phase 3 (icon system audit, Sidebar/PageHeader coupling) remains explicitly deferred per the spec —
+  not started, not needed yet.
+
+# Recommended Next Action
+
+1. Connor review in browser, then commit when satisfied — no further implementation work is required for
+   TASK-056's approved scope.
+2. Unrelated carry-forward items above are still open whenever convenient; none block TASK-056.
 
 # Context Notes
 
 - branch: `staging`.
 - Dev servers were started via `.claude/launch.json` (`server` on 3001, `client` on 5183); both stopped
-  cleanly at the end of the session. No worktree was used this session — all edits were made directly in the
-  main working tree, so no PowerShell Merge Block applies here (that section is for worktree-based sessions
-  only, per the dev guide).
+  cleanly at the end of the session. No worktree was used — all edits were made directly in the main working
+  tree, so no PowerShell Merge Block applies here.
 - Browser pane session was already Clerk-authenticated at the start of this session.
-
-# Recommended Next Action
-
-1. **TASK-056 (UI/UX redesign spec) is DRAFT-3, approved for implementation, committed, and ready for the
-   next agent to pick up** — see [ai/tasks/TASK-056-spec.md](../tasks/TASK-056-spec.md). No implementation
-   code exists yet; the spec's own Phase 1 (recipe-suggestion presentation consolidation, Recipes header
-   restructure, Pantry responsive cards) is the recommended starting scope. A visual companion with mockups
-   of every before/after was also produced this session (published as a Claude Artifact, not committed to
-   the repo — it's a review aid, not a source-of-truth doc; the spec file is authoritative).
-2. TASK-055 is committed (`3ef6963`). (Correction to a stale note previously here: an earlier version of
-   this file said TASK-055 was "not yet committed" — it was, before that note was written; fixed here.)
-3. Decide `server/.env.vercel`'s fate (Design 3/Open Questions) and run the two Manual Developer Actions
-   (delete root `.env`; strip the 2 dead vars from `server/.env.local`) whenever convenient — neither is
-   blocking, both are simple.
-4. Unrelated carry-forward, not blocking TASK-056: TASK-054's `consume_pantry_item` gap, TASK-053's Vercel
-   Preview streaming check, and OpenAI billing confirmation are all still open per
-   [[project_go_public_readiness]] and [archive/TASK-054.md](archive/TASK-054.md).
 
 ---
 
@@ -144,3 +124,4 @@ faithfully with a hand-rolled fake response object (it needs `res.on('finish', .
 - TASK-047 through TASK-053 (spec-drafting + TASK-053 streaming implementation session): see
   [archive/TASK-047-053.md](archive/TASK-047-053.md)
 - TASK-054 (chat context-size cap implementation session): see [archive/TASK-054.md](archive/TASK-054.md)
+- TASK-055 (post-audit hardening implementation session): see [archive/TASK-055.md](archive/TASK-055.md)

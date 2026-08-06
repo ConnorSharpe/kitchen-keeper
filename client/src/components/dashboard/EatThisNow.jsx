@@ -2,61 +2,13 @@ import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { api } from '../../api/index.js';
 import { usePantryContext } from '../../context/PantryContext.jsx';
+import RecipeSuggestionCard from '../recipes/RecipeSuggestionCard.jsx';
 
 const DIFFICULTY_BADGE = {
   easy: 'bg-green-100 text-green-700',
   medium: 'bg-amber-100 text-amber-700',
   hard: 'bg-red-100 text-red-700',
 };
-
-function SuggestionCard({ suggestion, onSave, isSaving }) {
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-semibold text-gray-900">
-          {suggestion.name}
-        </h3>
-        {suggestion.difficulty && (
-          <span
-            className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${DIFFICULTY_BADGE[suggestion.difficulty] || 'bg-gray-100 text-gray-600'}`}
-          >
-            {suggestion.difficulty}
-          </span>
-        )}
-      </div>
-
-      <p className="text-sm text-gray-600">{suggestion.description}</p>
-
-      {suggestion.usesExpiring?.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {suggestion.usesExpiring.map((ing) => (
-            <span
-              key={ing}
-              className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded px-1.5 py-0.5"
-            >
-              {ing}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div className="flex items-center justify-between mt-auto pt-1">
-        {suggestion.estimatedMinutes != null && (
-          <span className="text-xs text-gray-400">
-            ~{suggestion.estimatedMinutes} min
-          </span>
-        )}
-        <button
-          onClick={() => onSave(suggestion)}
-          disabled={isSaving}
-          className="ml-auto text-xs px-3 py-1.5 rounded-md bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
-        >
-          {isSaving ? 'Saving…' : 'Save Recipe'}
-        </button>
-      </div>
-    </div>
-  );
-}
 
 function FallbackRecipeCard({ recipe, expiringNames }) {
   // Highlight which ingredients overlap with expiring items
@@ -213,6 +165,12 @@ export default function EatThisNow() {
             <span className="font-medium text-gray-700">✨ Suggest Meals</span>{' '}
             to get personalised ideas that use your expiring ingredients first.
           </p>
+          <p className="text-xs text-gray-400 mt-3">
+            Prefer to just ask?{' '}
+            <a href="/" className="text-orange-600 hover:underline">
+              Chat →
+            </a>
+          </p>
         </div>
       )}
 
@@ -237,9 +195,27 @@ export default function EatThisNow() {
       {mode === 'suggestions' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {suggestions.map((s) => (
-            <SuggestionCard
+            <RecipeSuggestionCard
               key={s.name}
-              suggestion={s}
+              item={s}
+              name={s.name}
+              description={s.description}
+              badge={
+                s.difficulty
+                  ? {
+                      label: s.difficulty,
+                      className:
+                        DIFFICULTY_BADGE[s.difficulty] ||
+                        'bg-gray-100 text-gray-600',
+                    }
+                  : undefined
+              }
+              usesExpiring={s.usesExpiring}
+              footerNote={
+                s.estimatedMinutes != null
+                  ? `~${s.estimatedMinutes} min`
+                  : undefined
+              }
               onSave={handleSave}
               isSaving={savingName === s.name}
             />
