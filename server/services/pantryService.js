@@ -100,7 +100,7 @@ export async function update(householdId, id, data) {
   await db
     .update(pantryItems)
     .set({ ...patch, updatedAt: new Date().toISOString() })
-    .where(eq(pantryItems.id, id));
+    .where(and(eq(pantryItems.id, id), eq(pantryItems.householdId, householdId)));
 
   const [item] = await db
     .select()
@@ -117,7 +117,9 @@ export async function remove(householdId, id) {
   if (!existing) return { status: 'not_found' };
   if (existing.householdId !== householdId) return { status: 'forbidden' };
 
-  await db.delete(pantryItems).where(eq(pantryItems.id, id));
+  await db
+    .delete(pantryItems)
+    .where(and(eq(pantryItems.id, id), eq(pantryItems.householdId, householdId)));
   return { status: 'ok' };
 }
 
@@ -139,7 +141,7 @@ export async function markUsed(householdId, id) {
       wasExpiring,
       updatedAt: new Date().toISOString(),
     })
-    .where(eq(pantryItems.id, id));
+    .where(and(eq(pantryItems.id, id), eq(pantryItems.householdId, householdId)));
 
   return { status: 'ok' };
 }
@@ -182,7 +184,7 @@ export async function toggleFreeze(householdId, id) {
         freezeNotes: null,
         updatedAt: new Date().toISOString(),
       })
-      .where(eq(pantryItems.id, id));
+      .where(and(eq(pantryItems.id, id), eq(pantryItems.householdId, householdId)));
   } else {
     const matched = lookup(existing.name, 'freezer') != null;
     const expiryDate = matched
@@ -208,7 +210,7 @@ export async function toggleFreeze(householdId, id) {
         freezeNotes: null,
         updatedAt: new Date().toISOString(),
       })
-      .where(eq(pantryItems.id, id));
+      .where(and(eq(pantryItems.id, id), eq(pantryItems.householdId, householdId)));
   }
 
   const [item] = await db

@@ -1,37 +1,5 @@
 import { useState } from 'react';
-
-const TAGS = [
-  'breakfast',
-  'lunch',
-  'dinner',
-  'snack',
-  'dessert',
-  'drink',
-  'italian',
-  'mexican',
-  'asian',
-  'american',
-  'mediterranean',
-  'indian',
-  'french',
-  'thai',
-  'japanese',
-  'greek',
-  'chinese',
-  'vegetarian',
-  'vegan',
-  'gluten-free',
-  'dairy-free',
-  'low-carb',
-  'keto',
-  'paleo',
-  'quick',
-  'easy',
-  'slow-cooker',
-  'one-pot',
-  'meal-prep',
-  'freezer-friendly',
-];
+import { RECIPE_TAGS as TAGS } from '@shared/recipeTags.js';
 
 export default function RecipeReviewModal({
   recipe,

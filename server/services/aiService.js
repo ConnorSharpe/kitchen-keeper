@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { getExpiryDays } from '../../shared/expiry.js';
+import { PANTRY_CATEGORIES } from '../../shared/pantryCategories.js';
 import { resolveProvider } from './ai/resolveProvider.js';
 import { AIProviderError } from './ai/providerInterface.js';
 import { findByPantry } from './recipeSearchService.js';
@@ -68,21 +69,6 @@ function parseStructuredResponse(response, fallback) {
     structured.status !== 'ok' ? structured.status : parsed === PARSE_FAILED ? 'parse_failed' : 'ok';
   return { result: parsed === PARSE_FAILED ? fallback : parsed, structuredStatus };
 }
-
-// The 10 pantry categories used by both PANTRY_TOOLS' add/update-item tools and
-// PARSE_RECEIPT_SCHEMA below — a single shared list instead of 3 copies.
-const PANTRY_CATEGORIES = [
-  'Produce',
-  'Dairy',
-  'Meat',
-  'Seafood',
-  'Bakery',
-  'Frozen',
-  'Pantry',
-  'Beverages',
-  'Condiments',
-  'Other',
-];
 
 // PANTRY_TOOLS in OpenAI tools format.
 const PANTRY_TOOLS = [

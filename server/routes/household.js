@@ -1,11 +1,12 @@
-import { randomUUID } from 'crypto';
 import express from 'express';
 import { z } from 'zod';
 import * as householdService from '../services/householdService.js';
 import { clerkAuth } from '../middleware/clerkAuth.js';
 import { validate } from '../middleware/validate.js';
 import { joinRateLimit } from '../middleware/joinRateLimit.js';
+import { inviteRateLimit } from '../middleware/inviteRateLimit.js';
 import { sendHouseholdInvite } from '../services/emailService.js';
+import { generateRequestId } from '../utils/requestId.js';
 
 const router = express.Router();
 router.use(clerkAuth);
@@ -40,7 +41,7 @@ router.patch('/', validate(updateNameSchema), async (req, res) => {
 
 // GET /api/household/members — all users in this household
 router.get('/members', async (req, res) => {
-  const requestId = randomUUID().split('-')[0];
+  const requestId = generateRequestId();
   const start = Date.now();
   try {
     const members = await householdService.getMembers(req.user.householdId, {
@@ -62,7 +63,7 @@ const inviteSchema = z.object({
   email: z.string().email('Invalid email address'),
 });
 
-router.post('/invite', validate(inviteSchema), async (req, res) => {
+router.post('/invite', inviteRateLimit, validate(inviteSchema), async (req, res) => {
   const household = await householdService.getById(req.user.householdId);
   if (!household) return res.status(404).json({ error: 'Household not found' });
 

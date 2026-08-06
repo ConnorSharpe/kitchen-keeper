@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { clerkAuth } from '../middleware/clerkAuth.js';
 import { validate } from '../middleware/validate.js';
 import * as pantryService from '../services/pantryService.js';
+import { STORAGE_LOCATIONS } from '../../shared/pantryDefaults.js';
 
 const router = express.Router();
 router.use(clerkAuth);
@@ -17,10 +18,7 @@ const createSchema = z.object({
   purchaseDate: dateField,
   expiryDate: dateField,
   readyDate: dateField,
-  storageLocation: z
-    .enum(['pantry', 'refrigerator', 'freezer'])
-    .nullable()
-    .optional(),
+  storageLocation: z.enum(STORAGE_LOCATIONS).nullable().optional(),
   servingsPerPurchaseUnit: z.coerce
     .number()
     .min(0.1)
@@ -40,7 +38,7 @@ const splitSchema = z
   .object({
     splitQuantity: z.number().finite().positive().optional(),
     splitServings: z.number().finite().positive().optional(),
-    storageLocation: z.enum(['pantry', 'refrigerator', 'freezer']),
+    storageLocation: z.enum(STORAGE_LOCATIONS),
   })
   .refine(
     (body) => (body.splitQuantity != null) !== (body.splitServings != null),

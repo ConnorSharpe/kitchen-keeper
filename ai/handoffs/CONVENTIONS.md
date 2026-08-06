@@ -50,8 +50,8 @@ doesn't break the still-running old code.
   `vercel env` value back to Production's current value — a normal edit, not a rebuild.
 - **`staging` or `local` branch itself is bad** (e.g. a migration went wrong on it): re-fork it fresh
   from current production rather than hand-reversing schema changes. Both branches are disposable and
-  cheaply re-creatable, not precious. Re-forking `local` just means updating `server/.env.local` and
-  root `.env` with the new branch's connection string.
+  cheaply re-creatable, not precious. Re-forking `local` just means updating `server/.env.local` with
+  the new branch's connection string.
 - **Refreshing `staging`/`local` from production** (to pull in newer data) is destructive to whatever
   branch-only data exists at the time — it replaces the branch's contents wholesale. No periodic
   refresh is automated; do it manually if/when a branch's data becomes too stale to be useful.
@@ -59,13 +59,9 @@ doesn't break the still-running old code.
 ## Known gap
 
 Only `DATABASE_URL` is repointed per environment (the only Postgres variable this codebase reads —
-see `server/db/client.js`): Vercel's Preview scope → `staging` branch, `server/.env.local` and root
-`.env` → `local` branch. The other ~10 Postgres-family variables the Neon-Vercel integration also sets
+see `server/db/client.js`): Vercel's Preview scope → `staging` branch, `server/.env.local` →
+`local` branch. The other ~10 Postgres-family variables the Neon-Vercel integration also sets
 (`POSTGRES_PRISMA_URL`, `PGHOST_UNPOOLED`, etc.) still point at production in all scopes. If any future
 code starts reading one of those directly instead of `DATABASE_URL`, repoint it the same way — check
 via the Neon console (Connect → connection details for the relevant branch) rather than guessing the
 format.
-
-Root `.env.local` and `client/.env.local` also contain a stray, unused `DATABASE_URL` (no code path
-loads them — only `server/.env.local` is loaded via `dotenv`, in `server/loadEnv.js`). Harmless but
-worth deleting next time either file is touched.
