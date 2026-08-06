@@ -122,15 +122,18 @@ faithfully with a hand-rolled fake response object (it needs `res.on('finish', .
 
 # Recommended Next Action
 
-1. Review the diff, then let Claude know if/when to commit — no commit was made this session per the
-   commit-only-on-request convention. (Correction: TASK-054 was already committed as `a113855` before this
-   session started — confirmed via `git log`. An earlier version of this note incorrectly carried forward a
-   stale "still uncommitted" claim from `CURRENT_STATE.md`'s own pre-commit state; fixed in
-   [archive/TASK-054.md](archive/TASK-054.md) and here.)
-2. Decide `server/.env.vercel`'s fate (Design 3/Open Questions) and run the two Manual Developer Actions
+1. **TASK-056 (UI/UX redesign spec) is DRAFT-3, approved for implementation, committed, and ready for the
+   next agent to pick up** — see [ai/tasks/TASK-056-spec.md](../tasks/TASK-056-spec.md). No implementation
+   code exists yet; the spec's own Phase 1 (recipe-suggestion presentation consolidation, Recipes header
+   restructure, Pantry responsive cards) is the recommended starting scope. A visual companion with mockups
+   of every before/after was also produced this session (published as a Claude Artifact, not committed to
+   the repo — it's a review aid, not a source-of-truth doc; the spec file is authoritative).
+2. TASK-055 is committed (`3ef6963`). (Correction to a stale note previously here: an earlier version of
+   this file said TASK-055 was "not yet committed" — it was, before that note was written; fixed here.)
+3. Decide `server/.env.vercel`'s fate (Design 3/Open Questions) and run the two Manual Developer Actions
    (delete root `.env`; strip the 2 dead vars from `server/.env.local`) whenever convenient — neither is
    blocking, both are simple.
-3. Unrelated carry-forward, not blocking TASK-055: TASK-054's `consume_pantry_item` gap, TASK-053's Vercel
+4. Unrelated carry-forward, not blocking TASK-056: TASK-054's `consume_pantry_item` gap, TASK-053's Vercel
    Preview streaming check, and OpenAI billing confirmation are all still open per
    [[project_go_public_readiness]] and [archive/TASK-054.md](archive/TASK-054.md).
 
