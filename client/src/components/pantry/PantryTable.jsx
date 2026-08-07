@@ -16,9 +16,9 @@ const STORAGE_LOCATION_ICONS = {
 };
 
 function StorageBadge({ storageLocation }) {
-  if (!storageLocation) return <span className="text-gray-400 text-xs">—</span>;
+  if (!storageLocation) return <span className="text-ink-subtle text-xs">—</span>;
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-gray-600">
+    <span className="inline-flex items-center gap-1 text-xs text-ink-muted">
       <span aria-hidden="true">{STORAGE_LOCATION_ICONS[storageLocation]}</span>
       {STORAGE_LOCATION_LABELS[storageLocation] ?? storageLocation}
     </span>
@@ -26,18 +26,12 @@ function StorageBadge({ storageLocation }) {
 }
 
 function ExpiryBadge({ expiryDate, status }) {
-  if (!expiryDate) return <span className="text-gray-400 text-xs">—</span>;
+  if (!expiryDate) return <span className="text-ink-subtle text-xs">—</span>;
 
   const cls = getExpiryBadgeClass(status);
   const label = getExpiryLabel(expiryDate);
 
-  return (
-    <span
-      className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}
-    >
-      {label}
-    </span>
-  );
+  return <span className={cls}>{label}</span>;
 }
 
 // Derives the row/card status the table and card views both need from an item.
@@ -65,7 +59,7 @@ export default function PantryTable({
 }) {
   if (items.length === 0) {
     return (
-      <div className="text-center py-16 text-gray-400">
+      <div className="text-center py-16 text-ink-subtle">
         <p className="text-4xl mb-3">🧺</p>
         <p className="text-sm">
           Your pantry is empty. Add items manually or scan a grocery receipt.
@@ -77,9 +71,9 @@ export default function PantryTable({
   return (
     <>
       {/* Desktop/tablet: dense table (md and up) */}
-      <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
+      <div className="hidden md:block overflow-x-auto rounded-lg border border-border">
+        <table className="min-w-full divide-y divide-border text-sm">
+          <thead className="bg-page">
             <tr>
               {[
                 'Name',
@@ -93,14 +87,14 @@ export default function PantryTable({
               ].map((h) => (
                 <th
                   key={h}
-                  className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap"
+                  className="px-4 py-3 text-left text-xs font-semibold text-ink-subtle uppercase tracking-wider whitespace-nowrap"
                 >
                   {h}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-100">
+          <tbody className="bg-surface divide-y divide-border">
             {items.map((item) => {
               const { ripeState, expiryStatus, rowStatus, isFrozen, badgeStatus } =
                 deriveStatus(item);
@@ -108,7 +102,7 @@ export default function PantryTable({
                 ripeState === 'frozen' ? '' : getExpiryRowClass(rowStatus);
               return (
                 <tr key={item.id} className={`${rowCls} transition-colors`}>
-                  <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
+                  <td className="px-4 py-3 font-medium text-ink whitespace-nowrap">
                     {item.name}
                     {isFrozen && (
                       <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-xs bg-blue-100 text-blue-700 font-medium">
@@ -116,18 +110,18 @@ export default function PantryTable({
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                  <td className="px-4 py-3 text-ink-subtle whitespace-nowrap">
                     {item.category}
                   </td>
-                  <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                  <td className="px-4 py-3 text-ink-muted whitespace-nowrap">
                     {item.quantity}
                     {item.servingsPerPurchaseUnit != null && (
-                      <span className="block text-xs text-gray-400">
+                      <span className="block text-xs text-ink-subtle">
                         {item.servingsPerPurchaseUnit} servings/{item.unit}
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                  <td className="px-4 py-3 text-ink-subtle whitespace-nowrap">
                     {item.unit}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
@@ -157,7 +151,6 @@ export default function PantryTable({
                         onClick={() => onMarkUsed(item.id)}
                         title="Mark as used (I cooked this)"
                         label="✓ Used"
-                        success
                       />
                       <ActionButton
                         onClick={() => onToggleFreeze(item.id)}
@@ -168,12 +161,13 @@ export default function PantryTable({
                         onClick={() => onSplit(item)}
                         title="Split quantity across storage locations"
                         label="Split"
+                        variant="secondary"
                       />
                       <ActionButton
                         onClick={() => onDelete(item.id)}
                         title="Delete (I threw this away)"
                         label="Delete"
-                        danger
+                        variant="danger"
                       />
                     </div>
                   </td>
@@ -206,10 +200,10 @@ function PantryCard({ item, onEdit, onMarkUsed, onToggleFreeze, onSplit, onDelet
   const { ripeState, expiryStatus, isFrozen, badgeStatus } = deriveStatus(item);
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+    <div className="card p-3">
       <div className="flex items-start justify-between gap-2 mb-1">
         <h3
-          className="text-sm font-medium text-gray-900 truncate"
+          className="text-sm font-medium text-ink truncate"
           title={item.name}
         >
           {item.name}
@@ -230,7 +224,7 @@ function PantryCard({ item, onEdit, onMarkUsed, onToggleFreeze, onSplit, onDelet
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 mb-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-subtle mb-3">
         <span>{item.category}</span>
         <span>
           {item.quantity} {item.unit}
@@ -240,11 +234,7 @@ function PantryCard({ item, onEdit, onMarkUsed, onToggleFreeze, onSplit, onDelet
 
       <div className="flex items-center gap-2">
         <CardActionButton onClick={() => onEdit(item)} label="Edit" />
-        <CardActionButton
-          onClick={() => onMarkUsed(item.id)}
-          label="✓ Used"
-          success
-        />
+        <CardActionButton onClick={() => onMarkUsed(item.id)} label="✓ Used" />
         <CardActionButton
           onClick={() => onToggleFreeze(item.id)}
           label={isFrozen ? '🌡 Thaw' : '❄ Freeze'}
@@ -298,7 +288,7 @@ function ItemOverflowMenu({ onSplit, onDelete }) {
         aria-expanded={open}
         aria-label="More actions"
         title="More actions"
-        className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+        className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-md text-ink-subtle hover:bg-page hover:text-ink-muted transition-colors"
       >
         ⋯
       </button>
@@ -307,7 +297,7 @@ function ItemOverflowMenu({ onSplit, onDelete }) {
           ref={menuRef}
           role="menu"
           aria-label="More item actions"
-          className="absolute right-0 bottom-full mb-1 w-36 bg-white border border-gray-200 rounded-md shadow-lg py-1 z-20"
+          className="absolute right-0 bottom-full mb-1 w-36 bg-surface border border-border rounded-md shadow-lg py-1 z-20"
         >
           <button
             role="menuitem"
@@ -315,7 +305,7 @@ function ItemOverflowMenu({ onSplit, onDelete }) {
               setOpen(false);
               onSplit();
             }}
-            className="w-full text-left text-sm px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors"
+            className="w-full text-left text-sm px-3 py-2 text-ink-muted hover:bg-page transition-colors"
           >
             Split
           </button>
@@ -325,7 +315,7 @@ function ItemOverflowMenu({ onSplit, onDelete }) {
               setOpen(false);
               onDelete();
             }}
-            className="w-full text-left text-sm px-3 py-2 text-red-500 hover:bg-red-50 transition-colors"
+            className="btn-text-danger w-full text-left px-3 py-2"
           >
             Delete
           </button>
@@ -335,14 +325,11 @@ function ItemOverflowMenu({ onSplit, onDelete }) {
   );
 }
 
-function CardActionButton({ onClick, label, success = false }) {
-  const cls = success
-    ? 'text-green-600 hover:bg-green-50'
-    : 'text-gray-600 hover:bg-gray-100';
+function CardActionButton({ onClick, label }) {
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center justify-center min-h-[44px] px-2.5 text-xs font-medium rounded-md transition-colors ${cls}`}
+      className="btn-primary min-h-[44px] px-2.5 text-xs"
     >
       {label}
     </button>
@@ -359,34 +346,25 @@ function StatusLabel({ ripeState, expiryStatus, readyDate }) {
     return <span className="text-purple-600 text-xs font-medium">{label}</span>;
   }
   const map = {
-    ok: { cls: 'text-green-600', text: 'Good' },
-    warning: { cls: 'text-amber-600', text: 'Expiring soon' },
-    critical: { cls: 'text-red-600', text: 'Critical' },
-    expired: { cls: 'text-red-700', text: 'Expired' },
-    none: { cls: 'text-gray-400', text: 'No date' },
+    ok: { cls: 'text-status-ok-text', text: 'Good' },
+    warning: { cls: 'text-status-warning-text', text: 'Expiring soon' },
+    critical: { cls: 'text-status-critical-text', text: 'Critical' },
+    expired: { cls: 'text-status-critical-text', text: 'Expired' },
+    none: { cls: 'text-ink-subtle', text: 'No date' },
   };
   const { cls, text } = map[expiryStatus] ?? map.none;
   return <span className={`text-xs font-medium ${cls}`}>{text}</span>;
 }
 
-function ActionButton({
-  onClick,
-  label,
-  title,
-  danger = false,
-  success = false,
-}) {
-  const cls = danger
-    ? 'text-red-500 hover:bg-red-50 hover:text-red-700'
-    : success
-      ? 'text-green-600 hover:bg-green-50 hover:text-green-800'
-      : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700';
+function ActionButton({ onClick, label, title, variant = 'primary' }) {
+  const cls =
+    variant === 'danger'
+      ? 'btn-text-danger text-xs'
+      : variant === 'secondary'
+        ? 'btn-secondary text-xs px-2 py-1'
+        : 'btn-primary text-xs px-2 py-1';
   return (
-    <button
-      onClick={onClick}
-      title={title}
-      className={`text-xs px-2 py-1 rounded transition-colors ${cls}`}
-    >
+    <button onClick={onClick} title={title} className={cls}>
       {label}
     </button>
   );

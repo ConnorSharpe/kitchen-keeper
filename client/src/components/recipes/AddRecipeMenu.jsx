@@ -63,7 +63,7 @@ export default function AddRecipeMenu({
         onKeyDown={handleTriggerKeyDown}
         aria-haspopup="true"
         aria-expanded={open}
-        className="text-sm px-3 py-2 rounded-md bg-orange-500 text-white hover:bg-orange-600 transition-colors flex items-center gap-1.5"
+        className="btn-primary flex items-center gap-1.5"
       >
         + Add Recipe
         <span aria-hidden className="text-xs">▾</span>
@@ -74,7 +74,7 @@ export default function AddRecipeMenu({
           ref={menuRef}
           role="menu"
           aria-label="Add recipe options"
-          className="absolute right-0 mt-1 w-56 bg-white border border-gray-200 rounded-md shadow-lg py-1 z-20"
+          className="absolute right-0 mt-1 w-56 bg-surface border border-border rounded-md shadow-lg py-1 z-20"
         >
           <MenuItem
             ref={firstItemRef}
@@ -110,7 +110,7 @@ const MenuItem = forwardRef(function MenuItem(
       disabled={disabled}
       data-tour={dataTour}
       onClick={onSelect}
-      className="w-full text-left text-sm px-3 py-2 text-gray-700 hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      className="w-full text-left text-sm px-3 py-2 text-ink-muted hover:bg-page disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
     >
       {label}
     </button>

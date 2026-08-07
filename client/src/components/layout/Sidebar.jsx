@@ -2,12 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { usePantryContext } from '../../context/PantryContext.jsx';
 
-const navClass = ({ isActive }) =>
-  `flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-    isActive
-      ? 'bg-orange-100 text-orange-700'
-      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-  }`;
+const navClass = ({ isActive }) => (isActive ? 'nav-link-active' : 'nav-link');
 
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
   const { user, logout } = useAuth();
@@ -16,12 +11,12 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
 
   const sidebarContent = (
     <>
-      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-        <span className="text-lg font-bold text-orange-600">
+      <div className="p-4 bg-primary flex items-center justify-between">
+        <span className="text-lg font-bold text-on-primary">
           Kitchen Keeper
         </span>
         <button
-          className="md:hidden text-gray-400 hover:text-gray-600 text-2xl leading-none"
+          className="md:hidden text-on-primary/70 hover:text-on-primary text-2xl leading-none"
           onClick={() => setMobileOpen(false)}
           aria-label="Close menu"
         >
@@ -89,7 +84,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
           Shopping
         </NavLink>
 
-        <div className="my-2 border-t border-gray-100" />
+        <div className="my-2 border-t border-border" />
 
         <NavLink
           to="/household"
@@ -98,8 +93,8 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
           className={({ isActive }) =>
             `flex items-center gap-2 px-3 py-2 rounded-md text-xs font-medium transition-colors ${
               isActive
-                ? 'bg-gray-100 text-gray-700'
-                : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'
+                ? 'bg-page text-ink-muted'
+                : 'text-ink-subtle hover:bg-page hover:text-ink-muted'
             }`
           }
         >
@@ -108,14 +103,14 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
         </NavLink>
       </nav>
 
-      <div className="p-3 border-t border-gray-200 space-y-1">
-        <p className="text-xs font-medium text-gray-700 truncate">
+      <div className="p-3 border-t border-border space-y-1">
+        <p className="text-xs font-medium text-ink-muted truncate">
           {user?.name}
         </p>
-        <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+        <p className="text-xs text-ink-subtle truncate">{user?.email}</p>
         <button
           onClick={logout}
-          className="mt-1 text-xs text-gray-400 hover:text-red-500 transition-colors"
+          className="mt-1 text-xs text-ink-subtle hover:text-status-critical-text transition-colors"
         >
           Sign out
         </button>
@@ -129,7 +124,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
           PageHeader.jsx's `pl-12` clears this button's ~36px width — keep in
           sync if this button's size or position ever changes. */}
       <button
-        className="md:hidden fixed top-3 left-3 z-50 p-2 rounded-md bg-white border border-gray-200 shadow-sm text-gray-600 hover:text-gray-900"
+        className="md:hidden fixed top-3 left-3 z-50 p-2 rounded-md bg-surface border border-border shadow-sm text-ink-muted hover:text-ink"
         onClick={() => setMobileOpen(true)}
         aria-label="Open menu"
         style={{ display: mobileOpen ? 'none' : undefined }}
@@ -160,7 +155,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
       {/* Sidebar — always visible on md+, slide-in overlay on mobile */}
       <aside
         className={`
-          flex-col bg-white border-r border-gray-200 flex h-screen
+          flex-col bg-surface border-r border-border flex h-screen
           md:w-56 md:flex-shrink-0 md:sticky md:top-0
           fixed top-0 left-0 z-50 w-64 transition-transform duration-200
           md:translate-x-0

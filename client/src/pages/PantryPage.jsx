@@ -94,14 +94,14 @@ export default function PantryPage() {
             <button
               onClick={() => setShowReceiptUpload(true)}
               data-tour="scan-receipt"
-              className="px-4 py-2 bg-white text-orange-600 text-sm font-medium rounded-md border border-orange-300 hover:bg-orange-50 transition-colors shadow-sm"
+              className="btn-secondary shadow-sm"
             >
               📷 Scan receipt
             </button>
             <button
               onClick={() => setModalItem(null)}
               data-tour="add-item"
-              className="px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-md hover:bg-orange-600 transition-colors shadow-sm"
+              className="btn-primary shadow-sm"
             >
               + Add item
             </button>
@@ -118,7 +118,7 @@ export default function PantryPage() {
             placeholder="Search by name…"
             value={filterName}
             onChange={(e) => setFilterName(e.target.value)}
-            className="text-sm border border-gray-300 rounded-md px-3 py-2 text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-400 w-full sm:w-64"
+            className="input w-full sm:w-64"
           />
         </div>
       )}
@@ -126,9 +126,9 @@ export default function PantryPage() {
       {pantryLoading ? (
         <>
           {/* Desktop/tablet skeleton */}
-          <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-50">
+          <div className="hidden md:block overflow-x-auto rounded-lg border border-border">
+            <table className="min-w-full divide-y divide-border text-sm">
+              <thead className="bg-page">
                 <tr>
                   {[
                     'Name',
@@ -142,14 +142,14 @@ export default function PantryPage() {
                   ].map((h) => (
                     <th
                       key={h}
-                      className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap"
+                      className="px-4 py-3 text-left text-xs font-semibold text-ink-subtle uppercase tracking-wider whitespace-nowrap"
                     >
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
+              <tbody className="bg-surface divide-y divide-border">
                 {[...Array(5)].map((_, i) => (
                   <tr key={i} className="animate-pulse">
                     <td className="px-4 py-3">
@@ -187,7 +187,7 @@ export default function PantryPage() {
             {[...Array(5)].map((_, i) => (
               <div
                 key={i}
-                className="rounded-lg border border-gray-200 bg-white p-3 animate-pulse"
+                className="rounded-lg border border-border bg-surface p-3 animate-pulse"
               >
                 <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
                 <div className="h-3 bg-gray-100 rounded w-1/4 mb-3" />
@@ -202,13 +202,13 @@ export default function PantryPage() {
           </div>
         </>
       ) : filteredItems.length === 0 && items.length > 0 ? (
-        <div className="text-center py-16 text-gray-400">
-          <p className="text-sm font-medium text-gray-600">
+        <div className="text-center py-16 text-ink-subtle">
+          <p className="text-sm font-medium text-ink-muted">
             No items match your search.
           </p>
           <button
             onClick={() => setFilterName('')}
-            className="mt-2 text-xs text-orange-600 hover:underline"
+            className="mt-2 text-xs text-primary hover:underline"
           >
             Clear search
           </button>

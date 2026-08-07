@@ -56,6 +56,16 @@ doesn't break the still-running old code.
   branch-only data exists at the time — it replaces the branch's contents wholesale. No periodic
   refresh is automated; do it manually if/when a branch's data becomes too stale to be useful.
 
+## Design tokens (as of TASK-057)
+
+New UI code reaches for semantic color tokens (`bg-primary`, `text-status-critical-text`,
+`bg-accent-tan-bg`, etc. — defined in `client/tailwind.config.js`, backed by CSS variables in
+`client/src/index.css`) instead of a raw Tailwind hue (`bg-orange-600`, `text-red-500`). Raw hues
+remain valid only where no corresponding semantic token exists yet. Shared visual patterns (buttons,
+cards, badges, inputs) live once in `client/src/styles/components.css` as `@layer components` classes
+(`.btn-primary`, `.card`, `.badge-status-critical`, etc.) — compose those at call sites rather than
+retyping the underlying utility string. This is a documented convention, not an enforced lint rule.
+
 ## Known gap
 
 Only `DATABASE_URL` is repointed per environment (the only Postgres variable this codebase reads —

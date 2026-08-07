@@ -248,15 +248,15 @@ export default function RecipesPage() {
       {webSuggestions.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-gray-800">
+            <h2 className="text-base font-semibold text-ink">
               Recipes Found Online
-              <span className="ml-2 text-sm font-normal text-gray-500">
+              <span className="ml-2 text-sm font-normal text-ink-subtle">
                 using your expiring ingredients
               </span>
             </h2>
             <button
               onClick={() => setWebSuggestions([])}
-              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-xs text-ink-subtle hover:text-ink-muted transition-colors"
             >
               Dismiss
             </button>
@@ -272,7 +272,7 @@ export default function RecipesPage() {
                 tags={s.tags}
                 badge={{
                   label: 'From Web',
-                  className: 'bg-orange-100 text-orange-700',
+                  className: 'badge-source-web',
                 }}
                 onSave={handleSaveWebSuggestion}
                 isSaving={savingName === s.name}
@@ -290,13 +290,13 @@ export default function RecipesPage() {
           placeholder="Search by name…"
           value={filterName}
           onChange={(e) => setFilterName(e.target.value)}
-          className="text-sm border border-gray-300 rounded-md px-2 py-1.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-400 w-40"
+          className="input w-40 px-2 py-1.5"
         />
 
         <select
           value={filterSource}
           onChange={(e) => setFilterSource(e.target.value)}
-          className="text-sm border border-gray-300 rounded-md px-2 py-1.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-400"
+          className="input px-2 py-1.5"
         >
           <option value="all">All sources</option>
           <option value="upload">Uploaded</option>
@@ -306,12 +306,12 @@ export default function RecipesPage() {
           <option value="manual">Manual</option>
         </select>
 
-        <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer select-none">
+        <label className="flex items-center gap-1.5 text-sm text-ink-muted cursor-pointer select-none">
           <input
             type="checkbox"
             checked={filterFavorites}
             onChange={(e) => setFilterFavorites(e.target.checked)}
-            className="rounded border-gray-300 text-orange-500 focus:ring-orange-400"
+            className="rounded border-border text-primary focus:ring-primary/40"
           />
           Favorites only
         </label>
@@ -321,7 +321,7 @@ export default function RecipesPage() {
           placeholder="Filter by tag…"
           value={filterTag}
           onChange={(e) => setFilterTag(e.target.value)}
-          className="text-sm border border-gray-300 rounded-md px-2 py-1.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-400 w-36"
+          className="input w-36 px-2 py-1.5"
         />
 
         {(filterSource !== 'all' || filterFavorites || filterTag || filterName) && (
@@ -332,7 +332,7 @@ export default function RecipesPage() {
               setFilterTag('');
               setFilterName('');
             }}
-            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-xs text-ink-subtle hover:text-ink-muted transition-colors"
           >
             Clear filters
           </button>
@@ -340,7 +340,7 @@ export default function RecipesPage() {
 
         <button
           onClick={handleOpenBlocklist}
-          className="ml-auto text-xs text-gray-400 hover:text-gray-600 transition-colors"
+          className="ml-auto text-xs text-ink-subtle hover:text-ink-muted transition-colors"
         >
           🚫 Blocked Recipes
         </button>
@@ -352,26 +352,26 @@ export default function RecipesPage() {
           {[...Array(3)].map((_, i) => (
             <div
               key={i}
-              className="bg-gray-100 rounded-xl h-56 animate-pulse"
+              className="bg-page rounded-xl h-56 animate-pulse"
             />
           ))}
         </div>
       ) : error ? (
         <div className="text-center py-16">
-          <p className="text-sm text-red-500">{error}</p>
+          <p className="text-sm text-status-critical-text">{error}</p>
           <button
             onClick={refresh}
-            className="mt-2 text-sm text-orange-600 hover:underline"
+            className="mt-2 text-sm text-primary hover:underline"
           >
             Retry
           </button>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
+        <div className="text-center py-16 text-ink-subtle">
           {recipes.length === 0 ? (
             <>
               <p className="text-4xl mb-3">📖</p>
-              <p className="text-sm font-medium text-gray-600">
+              <p className="text-sm font-medium text-ink-muted">
                 No saved recipes yet.
               </p>
               <p className="text-xs mt-1">
@@ -380,7 +380,7 @@ export default function RecipesPage() {
             </>
           ) : (
             <>
-              <p className="text-sm font-medium text-gray-600">
+              <p className="text-sm font-medium text-ink-muted">
                 No recipes match your filters.
               </p>
               <button
@@ -390,7 +390,7 @@ export default function RecipesPage() {
                   setFilterTag('');
                   setFilterName('');
                 }}
-                className="mt-2 text-xs text-orange-600 hover:underline"
+                className="mt-2 text-xs text-primary hover:underline"
               >
                 Clear filters
               </button>

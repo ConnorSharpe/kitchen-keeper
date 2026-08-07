@@ -28,7 +28,7 @@ export default function ExpiryStrip() {
 
   if (loading) {
     return (
-      <div className="text-center py-4 text-gray-400 text-sm">
+      <div className="text-center py-4 text-ink-subtle text-sm">
         Loading expiring items…
       </div>
     );
@@ -36,7 +36,7 @@ export default function ExpiryStrip() {
 
   if (expiringItems.length === 0) {
     return (
-      <div className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+      <div className="flex items-center gap-2 rounded-lg bg-status-ok-bg/30 border border-status-ok-bg px-4 py-3 text-sm text-status-ok-text">
         <span aria-hidden>✅</span>
         <span>Nothing expiring this week — great job!</span>
       </div>
@@ -59,25 +59,23 @@ export default function ExpiryStrip() {
           <div
             key={item.id}
             role="listitem"
-            className="flex-shrink-0 w-40 rounded-lg border border-gray-200 bg-white p-3 shadow-sm flex flex-col gap-2"
+            className="card flex-shrink-0 w-40 p-3 flex flex-col gap-2"
           >
             <p
-              className="text-sm font-semibold text-gray-900 truncate"
+              className="text-sm font-semibold text-ink truncate"
               title={item.name}
             >
               {item.name}
             </p>
 
-            <span
-              className={`self-start inline-block px-2 py-0.5 rounded-full text-xs font-medium ${badgeCls}`}
-            >
+            <span className={`self-start ${badgeCls}`}>
               {item.isFrozen ? '❄️ Frozen' : label}
             </span>
 
             <button
               onClick={() => handleFreeze(item)}
               disabled={isFreezing}
-              className="mt-auto text-xs text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50 text-left"
+              className="mt-auto text-xs text-ink-subtle hover:text-primary transition-colors disabled:opacity-50 text-left"
               title={item.isFrozen ? 'Unfreeze' : 'Freeze to extend shelf life'}
             >
               {isFreezing ? '…' : item.isFrozen ? '🔥 Unfreeze' : '❄️ Freeze'}

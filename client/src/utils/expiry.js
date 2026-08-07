@@ -28,14 +28,17 @@ export function getRipeningState(item) {
 }
 
 // Returns Tailwind classes for row/badge coloring.
+// Row washes use the semantic status background token at low opacity (no dedicated shared class
+// exists for a row-level tint, Section 3) rather than a raw hue. 'ripening' is intentionally left as
+// a raw Tailwind class (TASK-057 Section 2.2 — no scaffold depicts this status, nothing to retint from).
 export function getExpiryRowClass(status) {
   switch (status) {
     case 'expired':
-      return 'bg-red-50';
+      return 'bg-status-critical-bg/30';
     case 'critical':
-      return 'bg-red-50';
+      return 'bg-status-critical-bg/30';
     case 'warning':
-      return 'bg-amber-50';
+      return 'bg-status-warning-bg/30';
     case 'ripening':
       return 'bg-purple-50';
     default:
@@ -46,13 +49,13 @@ export function getExpiryRowClass(status) {
 export function getExpiryBadgeClass(status) {
   switch (status) {
     case 'expired':
-      return 'bg-red-100 text-red-700';
+      return 'badge-status-critical';
     case 'critical':
-      return 'bg-red-100 text-red-600';
+      return 'badge-status-critical';
     case 'warning':
-      return 'bg-amber-100 text-amber-700';
+      return 'badge-status-warning';
     case 'ok':
-      return 'bg-green-100 text-green-700';
+      return 'badge-status-ok';
     case 'ripening':
       return 'bg-purple-100 text-purple-700';
     default:

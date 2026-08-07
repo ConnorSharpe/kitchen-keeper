@@ -16,7 +16,7 @@ export default function DashboardPage() {
       <section aria-labelledby="expiry-heading">
         <h2
           id="expiry-heading"
-          className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3"
+          className="text-sm font-semibold text-ink-subtle uppercase tracking-wide mb-3"
         >
           Expiring Soon
         </h2>

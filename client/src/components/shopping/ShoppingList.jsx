@@ -123,7 +123,7 @@ export default function ShoppingList({ listId }) {
     return (
       <div className="space-y-2 animate-pulse">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-10 bg-gray-100 rounded-lg" />
+          <div key={i} className="h-10 bg-page rounded-lg" />
         ))}
       </div>
     );
@@ -150,7 +150,7 @@ export default function ShoppingList({ listId }) {
   return (
     <div className="flex flex-col gap-4">
       {items.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-8">
+        <p className="text-sm text-ink-subtle text-center py-8">
           This list has no items yet. Add one below.
         </p>
       ) : (
@@ -162,7 +162,7 @@ export default function ShoppingList({ listId }) {
 
           {/* Divider when both buckets have items */}
           {unchecked.length > 0 && checked.length > 0 && (
-            <li className="border-t border-gray-100 my-2" />
+            <li className="border-t border-border my-2" />
           )}
 
           {/* Checked items dimmed at bottom */}
@@ -178,17 +178,17 @@ export default function ShoppingList({ listId }) {
         className="border-t border-gray-100 pt-4 flex flex-wrap gap-2 items-end"
       >
         <div className="flex-1 min-w-[140px]">
-          <label className="block text-xs text-gray-500 mb-1">Item</label>
+          <label className="block text-xs text-ink-subtle mb-1">Item</label>
           <input
             type="text"
             value={addName}
             onChange={(e) => setAddName(e.target.value)}
             placeholder="e.g. Garlic"
-            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+            className="input w-full px-3 py-1.5"
           />
         </div>
         <div className="w-20">
-          <label className="block text-xs text-gray-500 mb-1">Qty</label>
+          <label className="block text-xs text-ink-subtle mb-1">Qty</label>
           <input
             type="number"
             value={addQty}
@@ -196,30 +196,30 @@ export default function ShoppingList({ listId }) {
             min="0"
             step="any"
             placeholder="—"
-            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+            className="input w-full px-3 py-1.5"
           />
         </div>
         <div className="w-24">
-          <label className="block text-xs text-gray-500 mb-1">Unit</label>
+          <label className="block text-xs text-ink-subtle mb-1">Unit</label>
           <input
             type="text"
             value={addUnit}
             onChange={(e) => setAddUnit(e.target.value)}
             placeholder="e.g. cloves"
-            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+            className="input w-full px-3 py-1.5"
           />
         </div>
         <button
           type="submit"
           disabled={adding || !addName.trim()}
-          className="py-1.5 px-4 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 disabled:opacity-50"
+          className="btn-primary py-1.5 px-4"
         >
           {adding ? '…' : 'Add'}
         </button>
       </form>
 
       {items.length > 0 && (
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-ink-subtle">
           {checked.length} / {items.length} checked
         </p>
       )}
@@ -248,7 +248,7 @@ function ItemRow({
 
   if (editing) {
     return (
-      <li className="rounded-lg px-3 py-2 bg-gray-50">
+      <li className="rounded-lg px-3 py-2 bg-page">
         <form
           onSubmit={onEditSave}
           onKeyDown={(e) => {
@@ -257,39 +257,39 @@ function ItemRow({
           className="flex flex-wrap gap-2 items-end"
         >
           <div className="flex-1 min-w-[140px]">
-            <label className="block text-xs text-gray-500 mb-1">Item</label>
+            <label className="block text-xs text-ink-subtle mb-1">Item</label>
             <input
               type="text"
               value={editName}
               onChange={(e) => onEditNameChange(e.target.value)}
               autoFocus
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+              className="input w-full px-3 py-1.5"
             />
           </div>
           <div className="w-20">
-            <label className="block text-xs text-gray-500 mb-1">Qty</label>
+            <label className="block text-xs text-ink-subtle mb-1">Qty</label>
             <input
               type="number"
               value={editQty}
               onChange={(e) => onEditQtyChange(e.target.value)}
               min="0"
               step="any"
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+              className="input w-full px-3 py-1.5"
             />
           </div>
           <div className="w-24">
-            <label className="block text-xs text-gray-500 mb-1">Unit</label>
+            <label className="block text-xs text-ink-subtle mb-1">Unit</label>
             <input
               type="text"
               value={editUnit}
               onChange={(e) => onEditUnitChange(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+              className="input w-full px-3 py-1.5"
             />
           </div>
           <button
             type="submit"
             disabled={savingEdit || !editName.trim()}
-            className="py-1.5 px-3 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 disabled:opacity-50"
+            className="btn-primary py-1.5 px-3"
           >
             {savingEdit ? '…' : 'Save'}
           </button>
@@ -297,7 +297,7 @@ function ItemRow({
             type="button"
             onClick={onEditCancel}
             disabled={savingEdit}
-            className="py-1.5 px-3 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-100 disabled:opacity-50"
+            className="py-1.5 px-3 border border-border text-ink-muted rounded-lg text-sm font-medium hover:bg-page disabled:opacity-50"
           >
             Cancel
           </button>
@@ -305,7 +305,7 @@ function ItemRow({
             type="button"
             onClick={onDelete}
             aria-label="Delete item"
-            className="py-1.5 px-2 text-gray-400 hover:text-red-500 text-sm"
+            className="py-1.5 px-2 text-ink-subtle hover:text-status-critical-text text-sm"
           >
             🗑️
           </button>
@@ -317,7 +317,7 @@ function ItemRow({
   return (
     <li
       className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
-        checked ? 'opacity-50' : 'hover:bg-gray-50'
+        checked ? 'opacity-50' : 'hover:bg-page'
       }`}
     >
       <button
@@ -326,19 +326,19 @@ function ItemRow({
         aria-label={checked ? 'Uncheck item' : 'Check item'}
         className={`w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
           checked
-            ? 'bg-green-500 border-green-500 text-white'
-            : 'border-gray-300 hover:border-orange-400'
+            ? 'bg-primary border-primary text-on-primary'
+            : 'border-border hover:border-primary'
         } disabled:opacity-50`}
       >
         {checked && <span className="text-xs leading-none">✓</span>}
       </button>
 
       <span
-        className={`flex-1 text-sm ${checked ? 'line-through text-gray-400' : 'text-gray-800'}`}
+        className={`flex-1 text-sm ${checked ? 'line-through text-ink-subtle' : 'text-ink'}`}
       >
         {item.ingredientName}
         {(item.quantity != null || item.unit) && (
-          <span className="text-gray-400 ml-1.5 font-normal">
+          <span className="text-ink-subtle ml-1.5 font-normal">
             {item.quantity != null ? item.quantity : ''}
             {item.unit ? ` ${item.unit}` : ''}
           </span>
@@ -348,7 +348,7 @@ function ItemRow({
       {item.hasUnitMismatch && (
         <span
           title="Unit mismatch: this ingredient appeared with different units across recipes. Verify the quantity."
-          className="text-amber-500 text-sm flex-shrink-0 cursor-help"
+          className="text-status-warning-text text-sm flex-shrink-0 cursor-help"
           aria-label="Unit mismatch warning"
         >
           ⚠️
@@ -358,14 +358,14 @@ function ItemRow({
       <button
         onClick={onEditStart}
         aria-label="Edit item"
-        className="text-gray-400 hover:text-orange-500 text-sm flex-shrink-0"
+        className="text-ink-subtle hover:text-primary text-sm flex-shrink-0"
       >
         ✏️
       </button>
       <button
         onClick={onDelete}
         aria-label="Delete item"
-        className="text-gray-400 hover:text-red-500 text-sm flex-shrink-0"
+        className="text-ink-subtle hover:text-status-critical-text text-sm flex-shrink-0"
       >
         🗑️
       </button>

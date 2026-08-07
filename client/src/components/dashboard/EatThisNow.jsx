@@ -5,9 +5,9 @@ import { usePantryContext } from '../../context/PantryContext.jsx';
 import RecipeSuggestionCard from '../recipes/RecipeSuggestionCard.jsx';
 
 const DIFFICULTY_BADGE = {
-  easy: 'bg-green-100 text-green-700',
-  medium: 'bg-amber-100 text-amber-700',
-  hard: 'bg-red-100 text-red-700',
+  easy: 'badge-status-ok',
+  medium: 'badge-status-warning',
+  hard: 'badge-status-critical',
 };
 
 function FallbackRecipeCard({ recipe, expiringNames }) {
@@ -17,18 +17,15 @@ function FallbackRecipeCard({ recipe, expiringNames }) {
     .filter((name) => expiringNames.has(name.toLowerCase()));
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-2">
-      <h3 className="text-sm font-semibold text-gray-900">{recipe.name}</h3>
+    <div className="card p-4 flex flex-col gap-2">
+      <h3 className="text-sm font-semibold text-ink">{recipe.name}</h3>
       {recipe.description && (
-        <p className="text-sm text-gray-600">{recipe.description}</p>
+        <p className="text-sm text-ink-muted">{recipe.description}</p>
       )}
       {matchingIngredients.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {matchingIngredients.map((name) => (
-            <span
-              key={name}
-              className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded px-1.5 py-0.5"
-            >
+            <span key={name} className="badge-tag">
               {name}
             </span>
           ))}
@@ -103,13 +100,13 @@ export default function EatThisNow() {
   const expiringNames = new Set(expiringItems.map((i) => i.name.toLowerCase()));
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
+    <div className="rounded-xl border border-border bg-page p-5">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-base font-semibold text-gray-900">
+          <h2 className="text-base font-semibold text-ink">
             What Can I Make?
           </h2>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-ink-subtle mt-0.5">
             AI suggestions using your expiring ingredients
           </p>
         </div>
@@ -117,7 +114,7 @@ export default function EatThisNow() {
         <button
           onClick={handleGetSuggestions}
           disabled={pantryIsEmpty || mode === 'loading'}
-          className="px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="btn-primary"
           title={pantryIsEmpty ? 'Add items to your pantry first' : undefined}
         >
           {mode === 'loading' ? (
@@ -150,24 +147,24 @@ export default function EatThisNow() {
       </div>
 
       {pantryIsEmpty && mode === 'idle' && (
-        <p className="text-sm text-gray-400 text-center py-4">
+        <p className="text-sm text-ink-subtle text-center py-4">
           Add items to your pantry first, then get meal suggestions here.
         </p>
       )}
 
       {!pantryIsEmpty && mode === 'idle' && (
-        <div className="text-center py-6 text-gray-400 select-none">
+        <div className="text-center py-6 text-ink-subtle select-none">
           <p className="text-4xl mb-3" aria-hidden>
             🍽️
           </p>
-          <p className="text-sm text-gray-500 max-w-xs mx-auto">
+          <p className="text-sm text-ink-subtle max-w-xs mx-auto">
             Tap{' '}
-            <span className="font-medium text-gray-700">✨ Suggest Meals</span>{' '}
+            <span className="font-medium text-ink-muted">✨ Suggest Meals</span>{' '}
             to get personalised ideas that use your expiring ingredients first.
           </p>
-          <p className="text-xs text-gray-400 mt-3">
+          <p className="text-xs text-ink-subtle mt-3">
             Prefer to just ask?{' '}
-            <a href="/" className="text-orange-600 hover:underline">
+            <a href="/" className="text-primary hover:underline">
               Chat →
             </a>
           </p>
@@ -206,7 +203,7 @@ export default function EatThisNow() {
                       label: s.difficulty,
                       className:
                         DIFFICULTY_BADGE[s.difficulty] ||
-                        'bg-gray-100 text-gray-600',
+                        'bg-page text-ink-muted',
                     }
                   : undefined
               }
@@ -225,7 +222,7 @@ export default function EatThisNow() {
 
       {mode === 'fallback' && (
         <>
-          <p className="text-xs text-amber-600 mb-3">
+          <p className="text-xs text-status-warning-text mb-3">
             AI unavailable — showing saved recipes that use your expiring
             ingredients:
           </p>
@@ -242,7 +239,7 @@ export default function EatThisNow() {
       )}
 
       {mode === 'empty' && (
-        <p className="text-sm text-gray-400 text-center py-4">
+        <p className="text-sm text-ink-subtle text-center py-4">
           No suggestions available right now. Try adding more items to your
           pantry.
         </p>

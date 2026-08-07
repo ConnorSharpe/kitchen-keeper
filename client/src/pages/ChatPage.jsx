@@ -206,14 +206,14 @@ export default function ChatPage() {
     // The sidebar is sticky h-screen, so this fills the remaining column.
     <div className="h-screen flex flex-col">
       {/* ── Header ── */}
-      <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 bg-white">
+      <div className="flex-shrink-0 px-6 py-4 border-b border-border bg-surface">
         <PageHeader
           title="Kitchen Keeper"
           subtitle="Ask anything about your kitchen, ingredients, or recipes."
           actions={
             <button
               onClick={() => setShowCapabilities(true)}
-              className="w-7 h-7 rounded-full border border-gray-200 text-gray-400 hover:text-gray-700 hover:border-gray-300 flex items-center justify-center text-sm transition-colors"
+              className="w-7 h-7 rounded-full border border-border text-ink-subtle hover:text-ink-muted hover:border-primary flex items-center justify-center text-sm transition-colors"
               aria-label="What can the assistant do?"
               title="What can the assistant do?"
             >
@@ -229,22 +229,22 @@ export default function ChatPage() {
           onClick={() => setShowCapabilities(false)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-3"
+            className="bg-surface rounded-2xl shadow-xl w-full max-w-md p-6 space-y-3"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-2">
-              <h2 className="text-lg font-semibold text-gray-900">
+              <h2 className="text-lg font-semibold text-ink">
                 What can Kitchen Keeper do?
               </h2>
               <button
                 onClick={() => setShowCapabilities(false)}
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                className="text-ink-subtle hover:text-ink-muted text-xl leading-none"
                 aria-label="Close"
               >
                 ×
               </button>
             </div>
-            <p className="text-sm text-gray-600 leading-relaxed">
+            <p className="text-sm text-ink-muted leading-relaxed">
               Ask it to add, update, or remove pantry items just by describing
               them in plain language, or to log what you&apos;ve eaten or used
               up. Ask what to cook and it&apos;ll suggest recipes from what&apos;s
@@ -253,7 +253,7 @@ export default function ChatPage() {
               Suggestions always account for your household&apos;s dietary
               profile and flag allergy conflicts.
             </p>
-            <p className="text-xs text-gray-400 leading-relaxed">
+            <p className="text-xs text-ink-subtle leading-relaxed">
               Receipt scanning, recipe-photo import, and importing recipes
               from a URL are separate tools elsewhere in the app — the chat
               assistant itself can&apos;t do those.
@@ -273,10 +273,10 @@ export default function ChatPage() {
               <p className="text-3xl mb-2" aria-hidden>
                 🍳
               </p>
-              <h2 className="text-base font-semibold text-gray-700">
+              <h2 className="text-base font-semibold text-ink-muted">
                 What would you like to know?
               </h2>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-ink-subtle mt-1">
                 Kitchen Keeper knows your pantry and saved recipes — ask away.
               </p>
             </div>
@@ -285,7 +285,7 @@ export default function ChatPage() {
                 <button
                   key={prompt}
                   onClick={() => send(prompt)}
-                  className="text-left px-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-orange-50 hover:border-orange-300 transition-colors"
+                  className="text-left px-4 py-2.5 rounded-xl border border-border text-sm text-ink-muted hover:bg-page hover:border-primary transition-colors"
                 >
                   {prompt}
                 </button>
@@ -317,7 +317,7 @@ export default function ChatPage() {
                 >
                   {msg.role === 'assistant' && (
                     <div
-                      className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center text-sm flex-shrink-0"
+                      className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-sm flex-shrink-0"
                       aria-hidden
                     >
                       🍳
@@ -325,10 +325,10 @@ export default function ChatPage() {
                   )}
 
                   <div
-                    className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                    className={`max-w-[75%] text-sm leading-relaxed ${
                       msg.role === 'user'
-                        ? 'bg-orange-500 text-white rounded-br-sm'
-                        : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
+                        ? 'chat-bubble-user rounded-br-sm'
+                        : 'chat-bubble-assistant rounded-bl-sm'
                     }`}
                   >
                     {msg.role === 'assistant' ? (
@@ -351,7 +351,7 @@ export default function ChatPage() {
                   {msg.itemsAdded.map((item) => (
                     <span
                       key={item.id}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-50 border border-green-200 text-xs text-green-700"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-status-ok-bg/30 border border-status-ok-bg text-xs text-status-ok-text"
                     >
                       <span aria-hidden>+</span>
                       {item.name} added to pantry
@@ -392,14 +392,14 @@ export default function ChatPage() {
                           {/* Prep steps */}
                           {prepSteps.length > 0 && (
                             <div>
-                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                              <p className="text-xs font-semibold text-ink-subtle uppercase tracking-wide mb-1">
                                 Before You Start
                               </p>
                               <ul className="space-y-0.5">
                                 {prepSteps.map((step, i) => (
                                   <li
                                     key={i}
-                                    className="text-xs text-gray-600 flex gap-1.5"
+                                    className="text-xs text-ink-muted flex gap-1.5"
                                   >
                                     <span aria-hidden>•</span>
                                     <span>{step}</span>
@@ -412,7 +412,7 @@ export default function ChatPage() {
                           {/* Ingredients */}
                           {ingredients.length > 0 && (
                             <div>
-                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                              <p className="text-xs font-semibold text-ink-subtle uppercase tracking-wide mb-1">
                                 Ingredients
                               </p>
                               <ul className="space-y-0.5">
@@ -429,7 +429,7 @@ export default function ChatPage() {
                                   return (
                                     <li
                                       key={i}
-                                      className={`text-xs flex gap-1.5 ${have ? 'text-green-700' : 'text-red-600'}`}
+                                      className={`text-xs flex gap-1.5 ${have ? 'text-status-ok-text' : 'text-status-critical-text'}`}
                                     >
                                       <span aria-hidden>•</span>
                                       <span>
@@ -455,7 +455,7 @@ export default function ChatPage() {
 
                           {/* Allergy note */}
                           {recipe.allergyNote && (
-                            <p className="text-xs font-medium text-amber-700 bg-amber-50 rounded-lg px-2 py-1">
+                            <p className="text-xs font-medium text-status-warning-text bg-status-warning-bg/30 rounded-lg px-2 py-1">
                               ⚠ {recipe.allergyNote}
                             </p>
                           )}
@@ -481,16 +481,16 @@ export default function ChatPage() {
         {loading && !messages[messages.length - 1]?.content && (
           <div className="flex items-end gap-2 justify-start">
             <div
-              className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center text-sm flex-shrink-0"
+              className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-sm flex-shrink-0"
               aria-hidden
             >
               🍳
             </div>
-            <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-4 py-3">
+            <div className="chat-bubble-assistant rounded-bl-sm">
               <div className="flex gap-1 items-center" aria-label="Thinking…">
-                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0ms]" />
-                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]" />
-                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                <span className="w-2 h-2 bg-ink-subtle rounded-full animate-bounce [animation-delay:0ms]" />
+                <span className="w-2 h-2 bg-ink-subtle rounded-full animate-bounce [animation-delay:150ms]" />
+                <span className="w-2 h-2 bg-ink-subtle rounded-full animate-bounce [animation-delay:300ms]" />
               </div>
             </div>
           </div>
@@ -501,7 +501,7 @@ export default function ChatPage() {
       </div>
 
       {/* ── Input bar ── */}
-      <div className="flex-shrink-0 border-t border-gray-200 bg-white px-6 py-4">
+      <div className="flex-shrink-0 border-t border-border bg-surface px-6 py-4">
         <form onSubmit={handleSubmit} className="flex gap-3">
           {/* Mic button — mobile only via md:hidden; also feature-detected via supported */}
           {(micSupported || iosPwaCaveat) && (
@@ -519,8 +519,8 @@ export default function ChatPage() {
               className={`md:hidden flex-shrink-0 w-10 h-10 rounded-xl border flex items-center justify-center text-lg transition-colors
                 ${
                   iosPwaCaveat
-                    ? 'border-gray-100 text-gray-300 cursor-default'
-                    : 'border-gray-200 disabled:opacity-50'
+                    ? 'border-border text-ink-subtle cursor-default'
+                    : 'border-border disabled:opacity-50'
                 }`}
               aria-label={listening ? 'Stop recording' : 'Voice input'}
             >
@@ -542,18 +542,18 @@ export default function ChatPage() {
             placeholder="Ask about your kitchen…"
             rows={1}
             disabled={loading}
-            className="flex-1 resize-none rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-400"
+            className="input flex-1 resize-none rounded-xl py-2.5 disabled:bg-page disabled:text-ink-subtle"
             style={{ maxHeight: '120px' }}
           />
           <button
             type="submit"
             disabled={loading || !input.trim()}
-            className="px-5 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-medium hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+            className="btn-primary flex-shrink-0"
           >
             Send
           </button>
         </form>
-        <p className="text-xs text-gray-400 mt-1.5">
+        <p className="text-xs text-ink-subtle mt-1.5">
           Press Enter to send · Shift+Enter for a new line
         </p>
       </div>
