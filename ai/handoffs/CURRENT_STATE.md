@@ -37,13 +37,23 @@ Connor explicitly authorized migrating `DietaryProfileForm.jsx` (judgment call #
 
 # Judgment Calls Made Beyond the Spec's Literal Text (flag for Connor's review)
 
-1. **`PantryPage.jsx` and `RecipesPage.jsx` were migrated even though neither is named in the spec's
-   Allowed Files list** (only `PantryTable/PantryCard` and `RecipeCard`/etc. are listed). Both are the page
-   shells hosting the exact components the spec does name (Add Item/Add Recipe buttons, search/filter bars,
-   loading skeletons) — leaving them raw-orange would have produced an immediately visible clash on the very
-   screens Phase 2/3 claims to complete. Treated as the same class of gap DRAFT-4's review caught for CRUD
-   modals, but judged in the opposite direction (include, not exclude) since these two files are structural
-   page containers for in-scope components, not standalone CRUD forms. **Worth a quick look** — this was a
+1. **RESOLVED, and the inclusion decision itself confirmed correct by direct scaffold evidence.**
+   `PantryPage.jsx` and `RecipesPage.jsx` were migrated even though neither is named in the spec's Allowed
+   Files list (only `PantryTable/PantryCard` and `RecipeCard`/etc. are listed) — an inference, not an explicit
+   instruction, unlike judgment call #2's actual contradiction. Checking `03-pantry-mobile.png` directly
+   confirmed the inference: it depicts "Scan Receipt" and "+ Add Item" (both `PantryPage.jsx`, not
+   `PantryTable.jsx`) as solid dark-green pills alongside the already-migrated card/badge/action-button
+   treatment. One real deviation this check caught: `PantryPage.jsx`'s "Scan receipt" button had been styled
+   `.btn-secondary` (outlined) — my own unverified choice to visually de-rank it below "+ Add item" — but the
+   scaffold shows both buttons identically solid-filled, no outline/filled distinction at all. Fixed to
+   `.btn-primary` (reused the existing class, no new CSS), live-verified both now render identically
+   (`rgb(37,72,50)` bg, white text, full pill). Both are the page shells hosting the exact components the
+   spec does name (Add Item/Add Recipe buttons, search/filter bars, loading skeletons) — leaving them
+   raw-orange would have produced an immediately visible clash on the very screens Phase 2/3 claims to
+   complete. Treated as the same class of gap DRAFT-4's review caught for CRUD modals, but judged in the
+   opposite direction (include, not exclude) since these two files are structural
+   page containers for in-scope components, not standalone CRUD forms. No longer needs Connor's review — this
+   was a
    judgment call, not an explicit spec instruction.
 2. **RESOLVED, by explicit Connor authorization (not a unilateral call).** Section 4G's Household chip
    instructions (`.chip-allergy`, `.badge-tag` for dietary/health chips) target markup that only exists
@@ -135,8 +145,12 @@ only a build warning (verified during spec review, re-confirmed this session).
 
 # Recommended Next Action
 
-Get Connor's explicit read on the one remaining flagged judgment call (PantryPage/RecipesPage inclusion).
-Phase 4 (icons) and TASK-058/TASK-060 remain separate, not-yet-started follow-ups.
+Judgment call #1 (PantryPage/RecipesPage inclusion) is resolved: checking `03-pantry-mobile.png` directly
+confirmed both "Scan Receipt" and "+ Add Item" are scaffold-depicted as identical solid-green pills (not one
+outlined) — `PantryPage.jsx`'s "Scan receipt" button was wrongly styled `.btn-secondary` (my own unverified
+choice, not scaffold-derived); fixed to `.btn-primary`, reusing the existing class, no new CSS. Live-verified
+both buttons now render identically (`rgb(37,72,50)` bg, white text, full pill). Phase 4 (icons) and
+TASK-058/TASK-060 remain separate, not-yet-started follow-ups.
 
 # Context Notes
 

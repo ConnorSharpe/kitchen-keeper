@@ -94,7 +94,7 @@ export default function PantryPage() {
             <button
               onClick={() => setShowReceiptUpload(true)}
               data-tour="scan-receipt"
-              className="btn-secondary shadow-sm"
+              className="btn-primary shadow-sm"
             >
               📷 Scan receipt
             </button>
