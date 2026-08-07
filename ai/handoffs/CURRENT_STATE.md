@@ -1,15 +1,18 @@
 # Task
 
 TASK-057 implementation: full visual design-system migration ("Modern Farmhouse") — Phases 1-3 of the
-approved spec (`ai/tasks/TASK-057-spec.md`) shipped in one session. Phase 4 (optional app-wide icon system,
-Section 6) not started — it was always scoped as separable.
+approved spec (`ai/tasks/TASK-057-spec.md`) shipped in one session, plus a Connor-authorized deviation
+resolving judgment call #2 (below). Phase 4 (optional app-wide icon system, Section 6) not started — it was
+always scoped as separable.
 
 # Current Status
 
 All of Phase 1 (token/component foundation), Phase 2 (Sidebar, Dashboard, Pantry, Chat), and Phase 3
 (Recipes, Shopping, Household, Landing) are implemented, build-clean, lint-clean, and test-clean (98/98
 passing, zero regressions). Contrast-gated per the spec's hard Phase 1 requirement — verified against live
-computed CSS in the running app, not just hand math (see Verification Results).
+computed CSS in the running app, not just hand math (see Verification Results). After the initial push,
+Connor explicitly authorized migrating `DietaryProfileForm.jsx` (judgment call #2) to resolve the Section
+4G / Forbidden Files contradiction in favor of the scaffold — done and pushed as a follow-up commit.
 
 # Files Modified
 
@@ -42,17 +45,26 @@ computed CSS in the running app, not just hand math (see Verification Results).
    modals, but judged in the opposite direction (include, not exclude) since these two files are structural
    page containers for in-scope components, not standalone CRUD forms. **Worth a quick look** — this was a
    judgment call, not an explicit spec instruction.
-2. **Section 4G's Household chip instructions (`.chip-allergy`, `.badge-tag` for dietary/health chips)
-   target markup that only exists inside `DietaryProfileForm.jsx`** — confirmed live in the running app
-   (health-condition/preference chips render there, not in `HouseholdPage.jsx` itself). `DietaryProfileForm.jsx`
-   is explicitly named in the spec's own excluded-CRUD-modal list (Section 4, Forbidden Files boundary).
-   **This is a real unresolved contradiction in the approved spec, not a call I resolved by guessing** — I
-   left `DietaryProfileForm.jsx` untouched (Allowed Files is authoritative) rather than unilaterally
-   expanding scope into an explicitly-forbidden file. Household's allergy/dietary chips still show raw
-   Tailwind colors after this session. Flag this the same way TASK-060 is already flagged for the other
-   CRUD modals — likely belongs in that same future mechanical-migration task, or needs an explicit
-   Connor/architect call on whether Section 4G's intent should override the Forbidden Files line for this
-   one file.
+2. **RESOLVED, by explicit Connor authorization (not a unilateral call).** Section 4G's Household chip
+   instructions (`.chip-allergy`, `.badge-tag` for dietary/health chips) target markup that only exists
+   inside `DietaryProfileForm.jsx` — confirmed live in the running app — which is also named in the spec's
+   own excluded-CRUD-modal list (Forbidden Files). Root cause, confirmed by viewing
+   `ai/design/2026-08-gemini-redesign/scaffolds/10b-household-mobile-fixed.png` directly: it's one flattened
+   mockup image of the whole Household screen with no awareness of this codebase's component boundaries —
+   Section 4G was written from that image without cross-checking that the chip markup lives in a file
+   Forbidden Files excludes for an unrelated reason (the CRUD-modal sweep boundary). Connor reviewed this
+   explanation and explicitly said to migrate the file to match the scaffold, overriding Forbidden Files for
+   this one file. Done: `TagInput`'s chips now use `chipCls = isWarning ? 'chip-allergy' : 'badge-tag'`; the
+   tag-input wrapper, remove-tag buttons, loading state, and Save button all migrated too (not just the two
+   named classes) for the same "don't half-migrate a screen" reason as judgment call #1. One deliberate
+   implementation choice: the wrapper div uses hand-written `focus-within:border-primary
+   focus-within:ring-1 focus-within:ring-primary/40` rather than the `.input` shared class, because `.input`'s
+   `focus:` pseudo-class wouldn't fire when a *child* `<input>` receives focus — reusing it as-is would have
+   silently dropped the focus ring. Live-verified: `.badge-tag` chip renders at 11.34:1 contrast (matches
+   spec's ≈11.35:1); Save button renders as a solid `rgb(37,72,50)`/white pill, matching the scaffold.
+   `chip-allergy` wasn't exercisable live (this test household has no allergy tags set) but reuses the exact
+   token pairing already verified elsewhere this session (chip-allergy ≈8.93:1, Section 2.1). TASK-060 should
+   drop `DietaryProfileForm.jsx` from its scope now that it's done.
 3. **Row-level expiry tint** (`getExpiryRowClass`) has no defined shared class in spec Section 3 — used
    `bg-status-critical-bg/30` / `bg-status-warning-bg/30` (opacity-modifier composition, not a new class) as
    the natural extension of the token system for a light wash background. Not spec-specified; a reasonable
@@ -82,19 +94,20 @@ only a build warning (verified during spec review, re-confirmed this session).
 
 1. **Phase 4 (Section 6, optional)** — app-wide emoji→inline-SVG icon system. Not started. Explicitly
    splittable into its own follow-up task per the spec.
-2. **Judgment call #2 above (Household dietary/allergy chips)** needs an explicit decision from Connor or a
-   future architect review round before `DietaryProfileForm.jsx` is touched.
-3. TASK-058 (Shopping mobile layout) and TASK-060 (mechanical CRUD-modal class migration — now including
-   `DietaryProfileForm.jsx` per judgment call #2) are both still just named placeholders, not drafted.
+2. TASK-058 (Shopping mobile layout) and TASK-060 (mechanical CRUD-modal class migration — now covering only
+   `AddItemModal.jsx`, `SplitItemModal.jsx`, `BuildListModal.jsx`, `AddToListModal.jsx`, `AddRecipesModal.jsx`
+   — `DietaryProfileForm.jsx` is done, drop it from TASK-060's scope) are both still just named placeholders,
+   not drafted.
 
 # Known Risks / Open Questions
 
-- CRUD modals (`AddItemModal.jsx`, `SplitItemModal.jsx`, `BuildListModal.jsx`, `AddToListModal.jsx`,
-  `AddRecipesModal.jsx`, `DietaryProfileForm.jsx`) still render raw-orange styling and visually clash with
-  every migrated screen around them — this is the spec's own accepted, named gap (Section 11), not new.
-- Judgment calls #1 and #2 above are the two places this session's implementation reasoning went beyond the
-  spec's literal text — both are safe/conservative in the direction taken, but worth Connor's explicit
-  sign-off given this repo's spec-approval discipline.
+- Remaining CRUD modals (`AddItemModal.jsx`, `SplitItemModal.jsx`, `BuildListModal.jsx`, `AddToListModal.jsx`,
+  `AddRecipesModal.jsx`) still render raw-orange styling and visually clash with every migrated screen around
+  them — this is the spec's own accepted, named gap (Section 11), not new. `DietaryProfileForm.jsx` no longer
+  belongs on this list (resolved, see Judgment Calls #2).
+- Judgment call #1 (PantryPage/RecipesPage inclusion) is the one remaining place this session's
+  implementation reasoning went beyond the spec's literal text without an explicit go-ahead — safe/
+  conservative in the direction taken, but still worth a quick confirmation.
 - Carried forward, unrelated to this task: TASK-054's `consume_pantry_item`-on-truncated-item gap; TASK-053's
   Vercel Preview streaming verification; OpenAI billing confirmation; `server/.env.vercel`'s fate — see
   [archive/TASK-055.md](archive/TASK-055.md) and [[project_go_public_readiness]].
@@ -122,10 +135,8 @@ only a build warning (verified during spec review, re-confirmed this session).
 
 # Recommended Next Action
 
-Get Connor's explicit read on the two flagged judgment calls (PantryPage/RecipesPage inclusion,
-DietaryProfileForm's Section 4G contradiction). If both are accepted, this phase of TASK-057 is ready to
-commit/push per the user's normal git workflow. Phase 4 (icons) and TASK-058/TASK-060 remain separate,
-not-yet-started follow-ups.
+Get Connor's explicit read on the one remaining flagged judgment call (PantryPage/RecipesPage inclusion).
+Phase 4 (icons) and TASK-058/TASK-060 remain separate, not-yet-started follow-ups.
 
 # Context Notes
 
