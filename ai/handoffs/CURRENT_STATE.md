@@ -1,121 +1,99 @@
 # Task
 
-TASK-056 implementation session: implemented `ai/tasks/TASK-056-spec.md` (DRAFT-3, APPROVED FOR
-IMPLEMENTATION, 9.6/10) — the full UI/UX redesign spec, Phases 1 and 2 together (all 7 implementation items:
-Designs A-E). Client-only, no server/shared/DB changes, per the spec's own Constraints.
-**Implemented, lint/test-verified, and live-verified in local dev across 3 widths. Not yet committed**
-(commit-only-on-request convention, unchanged from prior sessions).
+TASK-057 spec-drafting session: drafted and revised `ai/tasks/TASK-057-spec.md` through five architect
+review rounds — **now DRAFT-6, APPROVED FOR IMPLEMENTATION (pending Connor's own final sign-off)** — a
+visual design-system migration spec ("Modern Farmhouse") turning the 11 Gemini-generated scaffolds in
+`ai/design/2026-08-gemini-redesign/` into a concrete, reusable token + component-class architecture. No
+implementation code written this session. One real-build investigation was run directly against this
+project's toolchain during round 2, fully reverted (`git status` confirmed clean after).
 
 # What was done this session
 
-- **Design A investigation (the one decision the spec explicitly left open):** the 3 recipe-suggestion data
-  shapes (pantry AI suggestion, web suggestion, chat's richer ingredients/prep-steps/notes breakdown) don't
-  unify cleanly enough for a single fixed-shape component, so new
-  [RecipeSuggestionCard.jsx](../../client/src/components/recipes/RecipeSuggestionCard.jsx) uses data-driven
-  optional sections (`badge`, `tags`, `usesExpiring`, `footerNote`, an `onSave`/`isSaving`/`isSaved` pair,
-  `onBlock`, and a `children` slot for chat's extra content) rather than `show*` boolean flags — stays under
-  the spec's ~4-5-prop smell test. Callbacks receive the original `item` object unchanged (not a
-  reconstructed subset), preserving each caller's existing save/block payload shape exactly.
-- Wired into all 3 call sites, each caller's own inline card component deleted:
-  [EatThisNow.jsx](../../client/src/components/dashboard/EatThisNow.jsx) (removed `SuggestionCard`),
-  [RecipesPage.jsx](../../client/src/pages/RecipesPage.jsx) (removed `WebSuggestionCard`),
-  [ChatPage.jsx](../../client/src/pages/ChatPage.jsx) (removed the inline recipe-card JSX block, extra
-  content passed via `children`).
-- Design C: new
-  [AddRecipeMenu.jsx](../../client/src/components/recipes/AddRecipeMenu.jsx) — no reusable menu primitive
-  existed in this codebase, so this is a small self-contained disclosure component (Enter/Space via the
-  native trigger button, `ArrowDown` on open moves focus to the first item, `Escape` closes and refocuses
-  the trigger, click-outside closes) consolidating Upload/Import/Find under one "+ Add Recipe" trigger in
-  `RecipesPage.jsx`. "Blocked Recipes" demoted to a text link in the filter bar; recipe name-search input
-  added to the same filter bar (same case-insensitive substring matching as the existing `filterTag`).
-- Design B: `PantryTable.jsx` gained an `md`-and-below card render path (`PantryCard`) reusing the existing
-  `StorageBadge`/`ExpiryBadge`/`StatusLabel` pieces and the same `onEdit`/`onMarkUsed`/`onToggleFreeze`/
-  `onSplit`/`onDelete` callbacks — desktop table unchanged, `hidden md:block` / `md:hidden` split. Edit/✓
-  Used/Freeze stay directly visible at a 44×44px touch target; Split/Delete moved behind a new
-  `ItemOverflowMenu` (`aria-haspopup`/`aria-expanded`/labelled menu, same disclosure pattern as
-  `AddRecipeMenu`). `PantryPage.jsx` added a name-filter input (same matching rule) and a `md:hidden`
-  skeleton-card loading state alongside the existing table skeleton.
-- Design D: `QuickAdd.jsx` gained a category `<select>` defaulting to the user's last-used category via
-  `localStorage` (`quickAdd.lastCategory`) instead of always POSTing `category: 'Other'` — fixes the P1-1
-  silent-miscategorization gap. Also fixed the spec's own flagged Open Question:
-  [AddItemModal.jsx](../../client/src/components/pantry/AddItemModal.jsx) had a hardcoded `CATEGORIES` array
-  byte-identical to `shared/pantryCategories.js` but never imported it — now imports
-  `PANTRY_CATEGORIES` from there via the existing `@shared` alias. (Not in the spec's original Allowed
-  Files list, but explicitly anticipated by the spec's own Open Questions section as "a one-line import fix
-  bundled into Design D.")
-- Design E: `EatThisNow.jsx`'s idle/empty state gained a "Prefer to just ask? → Chat" link to `/`.
-- `npm run lint` (root): clean. `npm test` (root): 117/117 passing (19 shared + 98 server), unchanged —
-  this spec touches no server/shared code, so zero regression risk there by construction.
-- `git status --short` after implementation: exactly the spec's Allowed Files list (`EatThisNow.jsx`,
-  `RecipesPage.jsx`, `ChatPage.jsx`, `PantryPage.jsx`, `PantryTable.jsx`, `QuickAdd.jsx`) plus 2 new files
-  (`RecipeSuggestionCard.jsx`, `AddRecipeMenu.jsx` — both anticipated by Design A/C) plus the one
-  spec-authorized addition (`AddItemModal.jsx`, see above) plus the pre-existing unrelated
-  `.claude/settings.local.json` change already present at session start. No `server/`, `shared/`, or
-  migration files touched — matches the spec's Forbidden Files exactly.
-- **Live-verified in local dev** (server on :3001, client on :5183, already-authenticated Clerk session,
-  Connor's real household data):
-  - Chat: existing recipe-suggestion history rendered correctly through the new shared card (ingredients,
-    footer time metadata, "Saved" state, block button all intact).
-  - Recipes: `+ Add Recipe` menu opens with all 3 options, `Escape` closes it and returns focus to the
-    trigger (confirmed via `document.activeElement`); "Blocked Recipes" demoted correctly; existing saved
-    recipes render unchanged (they use `RecipeCard.jsx`, untouched by this spec).
-  - Pantry at 375px: table hidden, 31 item cards render, `document.body.scrollWidth === innerWidth` (no
-    horizontal scroll — the spec's own acceptance criterion); Edit/✓Used/Freeze buttons measured at
-    44×44px+; overflow menu opens with `aria-expanded="true"` and exposes Split/Delete; name-search filter
-    correctly narrowed 31 items to 1 matching item.
-  - Pantry at 768px and 1280px: table visible, card view hidden, no horizontal overflow at either width.
-  - Dashboard: cross-link renders; Quick Add's category select defaults to "Other" with no
-    `localStorage` entry present. Real end-to-end test: added "ZZTEST QuickAdd Widget" with category
-    "Produce" — POST body confirmed `category: "Produce"` (same endpoint/shape as before, only the value is
-    now dynamic), `localStorage['quickAdd.lastCategory']` correctly updated to `"Produce"` afterward.
-    Cleaned up immediately via `DELETE /api/pantry/76` — confirmed removed via a follow-up `GET
-    /api/pantry`.
-  - Console: only benign Vite HMR websocket-connection noise from this sandboxed preview environment — no
-    React/component errors on any page touched.
-  - Both dev servers stopped cleanly at the end of the session.
+**DRAFT-1 → DRAFT-4 (rounds 1-3, 8.6 → 9.2 → 9.7 → 9.8):** built the primitive→semantic→shared-class→
+screen architecture from scratch against the codebase's actual state (zero design tokens; `orange-*`
+hardcoded across 29 files) and the scaffold PNGs (pixel-sampled with Python/PIL, not eyeballed). Every
+required review change across these rounds was resolved outright, several via direct empirical
+verification rather than argument: recomputed and replaced 2 failing contrast values; removed Shopping's
+mobile layout redesign from scope (→ future TASK-058, not drafted); traced Chat's "Action Confirmed"
+feature into the real server code and removed it after finding its required signal missing for 3 of 4
+tools; ran a real `npm run build` to test a reviewer's specific `@apply` claim (found wrong) and discovered
+a more serious `@import`-ordering bug in the process (fixed); closed both Phase 0 decisions (5-variant
+source badges with a restrained 2-tier color split; unified tag-chip tint) with concrete values, not
+placeholders. Full per-round detail: the spec's own Architect Review History table.
+
+**Review round 4 → DRAFT-5 (9.9/10):** 2 required changes, both real bugs in the spec's *prose*, not the
+architecture: (1) DRAFT-4 falsely claimed untouched CRUD modals would "automatically inherit" the new
+shared classes — fixed by stating plainly that `AddItemModal.jsx`/`SplitItemModal.jsx`/`BuildListModal.jsx`/
+`AddToListModal.jsx`/`AddRecipesModal.jsx`/`DietaryProfileForm.jsx` get no migration in this spec and will
+visibly clash with the rest of the app until a future task. (2) The contrast-check wording said "against
+rendered pixels" — fetched the cited W3C non-text-contrast page directly (not trusted on citation alone),
+confirmed it says contrast should be evaluated from resolved CSS values, not anti-aliased screenshot pixels;
+reworded 4 sections accordingly.
+
+**Review round 5 → DRAFT-6, this round (9.9/10 → APPROVED):** the review called this "the strongest spec in
+the TASK-05x series" and required only one small clarification, applied along with 3 non-blocking
+recommendations:
+- Added an explicit rule that `.btn` is an internal CSS composition primitive, never consumed bare in JSX —
+  only `.btn-primary`/`.btn-secondary`/etc. are valid call-site classes (Section 3).
+- Added design-token governance comments to the token file itself (Section 2.1) — 3 rules (components
+  consume semantic tokens only, never primitives directly; screens never introduce new raw colors).
+- **Declined** the suggestion to rename `surface`/`page` to a more scalable vocabulary — the review's own
+  text explicitly said not to unless a broader vocabulary is actually needed, which it isn't yet.
+- Named the CRUD-modal gap's future task as a placeholder so it doesn't disappear from planning — **caught a
+  self-inflicted naming collision while doing this**: DRAFT-2's own review history had already informally
+  floated "TASK-059" for an unrelated future task (the icon-system follow-up); used **TASK-060** instead and
+  documented why, so a future reader doesn't find two different tasks both informally called "TASK-059."
+- Answered an open question the review raised rather than leaving it implicit: `components.css` stays the
+  source of truth for shared visual patterns even if JSX component wrappers are introduced later; any future
+  wrapper composes the existing classes rather than reimplementing styling (Section 12).
+
+# Files Modified
+
+- `ai/tasks/TASK-057-spec.md` (DRAFT-1 → DRAFT-6 across 5 review rounds; now APPROVED)
+- `ai/handoffs/CURRENT_STATE.md` (this file)
+- `ai/handoffs/archive/TASK-056.md` (created early in the session, unchanged since)
+- **Not modified, net of cleanup:** `client/src/index.css`, `client/tailwind.config.js`,
+  `client/src/styles/` — touched temporarily for round 2's build investigation, fully reverted.
 
 # Decisions Made
 
-- Design A's composition: data-driven optional props + `children` slot, not a fixed single shape and not a
-  3-component split — see "What was done" above for the reasoning.
-- `RecipeSuggestionCard`/`AddRecipeMenu`/`ItemOverflowMenu` callbacks always receive the original data object
-  (`item`, `recipe`), never a reconstructed subset — avoids the data-loss bug caught during implementation
-  (EatThisNow's `handleSave` needs `suggestion.description`, which an earlier draft of the card would have
-  dropped).
-- `ItemOverflowMenu`'s dropdown opens upward (`bottom-full`) rather than downward — an unspecified detail;
-  chosen to avoid clipping against the viewport bottom for cards near the end of a long mobile list.
-- Chat's recipe-card time metadata moved from its own line near the top (original layout) into the shared
-  card's bottom footer slot — an intentional visual change, not an oversight: Design A's own UX requirement
-  is that recipe-suggestion metadata placement becomes *consistent* across all 3 call sites, which by
-  definition changes at least 2 of the 3 original layouts.
+- Caught and fixed a naming collision in my own review-history table (TASK-059 informally used for two
+  different things across rounds) before it could confuse a future implementation session — worth noting
+  since it's the kind of small consistency bug that's easy to introduce while iterating across many rounds.
+- Declined a reviewer suggestion for the first time this spec's history for a clean reason (the review
+  itself said not to apply it) rather than reflexively applying every suggestion — consistent with the
+  "critically assess before applying" discipline maintained across all 5 rounds.
 
-# Known Risks
+# Remaining Work
 
-- **Design A's residual risk was process, not outcome, per the spec's own Section 7** — that risk played out
-  as expected (real implementation time on the composition decision) but did not surface a bad outcome;
-  worth a second look in a future session if any of the 3 call sites' data shapes change.
-- **Pantry overflow menu hides Split/Delete one tap deeper** — the spec (Section 7) flagged this as a
-  judgment call for Connor to review, not decided unilaterally; unchanged by this session.
+1. **Spec is architect-approved.** Awaiting Connor's own explicit go-ahead before an implementation session
+   starts, per this repo's standing convention (spec approval and implementation are separate sessions).
+2. TASK-058 (Shopping mobile layout) and TASK-060 (mechanical CRUD-modal class migration) are both named as
+   placeholders in TASK-057-spec.md but neither is drafted yet.
+3. Phase 0 of TASK-057 is fully closed — an implementation session can start directly at Phase 1 (Section 8)
+   once Connor gives the go-ahead.
+
+# Known Risks / Open Questions
+
+- None remaining in the spec itself. The CRUD-modal visual gap and the Shopping mobile-layout gap are both
+  known, accepted, and explicitly documented limitations with named future tasks, not open questions.
 - Carried forward, unrelated to this task: TASK-054's `consume_pantry_item`-on-truncated-item gap; TASK-053's
   Vercel Preview streaming verification; OpenAI billing confirmation; `server/.env.vercel`'s fate; the two
-  outstanding Manual Developer Actions (root `.env` deletion, `server/.env.local` cleanup) from TASK-055 —
-  see [archive/TASK-055.md](archive/TASK-055.md) and [[project_go_public_readiness]].
-- Phase 3 (icon system audit, Sidebar/PageHeader coupling) remains explicitly deferred per the spec —
-  not started, not needed yet.
+  outstanding Manual Developer Actions (root `.env` deletion, `server/.env.local` cleanup) from TASK-055;
+  TASK-056's own carried-forward Pantry-overflow-menu judgment call — see
+  [archive/TASK-056.md](archive/TASK-056.md), [archive/TASK-055.md](archive/TASK-055.md), and
+  [[project_go_public_readiness]].
 
 # Recommended Next Action
 
-1. Connor review in browser, then commit when satisfied — no further implementation work is required for
-   TASK-056's approved scope.
-2. Unrelated carry-forward items above are still open whenever convenient; none block TASK-056.
+Confirm with Connor that implementation should begin, then start a fresh session at TASK-057-spec.md's
+Phase 1 (Section 8) — Phase 0's decisions are all closed, nothing blocks starting there directly.
 
 # Context Notes
 
 - branch: `staging`.
-- Dev servers were started via `.claude/launch.json` (`server` on 3001, `client` on 5183); both stopped
-  cleanly at the end of the session. No worktree was used — all edits were made directly in the main working
-  tree, so no PowerShell Merge Block applies here.
-- Browser pane session was already Clerk-authenticated at the start of this session.
+- No dev servers were started this round.
+- No worktree was used.
 
 ---
 
@@ -125,3 +103,5 @@ Designs A-E). Client-only, no server/shared/DB changes, per the spec's own Const
   [archive/TASK-047-053.md](archive/TASK-047-053.md)
 - TASK-054 (chat context-size cap implementation session): see [archive/TASK-054.md](archive/TASK-054.md)
 - TASK-055 (post-audit hardening implementation session): see [archive/TASK-055.md](archive/TASK-055.md)
+- TASK-056 (UI/UX effort-reduction redesign implementation session): see
+  [archive/TASK-056.md](archive/TASK-056.md)
