@@ -1,25 +1,13 @@
 import { z } from 'zod';
 import * as pantryService from '../../pantryService.js';
 import { getDefaultStorageLocation } from '../../../../shared/pantryDefaults.js';
+import { PANTRY_CATEGORIES } from '../../../../shared/pantryCategories.js';
 
 const addItemSchema = z.object({
   name: z.string().min(1).max(200),
   quantity: z.coerce.number().positive().default(1),
   unit: z.string().min(1).max(50).default('item'),
-  category: z
-    .enum([
-      'Produce',
-      'Dairy',
-      'Meat',
-      'Seafood',
-      'Bakery',
-      'Frozen',
-      'Pantry',
-      'Beverages',
-      'Condiments',
-      'Other',
-    ])
-    .default('Other'),
+  category: z.enum(PANTRY_CATEGORIES).default('Other'),
   shelfLifeDays: z.coerce.number().int().nonnegative().optional(),
   storageLocation: z
     .enum(['pantry', 'refrigerator', 'freezer'])

@@ -2,8 +2,8 @@ import express from 'express';
 import multer from 'multer';
 import { toFile } from 'openai';
 import { clerkAuth } from '../middleware/clerkAuth.js';
-import * as householdService from '../services/householdService.js';
 import { resolveProvider } from '../services/ai/resolveProvider.js';
+import { requireAiAccess } from '../middleware/requireAiAccess.js';
 import { aiRateLimit } from '../middleware/aiRateLimit.js';
 
 const router = express.Router();
@@ -23,6 +23,7 @@ const ALLOWED_MIME_TYPES = new Set([
 router.post(
   '/',
   clerkAuth,
+  requireAiAccess,
   aiRateLimit,
   upload.single('audio'),
   async (req, res) => {
@@ -37,12 +38,7 @@ router.post(
     }
 
     try {
-      const aiConfig = await householdService.getAiConfig(req.user.householdId);
-      const provider = resolveProvider({
-        clerkUserId: aiConfig.provider,
-        decryptedKey: aiConfig.decryptedKey,
-        publicAiAccessEnabled: aiConfig.publicAiAccessEnabled,
-      });
+      const provider = resolveProvider();
 
       const language =
         typeof req.body.language === 'string'

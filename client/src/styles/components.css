@@ -1,0 +1,67 @@
+@layer components {
+  /* Buttons — base + variant, matching the scaffolds' full-pill (rounded-full) button shape.
+     RULE: `.btn` is an internal CSS composition primitive only — it has no complete visual treatment on
+     its own (no fill, no border, no text color) and must never be used bare in JSX. Application markup
+     consumes `.btn-primary`/`.btn-secondary`/etc. only. This is also why `.btn` itself never appears as a
+     standalone rule in compiled output — nothing should ever reference it directly, so there's nothing to
+     tree-shake away from. */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold
+      transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50
+      disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary   { @apply btn bg-primary text-on-primary hover:bg-primary-hover; }
+  .btn-secondary { @apply btn border border-primary text-primary bg-transparent hover:bg-primary/5; }
+  .btn-text-danger {
+    @apply text-sm font-medium text-status-critical-text hover:underline;
+  }
+
+  /* Cards — the generic surface container used for every panel/section */
+  .card {
+    @apply bg-surface rounded-2xl border border-border shadow-sm;
+  }
+  .card-callout {
+    @apply bg-highlight border border-highlight-border rounded-2xl;
+  }
+
+  /* Form inputs */
+  .input {
+    @apply bg-surface border border-border rounded-lg px-3 py-2 text-sm text-ink
+      placeholder:text-ink-subtle focus:outline-none focus:ring-2 focus:ring-primary/40
+      focus:border-primary;
+  }
+
+  /* Badges/pills — base + status/tag/source variants */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+  .badge-status-critical { @apply badge bg-status-critical-bg text-status-critical-text; }
+  .badge-status-warning  { @apply badge bg-status-warning-bg text-status-warning-text; }
+  .badge-status-ok       { @apply badge bg-status-ok-bg text-status-ok-text; }
+  .badge-tag             { @apply badge bg-accent-tan-bg text-accent-tan-text; }
+  .chip-allergy          { @apply badge bg-accent-coral-bg text-status-critical-text font-semibold; }
+
+  /* Recipe source badges — shared base + 5 named variants (Section 7). Icon + label is the primary
+     distinguishing mechanism; color is deliberately restrained to 2 visual tiers (AI-generated vs.
+     human-provided), not 5 arbitrary hues. Zero new primitives: reuses primary/on-primary/border/
+     ink-muted only. */
+  .badge-source { @apply badge font-semibold; }
+  .badge-source-ai { @apply badge-source bg-primary text-on-primary; }
+  .badge-source-uploaded,
+  .badge-source-web,
+  .badge-source-manual,
+  .badge-source-url {
+    @apply badge-source bg-transparent border border-border text-ink-muted;
+  }
+
+  /* Nav links (Sidebar) */
+  .nav-link {
+    @apply flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors
+      text-ink-muted hover:bg-page hover:text-ink;
+  }
+  .nav-link-active { @apply nav-link bg-status-ok-bg text-primary; }
+
+  /* Chat bubbles */
+  .chat-bubble-user      { @apply bg-primary text-on-primary rounded-2xl px-4 py-3; }
+  .chat-bubble-assistant { @apply bg-surface text-ink rounded-2xl px-4 py-3 shadow-sm; }
+}

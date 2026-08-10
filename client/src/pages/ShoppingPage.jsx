@@ -65,7 +65,7 @@ export default function ShoppingPage() {
         actions={
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 shadow-sm"
+            className="btn-primary shadow-sm"
           >
             <span aria-hidden>+</span> New List
           </button>
@@ -75,7 +75,7 @@ export default function ShoppingPage() {
       {loading ? (
         <div className="space-y-2 animate-pulse">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-12 bg-gray-100 rounded-lg" />
+            <div key={i} className="h-12 bg-page rounded-lg" />
           ))}
         </div>
       ) : lists.length === 0 ? (
@@ -84,8 +84,8 @@ export default function ShoppingPage() {
           <span className="text-5xl mb-4" aria-hidden>
             🛒
           </span>
-          <p className="text-lg font-medium text-gray-700">No lists yet.</p>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-lg font-medium text-ink-muted">No lists yet.</p>
+          <p className="text-sm text-ink-subtle mt-1">
             Start a blank list, or build one from your saved recipes.
           </p>
         </div>
@@ -94,7 +94,7 @@ export default function ShoppingPage() {
         <div className="flex gap-6 flex-1 min-h-0">
           {/* Left: list of shopping lists */}
           <aside className="w-56 flex-shrink-0 flex flex-col gap-1">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 px-1">
+            <p className="text-xs font-semibold text-ink-subtle uppercase tracking-wider mb-1 px-1">
               Your Lists
             </p>
             {lists.map((list) => (
@@ -102,14 +102,14 @@ export default function ShoppingPage() {
                 key={list.id}
                 className={`group flex items-center justify-between rounded-lg px-3 py-2.5 cursor-pointer transition-colors ${
                   list.id === selectedId
-                    ? 'bg-orange-50 border border-orange-200'
-                    : 'hover:bg-gray-50 border border-transparent'
+                    ? 'bg-status-ok-bg border border-status-ok-bg'
+                    : 'hover:bg-page border border-transparent'
                 }`}
                 onClick={() => setSelectedId(list.id)}
               >
                 <span
                   className={`text-sm font-medium truncate ${
-                    list.id === selectedId ? 'text-orange-700' : 'text-gray-700'
+                    list.id === selectedId ? 'text-primary' : 'text-ink-muted'
                   }`}
                 >
                   {list.name}
@@ -120,7 +120,7 @@ export default function ShoppingPage() {
                     handleDelete(list.id);
                   }}
                   title="Delete list"
-                  className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-colors text-xs ml-1 flex-shrink-0"
+                  className="opacity-0 group-hover:opacity-100 text-ink-subtle hover:text-status-critical-text transition-colors text-xs ml-1 flex-shrink-0"
                   aria-label={`Delete list "${list.name}"`}
                 >
                   ✕
@@ -130,21 +130,21 @@ export default function ShoppingPage() {
           </aside>
 
           {/* Right: items for the selected list */}
-          <div className="flex-1 min-w-0 bg-white rounded-xl border border-gray-200 p-5 overflow-y-auto">
+          <div className="card flex-1 min-w-0 p-5 overflow-y-auto">
             {selectedList ? (
               <>
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-semibold text-gray-900 text-lg">
+                  <h2 className="font-semibold text-ink text-lg">
                     {selectedList.name}
                   </h2>
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => setShowAddRecipesModal(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 border border-orange-200 text-orange-700 rounded-lg text-xs font-medium hover:bg-orange-50"
+                      className="btn-secondary text-xs px-3 py-1.5"
                     >
                       <span aria-hidden>+</span> Add Recipe
                     </button>
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-ink-subtle">
                       Created{' '}
                       {new Date(selectedList.createdAt).toLocaleDateString()}
                     </span>
@@ -156,7 +156,7 @@ export default function ShoppingPage() {
                 />
               </>
             ) : (
-              <p className="text-sm text-gray-400 text-center py-8">
+              <p className="text-sm text-ink-subtle text-center py-8">
                 Select a list to view its items.
               </p>
             )}

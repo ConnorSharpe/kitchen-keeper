@@ -1,8 +1,8 @@
-import { randomUUID } from 'crypto';
 import express from 'express';
 import { z } from 'zod';
 import { clerkAuth } from '../middleware/clerkAuth.js';
 import { validate } from '../middleware/validate.js';
+import { generateRequestId } from '../utils/requestId.js';
 
 const router = express.Router();
 router.use(clerkAuth);
@@ -18,7 +18,7 @@ const reportSchema = z.object({
 
 // POST /api/client-errors — fire-and-forget report from ErrorBoundary.componentDidCatch.
 router.post('/', validate(reportSchema), async (req, res) => {
-  const requestId = randomUUID().split('-')[0]; // matches household.js's /members convention
+  const requestId = generateRequestId(); // matches household.js's /members convention
   // Vercel auto-populates this for Git-connected deployments, but whether it's
   // actually exposed to the runtime depends on the project's "Automatically
   // expose System Environment Variables" setting — falls back to 'unknown'

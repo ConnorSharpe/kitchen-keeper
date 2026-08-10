@@ -24,6 +24,12 @@ export class AIProvider {
     throw new Error('Not implemented');
   }
 
+  // Same contract as sendMessage, but invokes onToken(deltaText) synchronously for
+  // each text fragment as it arrives, before resolving with the final response.
+  async streamMessage(session, message, onToken) {
+    throw new Error('Not implemented');
+  }
+
   // Extracts tool calls from a raw provider response.
   // Returns: [{ callId: string, name: string, args: object }]
   extractToolCalls(response) {

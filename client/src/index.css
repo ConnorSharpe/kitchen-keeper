@@ -1,3 +1,63 @@
+@import './styles/components.css';
+
 @tailwind base;
+/*
+ * Design token rules:
+ * 1. Components (client/src/styles/components.css) consume semantic tokens (Section 2.2) only.
+ * 2. Components never reference these primitives directly — that's the whole point of the semantic layer.
+ * 3. Screens/JSX never introduce new raw color values — reach for an existing semantic token or shared
+ *    component class; propose a new token here if neither fits, don't invent one inline.
+ */
+@layer base {
+  :root {
+    /* Forest green family — sampled from the header bar (01, 02, 06) and every solid
+       button (Suggest Meals, Add, Scan Receipt, Edit/Mark Used/Freeze). All scaffold
+       greens cluster tightly (#21442e-#274a34); one canonical value is enough. */
+    --kk-green-900: 33 68 46;    /* #21442e — hover/active state */
+    --kk-green-800: 37 72 50;    /* #254832 — canonical brand green */
+
+    /* Warm neutrals — sampled from card interiors (01, 02) and the page background (01, 03) */
+    --kk-cream-100: 253 250 245; /* #fdfaf5 — card/surface background */
+    --kk-cream-300: 237 229 218; /* #ede5da — page background */
+    --kk-cream-500: 215 207 196; /* #d7cfc4 — borders, muted dividers */
+
+    /* Ink — sampled from body/heading text (01) */
+    --kk-ink-900: 45 38 28;      /* #2d261c */
+
+    /* Status family — pill backgrounds sampled from the pantry/dashboard urgency pills (01, 03);
+       text colors computed (not sampled — see note above), verified via the WCAG 2.1 relative-
+       luminance formula against the paired background, not just visual inspection:
+         L = 0.2126*R_lin + 0.7152*G_lin + 0.0722*B_lin (sRGB-linearized channels)
+         contrast = (L_lighter + 0.05) / (L_darker + 0.05)
+       DRAFT-1's estimated values (#7a2e28 on #da877f ≈ 3.45:1; #7a5a18 on #e8c07a ≈ 3.71:1) were
+       independently recomputed during architect review and confirmed to fail the 4.5:1 AA normal-text
+       target — both replaced below with values that clear it with margin. */
+    --kk-rose-200: 218 135 127;  /* #da877f — critical/expired pill background */
+    --kk-rose-800: 80 26 21;     /* #501a15 — computed ≈5.17:1 against rose-200 (was #7a2e28 ≈3.45:1, failed AA) */
+    --kk-gold-200: 232 192 122;  /* #e8c07a — urgent/warning pill background */
+    --kk-gold-800: 92 68 21;     /* #5c4415 — computed ≈5.35:1 against gold-200 (was #7a5a18 ≈3.71:1, failed AA) */
+    --kk-sage-200: 216 230 204;  /* #d8e6cc — ok/fine pill background */
+
+    /* Tag/callout family — sampled from Recipes' tag chips (07, 09) and Household's join-code callout (10b) */
+    --kk-tan-100: 245 223 160;   /* #f5dfa0 — recipe/dietary tag chip background */
+    --kk-amber-100: 255 242 226; /* #fff2e2 — callout box background (join-code box) */
+    --kk-amber-300: 235 224 204; /* #ebe0cc — callout box border */
+
+    /* Allergy/safety-critical chips — sampled from Household's allergy chips (10b); visibly more
+       saturated than the rose-200 status color, so kept as its own primitive rather than reused */
+    --kk-coral-300: 255 191 183; /* #ffbfb7 */
+
+    /* Muted text — NOT sampled from any scaffold (none shows a distinctly-styled placeholder/disabled
+       state); aliases Tailwind's own gray scale rather than inventing new gray primitives with no evidence
+       behind them. DRAFT-2 called gray-400 "already-AA-tested" — true against white (Tailwind's own docs
+       context), false against this app's actual cream surface: computed ≈2.44:1 against --kk-cream-100,
+       confirmed during architect review, a real AA failure. Replaced with gray-500, computed ≈4.64:1
+       against the same surface — passes. gray-600 (used for ink-muted, not ink-subtle) was independently
+       re-checked against both surface (≈7.25:1) and page (≈6.06:1) and is unaffected — it was never the
+       problem. */
+    --kk-gray-600: 75 85 99;     /* #4b5563 — Tailwind's gray-600 */
+    --kk-gray-500: 107 114 128;  /* #6b7280 — Tailwind's gray-500 — replaces gray-400, see note above */
+  }
+}
 @tailwind components;
 @tailwind utilities;

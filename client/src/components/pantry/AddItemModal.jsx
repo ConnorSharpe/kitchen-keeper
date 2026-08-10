@@ -4,19 +4,7 @@ import {
   STORAGE_LOCATIONS,
   STORAGE_LOCATION_LABELS,
 } from '../../utils/pantryDefaults.js';
-
-const CATEGORIES = [
-  'Produce',
-  'Dairy',
-  'Meat',
-  'Seafood',
-  'Bakery',
-  'Frozen',
-  'Pantry',
-  'Beverages',
-  'Condiments',
-  'Other',
-];
+import { PANTRY_CATEGORIES as CATEGORIES } from '@shared/pantryCategories.js';
 
 // HTML date inputs give "YYYY-MM-DD". Server's z.string().datetime() requires full ISO.
 // Treating all user-entered dates as UTC midnight avoids timezone drift.

@@ -4,81 +4,15 @@ import { useRecipes } from '../hooks/useRecipes.js';
 import { useRecipeBlocklist } from '../hooks/useRecipeBlocklist.js';
 import { api } from '../api/index.js';
 import RecipeCard from '../components/recipes/RecipeCard.jsx';
+import RecipeSuggestionCard from '../components/recipes/RecipeSuggestionCard.jsx';
 import RecipeModal from '../components/recipes/RecipeModal.jsx';
 import AddToListModal from '../components/shopping/AddToListModal.jsx';
 import RecipeUpload from '../components/recipes/RecipeUpload.jsx';
 import RecipeUrlImport from '../components/recipes/RecipeUrlImport.jsx';
 import RecipeReviewModal from '../components/recipes/RecipeReviewModal.jsx';
 import BlockedRecipesModal from '../components/recipes/BlockedRecipesModal.jsx';
+import AddRecipeMenu from '../components/recipes/AddRecipeMenu.jsx';
 import PageHeader from '../components/layout/PageHeader.jsx';
-
-// Web suggestion card — ephemeral until saved by user
-function WebSuggestionCard({ suggestion, onSave, isSaving, onBlock }) {
-  return (
-    <div className="bg-white rounded-xl border border-orange-200 shadow-sm p-4 flex flex-col gap-2">
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-semibold text-gray-900 leading-snug">
-          {suggestion.name}
-        </h3>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          {onBlock && (
-            <button
-              onClick={() => onBlock(suggestion)}
-              className="text-sm leading-none text-gray-300 hover:text-red-500 transition-colors"
-              aria-label="Don't suggest again"
-              title="Don't suggest again"
-            >
-              🚫
-            </button>
-          )}
-          <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">
-            From Web
-          </span>
-        </div>
-      </div>
-
-      {suggestion.description && (
-        <p className="text-xs text-gray-500 line-clamp-2">
-          {suggestion.description}
-        </p>
-      )}
-
-      <div className="flex flex-wrap gap-1">
-        {suggestion.tags?.slice(0, 3).map((tag) => (
-          <span
-            key={tag}
-            className="text-xs bg-gray-100 text-gray-600 rounded px-1.5 py-0.5"
-          >
-            {tag}
-          </span>
-        ))}
-      </div>
-
-      <div className="flex items-center justify-between mt-auto pt-1">
-        {suggestion.sourceUrl ? (
-          <a
-            href={suggestion.sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-600 hover:underline truncate max-w-[60%]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            View source
-          </a>
-        ) : (
-          <span />
-        )}
-        <button
-          onClick={() => onSave(suggestion)}
-          disabled={isSaving}
-          className="text-xs px-3 py-1.5 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:opacity-50 transition-colors"
-        >
-          {isSaving ? 'Saving…' : 'Save Recipe'}
-        </button>
-      </div>
-    </div>
-  );
-}
 
 export default function RecipesPage() {
   const {
@@ -117,6 +51,7 @@ export default function RecipesPage() {
   const [filterSource, setFilterSource] = useState('all');
   const [filterFavorites, setFilterFavorites] = useState(false);
   const [filterTag, setFilterTag] = useState('');
+  const [filterName, setFilterName] = useState('');
 
   useEffect(() => {
     refresh();
@@ -131,9 +66,14 @@ export default function RecipesPage() {
         !r.tags?.some((t) => t.toLowerCase().includes(filterTag.toLowerCase()))
       )
         return false;
+      if (
+        filterName &&
+        !r.name.toLowerCase().includes(filterName.toLowerCase())
+      )
+        return false;
       return true;
     });
-  }, [recipes, filterSource, filterFavorites, filterTag]);
+  }, [recipes, filterSource, filterFavorites, filterTag, filterName]);
 
   async function handleFindOnline() {
     setWebLoading(true);
@@ -295,61 +235,12 @@ export default function RecipesPage() {
         title="Recipes"
         subtitle={`${recipes.length} saved recipe${recipes.length !== 1 ? 's' : ''}`}
         actions={
-          <>
-            <button
-              onClick={handleOpenBlocklist}
-              className="text-sm px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              🚫 Blocked Recipes
-            </button>
-            <button
-              onClick={() => setShowUpload(true)}
-              data-tour="upload-recipe-image"
-              className="text-sm px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              📸 Upload Recipe Image
-            </button>
-            <button
-              onClick={() => setShowUrlImport(true)}
-              data-tour="import-recipe-url"
-              className="text-sm px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              🔗 Import from URL
-            </button>
-            <button
-              onClick={handleFindOnline}
-              disabled={webLoading}
-              data-tour="find-recipes-online"
-              className="text-sm px-3 py-2 rounded-md bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 transition-colors flex items-center gap-2"
-            >
-              {webLoading ? (
-                <>
-                  <svg
-                    className="animate-spin h-4 w-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8v8H4z"
-                    />
-                  </svg>
-                  Searching…
-                </>
-              ) : (
-                '🔍 Find Recipes Online'
-              )}
-            </button>
-          </>
+          <AddRecipeMenu
+            onUpload={() => setShowUpload(true)}
+            onImportUrl={() => setShowUrlImport(true)}
+            onFindOnline={handleFindOnline}
+            findOnlineLoading={webLoading}
+          />
         }
       />
 
@@ -357,24 +248,32 @@ export default function RecipesPage() {
       {webSuggestions.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-gray-800">
+            <h2 className="text-base font-semibold text-ink">
               Recipes Found Online
-              <span className="ml-2 text-sm font-normal text-gray-500">
+              <span className="ml-2 text-sm font-normal text-ink-subtle">
                 using your expiring ingredients
               </span>
             </h2>
             <button
               onClick={() => setWebSuggestions([])}
-              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-xs text-ink-subtle hover:text-ink-muted transition-colors"
             >
               Dismiss
             </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {webSuggestions.map((s) => (
-              <WebSuggestionCard
+              <RecipeSuggestionCard
                 key={s.name}
-                suggestion={s}
+                item={s}
+                name={s.name}
+                sourceUrl={s.sourceUrl}
+                description={s.description}
+                tags={s.tags}
+                badge={{
+                  label: 'From Web',
+                  className: 'badge-source-web',
+                }}
                 onSave={handleSaveWebSuggestion}
                 isSaving={savingName === s.name}
                 onBlock={handleBlockWebSuggestion}
@@ -386,10 +285,18 @@ export default function RecipesPage() {
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          placeholder="Search by name…"
+          value={filterName}
+          onChange={(e) => setFilterName(e.target.value)}
+          className="input w-40 px-2 py-1.5"
+        />
+
         <select
           value={filterSource}
           onChange={(e) => setFilterSource(e.target.value)}
-          className="text-sm border border-gray-300 rounded-md px-2 py-1.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-400"
+          className="input px-2 py-1.5"
         >
           <option value="all">All sources</option>
           <option value="upload">Uploaded</option>
@@ -399,12 +306,12 @@ export default function RecipesPage() {
           <option value="manual">Manual</option>
         </select>
 
-        <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer select-none">
+        <label className="flex items-center gap-1.5 text-sm text-ink-muted cursor-pointer select-none">
           <input
             type="checkbox"
             checked={filterFavorites}
             onChange={(e) => setFilterFavorites(e.target.checked)}
-            className="rounded border-gray-300 text-orange-500 focus:ring-orange-400"
+            className="rounded border-border text-primary focus:ring-primary/40"
           />
           Favorites only
         </label>
@@ -414,21 +321,29 @@ export default function RecipesPage() {
           placeholder="Filter by tag…"
           value={filterTag}
           onChange={(e) => setFilterTag(e.target.value)}
-          className="text-sm border border-gray-300 rounded-md px-2 py-1.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-400 w-36"
+          className="input w-36 px-2 py-1.5"
         />
 
-        {(filterSource !== 'all' || filterFavorites || filterTag) && (
+        {(filterSource !== 'all' || filterFavorites || filterTag || filterName) && (
           <button
             onClick={() => {
               setFilterSource('all');
               setFilterFavorites(false);
               setFilterTag('');
+              setFilterName('');
             }}
-            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-xs text-ink-subtle hover:text-ink-muted transition-colors"
           >
             Clear filters
           </button>
         )}
+
+        <button
+          onClick={handleOpenBlocklist}
+          className="ml-auto text-xs text-ink-subtle hover:text-ink-muted transition-colors"
+        >
+          🚫 Blocked Recipes
+        </button>
       </div>
 
       {/* Recipe grid */}
@@ -437,26 +352,26 @@ export default function RecipesPage() {
           {[...Array(3)].map((_, i) => (
             <div
               key={i}
-              className="bg-gray-100 rounded-xl h-56 animate-pulse"
+              className="bg-page rounded-xl h-56 animate-pulse"
             />
           ))}
         </div>
       ) : error ? (
         <div className="text-center py-16">
-          <p className="text-sm text-red-500">{error}</p>
+          <p className="text-sm text-status-critical-text">{error}</p>
           <button
             onClick={refresh}
-            className="mt-2 text-sm text-orange-600 hover:underline"
+            className="mt-2 text-sm text-primary hover:underline"
           >
             Retry
           </button>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
+        <div className="text-center py-16 text-ink-subtle">
           {recipes.length === 0 ? (
             <>
               <p className="text-4xl mb-3">📖</p>
-              <p className="text-sm font-medium text-gray-600">
+              <p className="text-sm font-medium text-ink-muted">
                 No saved recipes yet.
               </p>
               <p className="text-xs mt-1">
@@ -465,7 +380,7 @@ export default function RecipesPage() {
             </>
           ) : (
             <>
-              <p className="text-sm font-medium text-gray-600">
+              <p className="text-sm font-medium text-ink-muted">
                 No recipes match your filters.
               </p>
               <button
@@ -473,8 +388,9 @@ export default function RecipesPage() {
                   setFilterSource('all');
                   setFilterFavorites(false);
                   setFilterTag('');
+                  setFilterName('');
                 }}
-                className="mt-2 text-xs text-orange-600 hover:underline"
+                className="mt-2 text-xs text-primary hover:underline"
               >
                 Clear filters
               </button>

@@ -22,7 +22,6 @@ export const households = pgTable('households', {
   aiProvider: text('ai_provider'), // deprecated — kept for schema compat; unused after TASK-016B
   aiApiKey: text('ai_api_key'), // deprecated — kept for schema compat; unused after TASK-016B
   clerkUserId: text('clerk_user_id').unique(),
-  openaiApiKey: text('openai_api_key'), // AES-256-GCM ciphertext: iv:authTag:encrypted
 });
 
 export const pantryItems = pgTable('pantry_items', {

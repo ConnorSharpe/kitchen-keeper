@@ -23,3 +23,12 @@ export function getExpiryStatus(expiryDateStr) {
   if (days <= 7) return 'warning';
   return 'ok';
 }
+
+function isExpiringWithin(item, withinDays) {
+  const days = getExpiryDays(item.expiryDate);
+  return days !== null && days >= 0 && days <= withinDays;
+}
+
+export function getExpiringItems(items, withinDays = 7) {
+  return items.filter((item) => isExpiringWithin(item, withinDays));
+}

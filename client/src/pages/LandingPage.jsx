@@ -11,42 +11,36 @@ const FEATURES = [
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-page flex flex-col">
       <header className="px-6 py-4">
-        <span className="text-lg font-bold text-orange-600">Kitchen Keeper</span>
+        <span className="text-lg font-bold text-primary">Kitchen Keeper</span>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center px-6 py-12 text-center">
-        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 max-w-2xl">
+        <h1 className="text-3xl sm:text-4xl font-bold text-primary max-w-2xl">
           Stop throwing away food you forgot you had.
         </h1>
-        <p className="mt-4 text-gray-500 max-w-xl">
+        <p className="mt-4 text-ink-subtle max-w-xl">
           Kitchen Keeper is an AI-powered food waste management app for households. Track your pantry, see
-          what's expiring, get AI meal suggestions tailored to what you have on hand, and share it all with
-          your family — from your phone or browser.
+          what&apos;s expiring, get AI meal suggestions tailored to what you have on hand, and share it all
+          with your family — from your phone or browser.
         </p>
 
         <div className="mt-8 flex flex-col sm:flex-row gap-3">
-          <Link
-            to="/sign-up"
-            className="px-6 py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-lg transition-colors"
-          >
+          <Link to="/sign-up" className="btn-primary px-6 py-2.5">
             Create account
           </Link>
-          <Link
-            to="/sign-in"
-            className="px-6 py-2.5 border border-gray-300 hover:bg-gray-100 text-gray-700 font-medium rounded-lg transition-colors"
-          >
+          <Link to="/sign-in" className="btn-secondary px-6 py-2.5">
             Log in
           </Link>
         </div>
 
         <div className="mt-16 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 max-w-4xl text-left">
           {FEATURES.map((f) => (
-            <div key={f.title} className="bg-white border border-gray-200 rounded-2xl p-5">
+            <div key={f.title} className="card p-5">
               <div className="text-2xl mb-2" aria-hidden>{f.icon}</div>
-              <h2 className="font-semibold text-gray-900 mb-1">{f.title}</h2>
-              <p className="text-sm text-gray-500">{f.text}</p>
+              <h2 className="font-semibold text-ink mb-1">{f.title}</h2>
+              <p className="text-sm text-ink-subtle">{f.text}</p>
             </div>
           ))}
         </div>

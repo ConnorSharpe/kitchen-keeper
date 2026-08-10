@@ -2,7 +2,7 @@ import { put, del } from '@vercel/blob';
 import { randomUUID } from 'crypto';
 import { db } from '../db/client.js';
 import { recipes } from '../db/schema.js';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 
 // JSON-serialized columns — stored as text in the DB for portability
 const JSON_FIELDS = ['ingredients', 'steps', 'tags'];
@@ -125,7 +125,7 @@ export async function update(householdId, id, data) {
   await db
     .update(recipes)
     .set({ ...serialize(data), updatedAt: new Date().toISOString() })
-    .where(eq(recipes.id, id));
+    .where(and(eq(recipes.id, id), eq(recipes.householdId, householdId)));
 
   const [updated] = await db.select().from(recipes).where(eq(recipes.id, id));
   return { status: 'ok', recipe: parse(updated) };
@@ -143,7 +143,9 @@ export async function remove(householdId, id) {
     );
   }
 
-  await db.delete(recipes).where(eq(recipes.id, id));
+  await db
+    .delete(recipes)
+    .where(and(eq(recipes.id, id), eq(recipes.householdId, householdId)));
   return { status: 'ok' };
 }
 
@@ -158,7 +160,7 @@ export async function toggleFavorite(householdId, id) {
       isFavorite: !existing.isFavorite,
       updatedAt: new Date().toISOString(),
     })
-    .where(eq(recipes.id, id));
+    .where(and(eq(recipes.id, id), eq(recipes.householdId, householdId)));
 
   const [updated] = await db.select().from(recipes).where(eq(recipes.id, id));
   return { status: 'ok', recipe: parse(updated) };

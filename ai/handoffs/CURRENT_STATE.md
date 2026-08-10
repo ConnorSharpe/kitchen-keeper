@@ -1,143 +1,172 @@
 # Task
 
-TASK-049 implementation session: built `ai/tasks/TASK-049-spec.md` (DRAFT-3, approved) end to end —
-blank-list creation, and the new add-recipe(s)-to-an-existing-list capability. **Implemented and
-live-verified this session. Not yet committed** — working tree has the changes, no commit made (only
-commit on explicit request, per session convention).
+TASK-057 implementation: full visual design-system migration ("Modern Farmhouse") — Phases 1-3 of the
+approved spec (`ai/tasks/TASK-057-spec.md`) shipped in one session, plus a Connor-authorized deviation
+resolving judgment call #2 (below). Phase 4 (optional app-wide icon system, Section 6) not started — it was
+always scoped as separable.
 
 # Current Status
 
-**Implementation complete, live-verified in the local dev environment, test data cleaned up. Awaiting
-Connor's go-ahead to commit.**
+All of Phase 1 (token/component foundation), Phase 2 (Sidebar, Dashboard, Pantry, Chat), and Phase 3
+(Recipes, Shopping, Household, Landing) are implemented, build-clean, lint-clean, and test-clean (98/98
+passing, zero regressions). Contrast-gated per the spec's hard Phase 1 requirement — verified against live
+computed CSS in the running app, not just hand math (see Verification Results). After the initial push,
+Connor explicitly authorized migrating `DietaryProfileForm.jsx` (judgment call #2) to resolve the Section
+4G / Forbidden Files contradiction in favor of the scaffold — done and pushed as a follow-up commit.
 
-## What was done this session
+# Files Modified
 
-- Implemented exactly per the spec's Allowed Files list, no scope drift:
-  - [shoppingService.js](../../server/services/shoppingService.js): extracted `aggregateIngredients` and
-    `subtractPantry` out of `buildFromRecipes` as private helpers (no logic change — verified via a live
-    2-recipe build, see below); added `subtractExistingListItems` (checked rows excluded from coverage,
-    never mutates existing rows) and `addRecipesToList` per the spec's Design section 3, byte-matching the
-    spec's own reference implementation for the tricky exclusion logic.
-  - [shopping.js](../../server/routes/shopping.js): relaxed `buildSchema.recipeIds` to `.min(0).default([])`;
-    added `POST /:id/add-recipes` with its own `.min(1)` schema and the same `not_found`/`invalid_recipes`
-    status mapping used elsewhere in the file.
-  - [useShopping.js](../../client/src/hooks/useShopping.js): added `addRecipesToList`.
-  - New [RecipeSelectList.jsx](../../client/src/components/shopping/RecipeSelectList.jsx): extracted shared
-    checkbox-list UI, used by both modals.
-  - [BuildListModal.jsx](../../client/src/components/shopping/BuildListModal.jsx): recipe selection now
-    optional, dynamic submit label (`Create List` / `Build List`), skips the result screen on a 0-recipe
-    submit, retitled to "New Shopping List".
-  - New [AddRecipesModal.jsx](../../client/src/components/shopping/AddRecipesModal.jsx): recipe picker
-    reusing `RecipeSelectList`, "Add to List" submit, handles the 0-items-added case with dedicated copy.
-  - [ShoppingPage.jsx](../../client/src/pages/ShoppingPage.jsx): "+ Add Recipe" button, `AddRecipesModal`
-    wiring, `refreshKey` folded into `ShoppingList`'s existing `key`-triggers-refetch mechanism (no change
-    to `ShoppingList.jsx` itself, per the spec's Forbidden Files), updated subtitle/empty-state copy.
-- `npm run lint` clean on every changed/new file; `npm test --prefix server` — 82/82 passing (no
-  shopping-service-specific tests exist in this repo to extend).
-- Live-verified in the local dev environment (separate Neon branch from staging/prod — see
-  [[feedback_dev_db_is_shared]]) against Connor's real local household data (2 saved recipes: "Lobster
-  Pasta with Cream Sauce," "Caribbean Style Curry Cod"), using disposable test shopping lists deleted
-  afterward via a direct `DELETE /api/shopping/:id` call (the UI's `window.confirm` didn't resolve
-  through the automated browser tool, so cleanup went through the API instead of the confirm dialog).
-  Confirmed live: blank-list creation with immediate no-result-screen landing (Verification Step 2);
-  manual-add still works on a blank list (Step 3); the pre-extraction regression path (2 recipes sharing
-  "garlic" at the same unit, 31 items, no crash, exact-match convention intact — Step 1, no live case
-  existed in this household's 2 recipes for the unit-*mismatch* half of Step 1, covered instead by direct
-  code inspection since the extraction is copy-only); a partial-overlap shortfall row (Butter 2 tbsps
-  needed, 1 already on the list unchecked → new 1-tbsps row, original untouched — Step 5); **the
-  architect-mandated checked-item-exclusion fix** — a checked "Garlic minced" row did not suppress a new
-  recipe's need, a full new row was inserted and the checked row was left exactly as it was (Step 6, the
-  highest-risk behavior in the whole spec); coverage correctly dropped 11 of 13 already-covered
-  ingredients on a repeat add, only re-adding the two with no quantity (Salt, Pepper — confirms this is
-  the spec's own intended `quantity !== null` guard, not a bug); both modals and the "+ Add Recipe" button
-  render and remain usable at a 375px mobile viewport (Step 11). Steps 8/9 (cross-household/list-ownership
-  guards) and Step 10 (sortOrder from the full existing set) were verified by direct code inspection
-  against the spec's reference implementation rather than a live second-household test, since they
-  mechanically match the exact pattern every other `:id` route in this file already uses.
+- `client/src/index.css` — primitive token `:root` block + governance comment; `@import` moved to first line
+- `client/tailwind.config.js` — semantic color extension (`primary`, `surface`, `status-*`, `accent-*`, etc.)
+- `client/src/styles/components.css` — **new file**: `.btn-*`, `.card*`, `.input`, `.badge-*`,
+  `.badge-source-*`, `.nav-link*`, `.chat-bubble-*`
+- `client/src/utils/expiry.js` — `getExpiryBadgeClass`/`getExpiryRowClass` return semantic class names
+- `client/src/components/layout/Sidebar.jsx`, `PageHeader.jsx`
+- `client/src/pages/DashboardPage.jsx`, `client/src/components/dashboard/{ExpiryStrip,EatThisNow,QuickAdd}.jsx`
+- `client/src/components/recipes/RecipeSuggestionCard.jsx` (shared card, migrated during Phase 2 since
+  Dashboard consumes it)
+- `client/src/pages/PantryPage.jsx`, `client/src/components/pantry/PantryTable.jsx`
+- `client/src/pages/ChatPage.jsx`
+- `client/src/components/recipes/{RecipeCard,AddRecipeMenu,RecipeModal,RecipeReviewModal}.jsx`,
+  `client/src/pages/RecipesPage.jsx`
+- `client/src/pages/ShoppingPage.jsx`, `client/src/components/shopping/ShoppingList.jsx`
+- `client/src/pages/HouseholdPage.jsx`
+- `client/src/pages/LandingPage.jsx`
+- `ai/handoffs/CONVENTIONS.md` — added the semantic-token-over-raw-hue convention note (spec Section 2.2
+  required this)
 
-# Decisions Made
+# Judgment Calls Made Beyond the Spec's Literal Text (flag for Connor's review)
 
-- No implementation decisions diverged from the approved spec — implemented as designed, including the
-  parts the spec was most explicit about getting right (D-2's checked/unchecked split, D-6's private
-  helper extraction).
+1. **RESOLVED, and the inclusion decision itself confirmed correct by direct scaffold evidence.**
+   `PantryPage.jsx` and `RecipesPage.jsx` were migrated even though neither is named in the spec's Allowed
+   Files list (only `PantryTable/PantryCard` and `RecipeCard`/etc. are listed) — an inference, not an explicit
+   instruction, unlike judgment call #2's actual contradiction. Checking `03-pantry-mobile.png` directly
+   confirmed the inference: it depicts "Scan Receipt" and "+ Add Item" (both `PantryPage.jsx`, not
+   `PantryTable.jsx`) as solid dark-green pills alongside the already-migrated card/badge/action-button
+   treatment. One real deviation this check caught: `PantryPage.jsx`'s "Scan receipt" button had been styled
+   `.btn-secondary` (outlined) — my own unverified choice to visually de-rank it below "+ Add item" — but the
+   scaffold shows both buttons identically solid-filled, no outline/filled distinction at all. Fixed to
+   `.btn-primary` (reused the existing class, no new CSS), live-verified both now render identically
+   (`rgb(37,72,50)` bg, white text, full pill). Both are the page shells hosting the exact components the
+   spec does name (Add Item/Add Recipe buttons, search/filter bars, loading skeletons) — leaving them
+   raw-orange would have produced an immediately visible clash on the very screens Phase 2/3 claims to
+   complete. Treated as the same class of gap DRAFT-4's review caught for CRUD modals, but judged in the
+   opposite direction (include, not exclude) since these two files are structural
+   page containers for in-scope components, not standalone CRUD forms. No longer needs Connor's review — this
+   was a
+   judgment call, not an explicit spec instruction.
+2. **RESOLVED, by explicit Connor authorization (not a unilateral call).** Section 4G's Household chip
+   instructions (`.chip-allergy`, `.badge-tag` for dietary/health chips) target markup that only exists
+   inside `DietaryProfileForm.jsx` — confirmed live in the running app — which is also named in the spec's
+   own excluded-CRUD-modal list (Forbidden Files). Root cause, confirmed by viewing
+   `ai/design/2026-08-gemini-redesign/scaffolds/10b-household-mobile-fixed.png` directly: it's one flattened
+   mockup image of the whole Household screen with no awareness of this codebase's component boundaries —
+   Section 4G was written from that image without cross-checking that the chip markup lives in a file
+   Forbidden Files excludes for an unrelated reason (the CRUD-modal sweep boundary). Connor reviewed this
+   explanation and explicitly said to migrate the file to match the scaffold, overriding Forbidden Files for
+   this one file. Done: `TagInput`'s chips now use `chipCls = isWarning ? 'chip-allergy' : 'badge-tag'`; the
+   tag-input wrapper, remove-tag buttons, loading state, and Save button all migrated too (not just the two
+   named classes) for the same "don't half-migrate a screen" reason as judgment call #1. One deliberate
+   implementation choice: the wrapper div uses hand-written `focus-within:border-primary
+   focus-within:ring-1 focus-within:ring-primary/40` rather than the `.input` shared class, because `.input`'s
+   `focus:` pseudo-class wouldn't fire when a *child* `<input>` receives focus — reusing it as-is would have
+   silently dropped the focus ring. Live-verified: `.badge-tag` chip renders at 11.34:1 contrast (matches
+   spec's ≈11.35:1); Save button renders as a solid `rgb(37,72,50)`/white pill, matching the scaffold.
+   `chip-allergy` wasn't exercisable live (this test household has no allergy tags set) but reuses the exact
+   token pairing already verified elsewhere this session (chip-allergy ≈8.93:1, Section 2.1). TASK-060 should
+   drop `DietaryProfileForm.jsx` from its scope now that it's done.
+3. **Row-level expiry tint** (`getExpiryRowClass`) has no defined shared class in spec Section 3 — used
+   `bg-status-critical-bg/30` / `bg-status-warning-bg/30` (opacity-modifier composition, not a new class) as
+   the natural extension of the token system for a light wash background. Not spec-specified; a reasonable
+   default.
+4. Several genuinely undefined-in-spec cases were deliberately left as raw Tailwind (consistent with the
+   spec's own "raw hue acceptable where no token exists" acceptance criterion): the "❄ Frozen" location tag
+   (blue), `StatusLabel`'s "Frozen"/"Ripening" text (blue/purple — Ripening explicitly excluded by spec
+   Section 2.2), Chat's `healthNote` (blue), a "recording" red dot in Chat's mic button, and RecipeModal's
+   solid-red delete-confirm state (no "danger-filled button" token defined).
 
-# Known Risks
+# Dependency Chain
 
-- **Not yet committed.** Working tree has all seven Allowed Files changes; nothing pushed or committed
-  this session — only commit on Connor's explicit request.
-- Carried forward, unrelated to this session: OpenAI billing confirmation and Clerk sign-up hardening
-  from the public-AI-access fix — see [[project_go_public_readiness]].
+Editing: all files above.
+Requires: `client/tailwind.config.js` ↔ `client/src/index.css` (token pipeline); every screen depends on
+`client/src/styles/components.css` existing and being imported first in `index.css`.
+Irrelevant: `server/*` (unconditionally forbidden per spec), `shared/*`, DB/migrations — none touched.
+
+# Architecture Notes
+
+Two-layer token system (primitive `--kk-*` CSS vars → semantic Tailwind color names) plus a shared
+`@layer components` class library. `.btn` is an internal composition primitive never used bare in JSX
+(confirmed correctly tree-shaken from compiled output when unused). `@import './styles/components.css'` is
+the first line of `index.css` — moving it after `@tailwind` directives silently drops the whole file with
+only a build warning (verified during spec review, re-confirmed this session).
+
+# Remaining Work
+
+1. **Phase 4 (Section 6, optional)** — app-wide emoji→inline-SVG icon system. Not started. Explicitly
+   splittable into its own follow-up task per the spec.
+2. TASK-058 (Shopping mobile layout) and TASK-060 (mechanical CRUD-modal class migration — now covering only
+   `AddItemModal.jsx`, `SplitItemModal.jsx`, `BuildListModal.jsx`, `AddToListModal.jsx`, `AddRecipesModal.jsx`
+   — `DietaryProfileForm.jsx` is done, drop it from TASK-060's scope) are both still just named placeholders,
+   not drafted.
+
+# Known Risks / Open Questions
+
+- Remaining CRUD modals (`AddItemModal.jsx`, `SplitItemModal.jsx`, `BuildListModal.jsx`, `AddToListModal.jsx`,
+  `AddRecipesModal.jsx`) still render raw-orange styling and visually clash with every migrated screen around
+  them — this is the spec's own accepted, named gap (Section 11), not new. `DietaryProfileForm.jsx` no longer
+  belongs on this list (resolved, see Judgment Calls #2).
+- Judgment call #1 (PantryPage/RecipesPage inclusion) is the one remaining place this session's
+  implementation reasoning went beyond the spec's literal text without an explicit go-ahead — safe/
+  conservative in the direction taken, but still worth a quick confirmation.
+- Carried forward, unrelated to this task: TASK-054's `consume_pantry_item`-on-truncated-item gap; TASK-053's
+  Vercel Preview streaming verification; OpenAI billing confirmation; `server/.env.vercel`'s fate — see
+  [archive/TASK-055.md](archive/TASK-055.md) and [[project_go_public_readiness]].
+
+# Verification Results
+
+- `npm run build` (client): clean, no warnings beyond the pre-existing chunk-size notice, after every phase.
+- `npm run lint` (root): clean.
+- `npm test` (root): 98/98 passing, 0 failures — zero regressions.
+- Contrast gate (Phase 1 hard requirement, live computed-CSS values from the running app, not hand math
+  alone): `badge-status-critical` 5.17:1, `badge-status-warning` 5.34:1, `badge-status-ok` 7.85:1,
+  `bg-primary`/`text-on-primary` (via `.btn-primary` and `.chat-bubble-user`) 10.24:1 — all clear WCAG AA
+  4.5:1 with margin, matching Section 2.1's hand-computed values almost exactly.
+- Responsive: Pantry table/card breakpoint checked live at 375px/768px/1280px — no horizontal overflow at
+  any width, table↔card switch confirmed correct.
+- Live smoke tests (real running app, real data, no mocks): Dashboard, Pantry (desktop table + action-button
+  variants), Chat (48 real message bubbles rendered), Recipes (source badges with icons confirmed correct
+  colors/icons live), Household (`.card-callout` confirmed) all checked via `read_page`/`get_page_text`/
+  `getComputedStyle` — screenshots were unavailable this session (Browser pane wasn't compositing).
+- `orange-` grep scoped to all touched files: zero matches after a full pass (one leftover instance in
+  `RecipeReviewModal.jsx`'s Recipe Name input was caught by this grep and fixed).
+- Shopping and Landing were verified by code review + build success only (not live-clicked) — every class
+  used on those two pages was already live-verified elsewhere in the same session (`.btn-primary`, `.card`,
+  `.input`, `text-primary`, etc.), so this is a reasonable-confidence gap, not a blind spot on novel classes.
+
+# Recommended Next Action
+
+Judgment call #1 (PantryPage/RecipesPage inclusion) is resolved: checking `03-pantry-mobile.png` directly
+confirmed both "Scan Receipt" and "+ Add Item" are scaffold-depicted as identical solid-green pills (not one
+outlined) — `PantryPage.jsx`'s "Scan receipt" button was wrongly styled `.btn-secondary` (my own unverified
+choice, not scaffold-derived); fixed to `.btn-primary`, reusing the existing class, no new CSS. Live-verified
+both buttons now render identically (`rgb(37,72,50)` bg, white text, full pill). Phase 4 (icons) and
+TASK-058/TASK-060 remain separate, not-yet-started follow-ups.
 
 # Context Notes
 
 - branch: `staging`.
-- Dev servers were started via the project's `.claude/launch.json` configs (`server` on 3001, `client` on
-  5183) — a stale `node index.js` from an earlier, uncleaned session was occupying port 3001 and was
-  stopped first so the new code was actually what got exercised.
-
-# Recommended Next Action
-
-1. Review the diff, then let Claude know if/when to commit — no commit was made this session per the
-   commit-only-on-request convention.
-2. Unrelated carry-forward, not blocking TASK-049: OpenAI billing confirmation and Clerk sign-up hardening
-   are still open per [[project_go_public_readiness]].
+- Dev servers (`server` on 3001, `client` on 5183) were started and stopped this session; none left running.
+- No worktree was used.
 
 ---
 
-# Prior Handoff (TASK-049 spec-drafting session, now superseded above)
+## Archived History
 
-Spec-drafting session for `ai/tasks/TASK-049-spec.md`: let a user create a shopping list from scratch (no
-recipe required), preserve the existing start-from-recipe flow, and add a new capability — add saved
-recipe(s) to a list that already exists, inserting only the ingredients the household doesn't already
-have. Read the full existing shopping/recipe/pantry code path before designing anything, researched and
-deliberately declined fuzzy ingredient matching and automatic unit conversion in favor of extending the
-app's existing exact-match convention (see the spec's Research section for sources), then went through two
-rounds of GPT architect review (9.7/10 → 10/10 APPROVED). Round 1's one required change —
-`subtractExistingListItems` must only treat **unchecked** existing rows as coverage, since `toggleItem`
-never writes to `pantryItems` and a checked row can go stale — was verified directly against the code
-before being accepted, not taken on the review's authority alone. No code was written in that session,
-only the spec — implemented, live-verified, and documented in the session described above.
-
----
-
-# Prior Handoff (Production AI chat 403 fix for new public sign-ups)
-
-Production support investigation, no prior spec: Connor's father John Sharpe signed up as a real public
-user and hit a 403 on in-app AI chat. Traced through `ChatPage.jsx` → `api/index.js` → `routes/ai.js` →
-`resolveProvider.js`'s `NoApiKeyError`, then confirmed directly against the live production DB
-(read-only first) that his household was owned by a different Clerk user, had no BYOK OpenAI key, and
-`platform_settings.public_ai_access_enabled` was `false` — reproducing the symptom deterministically.
-This is the still-open TASK-037/[[project_go_public_readiness]] risk: public sign-ups have no working AI
-path without either a BYOK key or the platform toggle, and neither Clerk hardening nor OpenAI prepaid
-billing were ever confirmed before TASK-048 shipped a public landing page inviting exactly this kind of
-sign-up. Asked Connor rather than assuming which fix to apply; he chose the global toggle. Applied
-`public_ai_access_enabled = true` directly to production via SQL, after verifying (by diffing Neon
-hostnames, not trusting a `vercel env pull` that came back blank) the write hit the correct DB. Also
-corrected this file's own stale status at the time — TASK-048 and TASK-047 were already implemented and
-committed (`7506748`, `f9eed51`) despite this file previously describing them as not yet done. **Biggest
-open carry-forward**: OpenAI prepaid billing / auto-recharge-off was never confirmed set up, and public
-AI access is now live in production — see [[project_go_public_readiness]]. Full detail in git history at
-commit `561d0da` if ever needed again.
-
-# Prior-Prior Handoff (TASK-048 spec + implementation, now superseded above)
-
-Spec-drafting session for `ai/tasks/TASK-048-spec.md` — a public landing page shown to signed-out visitors
-at `/`, with "Create account" and "Log in" buttons, per two rounds of GPT architect review (9.7/10 →
-10/10). Design: `client/src/pages/LandingPage.jsx` (new, static, copy from README, links to `/sign-up` /
-`/sign-in`, never imports `AppLayout`/`PantryProvider`); `client/src/App.jsx`'s `PrivateRoute` gained an
-optional `publicHomeElement` prop rather than hardcoding the landing page import; one additive `<meta
-name="description">` in `client/index.html`. Declined the architect's suggested `RootPage` restructuring
-with a concrete codebase-specific counter-argument (`AppLayout`/`PantryProvider`/`Outlet` coupling) — agreed
-correct in round 2. **Implemented and committed in a later session (`7506748`)** — this file previously
-described it as not-yet-implemented; that was stale as of the correction above. Full design detail
-preserved in `ai/tasks/TASK-048-spec.md` and this file's git history as of the spec-approval commit
-(`96c671e`) if ever needed again.
-
-# Prior-Prior-Prior Handoff (TASK-047 implementation session)
-
-Private, owner-only "Suggest an Improvement" feedback box on the Dashboard. Two rounds of GPT architect
-review (9.6/10 → 9.9/10 APPROVED) before implementation, plus two scope questions resolved directly with
-Connor (no read UI — DB-only; fire-and-forget submitter UX). **Implemented, live-verified, and committed in
-a later session (`f9eed51`)** — this file previously described it as awaiting Connor's review before
-commit; that was stale as of the correction above. Full detail in git history as of the TASK-047
-implementation session if ever needed again.
+- TASK-047 through TASK-053 (spec-drafting + TASK-053 streaming implementation session): see
+  [archive/TASK-047-053.md](archive/TASK-047-053.md)
+- TASK-054 (chat context-size cap implementation session): see [archive/TASK-054.md](archive/TASK-054.md)
+- TASK-055 (post-audit hardening implementation session): see [archive/TASK-055.md](archive/TASK-055.md)
+- TASK-056 (UI/UX effort-reduction redesign implementation session): see
+  [archive/TASK-056.md](archive/TASK-056.md)
+- TASK-057 spec-drafting session (5 architect review rounds, DRAFT-1 → DRAFT-6 approved): see
+  [archive/TASK-057-spec-drafting.md](archive/TASK-057-spec-drafting.md)

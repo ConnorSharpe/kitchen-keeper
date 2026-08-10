@@ -1,31 +1,26 @@
-import { randomUUID } from 'crypto';
 import express from 'express';
 import { z } from 'zod';
 import * as householdService from '../services/householdService.js';
 import { clerkAuth } from '../middleware/clerkAuth.js';
 import { validate } from '../middleware/validate.js';
 import { joinRateLimit } from '../middleware/joinRateLimit.js';
+import { inviteRateLimit } from '../middleware/inviteRateLimit.js';
 import { sendHouseholdInvite } from '../services/emailService.js';
-import { maskKey } from '../utils/keyEncryption.js';
+import { generateRequestId } from '../utils/requestId.js';
 
 const router = express.Router();
 router.use(clerkAuth);
 
-// GET /api/household — household info + join code + AI key preview
+// GET /api/household — household info + join code
 router.get('/', async (req, res) => {
   const household = await householdService.getById(req.user.householdId);
   if (!household) return res.status(404).json({ error: 'Household not found' });
-
-  const aiPreview = await householdService.getAiKeyPreview(
-    req.user.householdId
-  );
 
   res.json({
     household: {
       id: household.id,
       name: household.name,
       joinCode: household.joinCode,
-      maskedKey: aiPreview.maskedKey,
     },
     viewerIsOwner: req.user.id === process.env.OWNER_CLERK_ID,
   });
@@ -44,26 +39,9 @@ router.patch('/', validate(updateNameSchema), async (req, res) => {
   res.json({ ok: true });
 });
 
-// PATCH /api/household/ai-key — set or remove BYOK OpenAI key
-const aiKeySchema = z.object({
-  key: z.string().min(1).nullable(),
-});
-
-router.patch('/ai-key', validate(aiKeySchema), async (req, res) => {
-  const { key } = req.body;
-
-  if (key === null) {
-    await householdService.removeAiApiKey(req.user.householdId);
-    return res.json({ maskedKey: null });
-  }
-
-  await householdService.setAiApiKey(req.user.householdId, key);
-  res.json({ maskedKey: maskKey(key) });
-});
-
 // GET /api/household/members — all users in this household
 router.get('/members', async (req, res) => {
-  const requestId = randomUUID().split('-')[0];
+  const requestId = generateRequestId();
   const start = Date.now();
   try {
     const members = await householdService.getMembers(req.user.householdId, {
@@ -85,7 +63,7 @@ const inviteSchema = z.object({
   email: z.string().email('Invalid email address'),
 });
 
-router.post('/invite', validate(inviteSchema), async (req, res) => {
+router.post('/invite', inviteRateLimit, validate(inviteSchema), async (req, res) => {
   const household = await householdService.getById(req.user.householdId);
   if (!household) return res.status(404).json({ error: 'Household not found' });
 

@@ -20,7 +20,6 @@ import suggestionsRouter from './routes/suggestions.js';
 
 const REQUIRED_ENV = [
   'CLERK_SECRET_KEY',
-  'ENCRYPTION_KEY',
   'OWNER_CLERK_ID',
   'OPENAI_API_KEY',
   'VAPID_PUBLIC_KEY',

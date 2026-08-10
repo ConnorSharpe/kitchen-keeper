@@ -1,10 +1,8 @@
 import express from 'express';
-import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { clerkAuth } from '../middleware/clerkAuth.js';
 import { validate } from '../middleware/validate.js';
 import { upload } from '../middleware/upload.js';
-import * as householdService from '../services/householdService.js';
 import * as pantryService from '../services/pantryService.js';
 import * as recipeService from '../services/recipeService.js';
 import * as chatService from '../services/chatService.js';
@@ -14,25 +12,29 @@ import * as recipeBlocklistService from '../services/recipeBlocklistService.js';
 import * as recipeSearchService from '../services/recipeSearchService.js';
 import * as recipeUrlImportService from '../services/recipeUrlImportService.js';
 import { createToolHandlers } from '../services/chat/createToolHandlers.js';
-import { getExpiryDays, getExpiryStatus } from '../../shared/expiry.js';
-import { getDefaultStorageLocation } from '../../shared/pantryDefaults.js';
+import { getExpiryStatus, getExpiringItems } from '../../shared/expiry.js';
+import {
+  getDefaultStorageLocation,
+  STORAGE_LOCATIONS,
+} from '../../shared/pantryDefaults.js';
+import { RECIPE_TAGS } from '../../shared/recipeTags.js';
 import { aiRateLimit } from '../middleware/aiRateLimit.js';
+import { requireAiAccess } from '../middleware/requireAiAccess.js';
+import { generateRequestId } from '../utils/requestId.js';
 const router = express.Router();
 router.use(clerkAuth);
+router.use(requireAiAccess);
 router.use(aiRateLimit);
 
 // POST /api/ai/eat-this-now
 router.post('/eat-this-now', async (req, res) => {
-  const requestId = randomUUID().split('-')[0];
+  const requestId = generateRequestId();
   const [allItems, savedRecipes] = await Promise.all([
     pantryService.getAll(req.user.householdId),
     recipeService.getAll(req.user.householdId),
   ]);
 
-  const expiringItems = allItems.filter((item) => {
-    const days = getExpiryDays(item.expiryDate);
-    return days !== null && days >= 0 && days <= 7;
-  });
+  const expiringItems = getExpiringItems(allItems);
 
   const suggestions = await aiService.eatThisNow(
     allItems,
@@ -50,7 +52,7 @@ const expandSchema = z.object({
 });
 
 router.post('/expand-suggestion', validate(expandSchema), async (req, res) => {
-  const requestId = randomUUID().split('-')[0];
+  const requestId = generateRequestId();
   const { name, description } = req.body;
   const allItems = await pantryService.getAll(req.user.householdId);
 
@@ -86,10 +88,7 @@ const candidateItemSchema = z.object({
   unit: z.string().min(1).max(50).default('item'),
   purchaseDate: dateField,
   expiryDate: dateField,
-  storageLocation: z
-    .enum(['pantry', 'refrigerator', 'freezer'])
-    .nullable()
-    .optional(),
+  storageLocation: z.enum(STORAGE_LOCATIONS).nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
 });
 
@@ -98,7 +97,7 @@ router.post('/parse-receipt', upload.single('receipt'), async (req, res) => {
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
-  const requestId = randomUUID().split('-')[0];
+  const requestId = generateRequestId();
   const base64 = req.file.buffer.toString('base64');
   const rawItems = await aiService.parseReceipt(
     base64,
@@ -136,10 +135,7 @@ router.post('/parse-receipt', upload.single('receipt'), async (req, res) => {
 // POST /api/ai/suggest-recipes
 router.post('/suggest-recipes', async (req, res) => {
   const allItems = await pantryService.getAll(req.user.householdId);
-  const expiringItems = allItems.filter((item) => {
-    const days = getExpiryDays(item.expiryDate);
-    return days !== null && days >= 0 && days <= 7;
-  });
+  const expiringItems = getExpiringItems(allItems);
 
   const [rawSuggestions, blockedKeys] = await Promise.all([
     aiService.suggestRecipes(allItems, expiringItems),
@@ -155,38 +151,7 @@ router.post('/suggest-recipes', async (req, res) => {
 // Extracts recipe data from an uploaded image using AI.
 // Returns { recipe: extractedJson } — does NOT save. The client reviews and saves separately.
 
-const TAG_ALLOWED = z.enum([
-  'breakfast',
-  'lunch',
-  'dinner',
-  'snack',
-  'dessert',
-  'drink',
-  'italian',
-  'mexican',
-  'asian',
-  'american',
-  'mediterranean',
-  'indian',
-  'french',
-  'thai',
-  'japanese',
-  'greek',
-  'chinese',
-  'vegetarian',
-  'vegan',
-  'gluten-free',
-  'dairy-free',
-  'low-carb',
-  'keto',
-  'paleo',
-  'quick',
-  'easy',
-  'slow-cooker',
-  'one-pot',
-  'meal-prep',
-  'freezer-friendly',
-]);
+const TAG_ALLOWED = z.enum(RECIPE_TAGS);
 
 const fractionalQuantity = z
   .union([
@@ -217,7 +182,7 @@ const fractionalQuantity = z
   ])
   .transform((v) => (typeof v === 'number' && isFinite(v) ? v : null));
 
-const parsedRecipeSchema = z.object({
+export const parsedRecipeSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(1000).nullable().optional(),
   ingredients: z
@@ -257,7 +222,7 @@ router.post(
         .json({ error: 'Unsupported file type. Please upload an image.' });
     }
 
-    const requestId = randomUUID().split('-')[0];
+    const requestId = generateRequestId();
     const base64 = req.file.buffer.toString('base64');
 
     let raw;
@@ -320,7 +285,7 @@ router.post(
   '/parse-recipe-url',
   validate(urlImportSchema),
   async (req, res) => {
-    const requestId = randomUUID().split('-')[0];
+    const requestId = generateRequestId();
 
     let html;
     try {
@@ -407,7 +372,7 @@ const chatMessageSchema = z.object({
 router.post('/chat', validate(chatMessageSchema), async (req, res) => {
   const { message } = req.body;
   const householdId = req.user.householdId;
-  const requestId = randomUUID().split('-')[0];
+  const requestId = generateRequestId();
 
   const [allItems, allRecipes, history] = await Promise.all([
     pantryService.getAll(householdId),
@@ -415,10 +380,7 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
     chatService.getHistory(householdId, 20),
   ]);
 
-  const expiringItems = allItems.filter((item) => {
-    const days = getExpiryDays(item.expiryDate);
-    return days !== null && days >= 0 && days <= 7;
-  });
+  const expiringItems = getExpiringItems(allItems);
 
   const pantrySummary = allItems.map((i) => ({
     id: i.id,
@@ -449,33 +411,72 @@ router.post('/chat', validate(chatMessageSchema), async (req, res) => {
   };
   const toolHandlers = createToolHandlers(ctx);
 
-  const aiConfig = await householdService.getAiConfig(householdId);
-  const { reply, itemsAdded } = await aiService.chat(
-    pantrySummary,
-    recipeSummary,
-    history,
-    message,
-    toolHandlers,
-    dietaryContext,
-    aiConfig,
-    requestId
-  );
-
-  await chatService.savePair(
-    householdId,
-    message,
-    reply,
-    ctx.result.recipeSuggestions.length > 0
-      ? { version: 1, recipeSuggestions: ctx.result.recipeSuggestions }
-      : null
-  );
-  await chatService.trimHistory(householdId, 50);
-
-  res.json({
-    reply,
-    itemsAdded,
-    recipeSuggestions: ctx.result.recipeSuggestions,
+  res.writeHead(200, {
+    'Content-Type': 'application/x-ndjson',
+    'Cache-Control': 'no-cache, no-transform',
+    'X-Accel-Buffering': 'no',
   });
+  res.flushHeaders();
+
+  const abortController = new AbortController();
+  let clientDisconnected = false;
+  req.on('close', () => {
+    clientDisconnected = true;
+    abortController.abort();
+  });
+
+  const onToken = (delta) => {
+    if (clientDisconnected || ctx.result.recipeSuggestions.length > 0) return;
+    res.write(JSON.stringify({ type: 'token', delta }) + '\n');
+  };
+
+  try {
+    const { reply, itemsAdded } = await aiService.chat(
+      pantrySummary,
+      recipeSummary,
+      history,
+      message,
+      toolHandlers,
+      dietaryContext,
+      requestId,
+      onToken,
+      { signal: abortController.signal }
+    );
+
+    await chatService.savePair(
+      householdId,
+      message,
+      reply,
+      ctx.result.recipeSuggestions.length > 0
+        ? { version: 1, recipeSuggestions: ctx.result.recipeSuggestions }
+        : null
+    );
+    await chatService.trimHistory(householdId, 50);
+
+    if (!clientDisconnected) {
+      res.write(
+        JSON.stringify({
+          type: 'done',
+          itemsAdded,
+          recipeSuggestions: ctx.result.recipeSuggestions,
+        }) + '\n'
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[kitchen-keeper] request_id=${requestId} function=chat error=${err.message}`
+    );
+    if (!clientDisconnected) {
+      res.write(
+        JSON.stringify({
+          type: 'error',
+          message: 'Something went wrong. Please try again.',
+        }) + '\n'
+      );
+    }
+  } finally {
+    if (!res.writableEnded) res.end();
+  }
 });
 
 export default router;
