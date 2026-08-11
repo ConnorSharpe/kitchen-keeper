@@ -1,6 +1,8 @@
 // Vite proxies /api to http://localhost:3001 — no base URL needed.
 // Auth: Clerk Bearer token injected from window.Clerk (set by ClerkProvider in main.jsx).
 
+import { logEvent } from '../lib/debugLog.js';
+
 async function getClerkToken() {
   return window.Clerk?.session?.getToken() ?? null;
 }
@@ -38,6 +40,8 @@ async function authorizedFetch(path, opts = {}) {
   let res = await fetch(path, { ...opts, headers });
   if (res.status !== 401) return res;
 
+  logEvent('auth-fetch-401', { path, hadToken: !!token });
+
   // Forced refresh itself throwing (network error, not a 401) is not evidence of an
   // invalid session — propagate that error normally, do not redirect.
   const freshToken = await forceRefreshToken();
@@ -46,6 +50,7 @@ async function authorizedFetch(path, opts = {}) {
   // unauthenticated request guaranteed to 401 again. Skip the pointless round-trip and
   // go straight to the same outcome a second 401 would produce.
   if (!freshToken) {
+    logEvent('auth-fetch-redirect', { path, reason: 'no-fresh-token' });
     redirectToSignIn();
     throw new Error('Session expired');
   }
@@ -54,9 +59,11 @@ async function authorizedFetch(path, opts = {}) {
   res = await fetch(path, { ...opts, headers: retryHeaders });
 
   if (res.status === 401) {
+    logEvent('auth-fetch-redirect', { path, reason: 'retry-still-401' });
     redirectToSignIn();
     throw new Error('Session expired');
   }
+  logEvent('auth-fetch-retry-succeeded', { path });
   return res;
 }
 

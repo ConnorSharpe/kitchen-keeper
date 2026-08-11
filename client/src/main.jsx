@@ -2,7 +2,20 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ClerkProvider } from '@clerk/clerk-react';
 import App from './App.jsx';
+import { logEvent } from './lib/debugLog.js';
+import { isStandalonePwa } from './lib/oauthReturn.js';
 import './index.css';
+
+// TASK-063: earliest possible capture point, before Clerk or React mount — if the double
+// sign-in is caused by something that resets state before the app even renders, this is the
+// only place it would show up.
+logEvent('app-boot', {
+  href: window.location.href,
+  referrer: document.referrer,
+  standalone: isStandalonePwa(),
+  visibilityState: document.visibilityState,
+  swController: !!navigator.serviceWorker?.controller,
+});
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () =>

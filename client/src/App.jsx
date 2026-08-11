@@ -14,9 +14,11 @@ import {
   isStandalonePwa,
   OAUTH_RELOAD_MARKER_KEY,
 } from './lib/oauthReturn.js';
+import { logEvent } from './lib/debugLog.js';
 import { AuthProvider } from './context/AuthContext.jsx';
 import AppLayout from './components/layout/AppLayout.jsx';
 import ErrorBoundary from './components/layout/ErrorBoundary.jsx';
+import DebugPanel from './components/DebugPanel.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import LandingPage from './pages/LandingPage.jsx';
 import PantryPage from './pages/PantryPage.jsx';
@@ -64,14 +66,31 @@ function OAuthReturnGuard() {
     if (!isLoaded) return;
 
     const marker = sessionStorage.getItem(OAUTH_RELOAD_MARKER_KEY);
+    const standalone = isStandalonePwa();
+    const fromCallback = cameFromOAuthCallback();
 
-    if (
+    const shouldReload =
       !marker &&
       location.pathname === '/' &&
       !isSignedIn &&
-      isStandalonePwa() &&
-      cameFromOAuthCallback()
-    ) {
+      standalone &&
+      fromCallback;
+
+    logEvent('oauth-return-guard', {
+      pathname: location.pathname,
+      isSignedIn,
+      standalone,
+      referrer: document.referrer,
+      fromCallback,
+      marker: !!marker,
+      decision: shouldReload
+        ? 'reload'
+        : marker
+          ? 'marker-cleared'
+          : 'noop',
+    });
+
+    if (shouldReload) {
       sessionStorage.setItem(OAUTH_RELOAD_MARKER_KEY, '1');
       window.location.reload();
       return;
@@ -88,6 +107,24 @@ function OAuthReturnGuard() {
   return null;
 }
 
+// TASK-063: logs every Clerk isLoaded/isSignedIn transition Clerk itself reports, independent
+// of the reload-guard's own decision above — distinguishes "Clerk flip-flopped" from
+// "the guard's heuristic misfired" when reading the captured sequence back.
+function AuthStateLogger() {
+  const location = useLocation();
+  const { isLoaded, isSignedIn } = useAuth();
+
+  useEffect(() => {
+    logEvent('clerk-auth-state', {
+      pathname: location.pathname,
+      isLoaded,
+      isSignedIn,
+    });
+  }, [isLoaded, isSignedIn, location.pathname]);
+
+  return null;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -96,6 +133,8 @@ export default function App() {
       >
         <AuthProvider>
           <OAuthReturnGuard />
+          <AuthStateLogger />
+          <DebugPanel />
           <Toaster position="top-right" />
           <Routes>
             <Route
