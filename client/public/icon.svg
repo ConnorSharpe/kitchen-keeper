@@ -1,24 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <!-- Background -->
-  <rect width="512" height="512" rx="96" fill="#16a34a"/>
+  <rect width="512" height="512" rx="96" fill="#254832"/>
 
-  <!-- Steam lines -->
-  <path d="M192 195 Q204 172 192 149 Q180 126 192 103" stroke="white" stroke-width="12" stroke-linecap="round" fill="none"/>
-  <path d="M256 195 Q268 172 256 149 Q244 126 256 103" stroke="white" stroke-width="12" stroke-linecap="round" fill="none"/>
-  <path d="M320 195 Q332 172 320 149 Q308 126 320 103" stroke="white" stroke-width="12" stroke-linecap="round" fill="none"/>
-
-  <!-- Lid handle -->
-  <rect x="220" y="202" width="72" height="26" rx="10" fill="white"/>
-
-  <!-- Lid -->
-  <rect x="130" y="222" width="252" height="34" rx="14" fill="white"/>
-
-  <!-- Left handle -->
-  <rect x="96" y="270" width="52" height="44" rx="12" fill="white"/>
-
-  <!-- Right handle -->
-  <rect x="364" y="270" width="52" height="44" rx="12" fill="white"/>
-
-  <!-- Pot body -->
-  <rect x="148" y="250" width="216" height="168" rx="22" fill="white"/>
+  <!-- Spoon -->
+  <ellipse cx="256" cy="185" rx="68" ry="86" fill="white"/>
+  <rect x="229" y="258" width="54" height="172" rx="27" fill="white"/>
 </svg>
