@@ -43,8 +43,21 @@ async function authorizedFetch(path, opts = {}) {
   logEvent('auth-fetch-401', { path, hadToken: !!token });
 
   // Forced refresh itself throwing (network error, not a 401) is not evidence of an
-  // invalid session — propagate that error normally, do not redirect.
-  const freshToken = await forceRefreshToken();
+  // invalid session — propagate that error normally, do not redirect. TASK-063: this used to
+  // fail silently from the diagnostic log's perspective (no event on either success or
+  // rethrow), which was masking whether window.Clerk.session goes null mid-flight during the
+  // double-sign-in repro. Log the failure explicitly, then keep the original behavior exactly.
+  let freshToken;
+  try {
+    freshToken = await forceRefreshToken();
+  } catch (err) {
+    logEvent('auth-fetch-refresh-threw', {
+      path,
+      message: err?.message,
+      hadClerkSession: !!window.Clerk?.session,
+    });
+    throw err;
+  }
 
   // No token at all means Clerk has nothing to give us — a retry would just send an
   // unauthenticated request guaranteed to 401 again. Skip the pointless round-trip and
