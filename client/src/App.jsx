@@ -33,6 +33,17 @@ function PrivateRoute({ children, publicHomeElement }) {
   );
 }
 
+function PublicRoute({ children }) {
+  return (
+    <>
+      <SignedIn>
+        <Navigate to="/" replace />
+      </SignedIn>
+      <SignedOut>{children}</SignedOut>
+    </>
+  );
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -44,11 +55,19 @@ export default function App() {
           <Routes>
             <Route
               path="/sign-in/*"
-              element={<SignIn routing="path" path="/sign-in" />}
+              element={
+                <PublicRoute>
+                  <SignIn routing="path" path="/sign-in" />
+                </PublicRoute>
+              }
             />
             <Route
               path="/sign-up/*"
-              element={<SignUp routing="path" path="/sign-up" />}
+              element={
+                <PublicRoute>
+                  <SignUp routing="path" path="/sign-up" />
+                </PublicRoute>
+              }
             />
             <Route path="/join" element={<JoinPage />} />
 
