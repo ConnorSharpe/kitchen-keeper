@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kitchen-keeper-v1';
+const CACHE_NAME = 'kitchen-keeper-v2';
 const SHELL = ['/', '/index.html'];
 
 self.addEventListener('install', (event) => {
