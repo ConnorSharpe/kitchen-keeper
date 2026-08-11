@@ -11,9 +11,13 @@ walked the real Google OAuth flow on the affected iOS PWA to confirm `document.r
 (`EXPECTED_OAUTH_CALLBACK_PATH` in `client/src/lib/oauthReturn.js`) specifically so that correcting it against
 the real observed value later is a one-line change, not a redesign.
 
-**This fix is code-complete and build/lint/test-green, but functionally unverified.** The actual bug (does
-this reload the stale render into a signed-in dashboard on iOS?) can only be confirmed device-side, which
-Connor deferred. Do not treat this as "done" — see Known Risks.
+**This fix is code-complete, build/lint/test-green, committed, and deployed to both `staging` and
+`production` (commit `8ff523f`) — but functionally unverified.** Connor explicitly instructed committing and
+pushing to both environments now, deferring only the device-side check. The actual bug (does this reload the
+stale render into a signed-in dashboard on iOS?) can only be confirmed device-side, which Connor deferred.
+Production deployment confirmed live via `vercel inspect kitchenkeeper.kitchen` (`dpl_BJuJcKABnsKkYMcE3WftcyHhFeFa`,
+status Ready). No migration involved, so `MIGRATION_LEDGER.md` has no new row. Do not treat this as fully
+verified — see Known Risks.
 
 # Files Modified
 
@@ -80,24 +84,27 @@ behavior.
    spec Section 7. If it doesn't match, update `EXPECTED_OAUTH_CALLBACK_PATH` in `oauthReturn.js` (one line)
    and re-verify; if the referrer approach doesn't hold at all, stop and bring findings back for a DRAFT-5
    spec revision — do not add a lifecycle-heuristic fallback (spec explicitly forbids this).
-2. Once device-verified: follow CONVENTIONS.md's canonical push workflow (this is client-only, no migration,
-   so no `MIGRATION_LEDGER.md` entry is needed) — push to `staging`, confirm on the Preview URL, then merge
-   `staging` → `main` for production.
+2. **Already committed and shipped to `staging` and `production`** (commit `8ff523f`, fast-forward
+   `staging` → `main`, both pushed). If Section 7's capture shows the referrer approach doesn't hold, the
+   fix as shipped is a safe no-op (criterion 6) but should still be corrected: update
+   `EXPECTED_OAUTH_CALLBACK_PATH` (or revise to DRAFT-5) and re-deploy the same way.
 3. Unrelated, carried forward: TASK-059's remaining phone-driven checklist rows (AUTH-1–5, ONB, HH, DASH,
    PANTRY, REC, SHOP, CHAT, DIET, PUSH, VIS-2–5, ERR-2/3/5) still pending a human pass; two disposable Clerk
    accounts (`+zzsmokeB@gmail.com`, `+zzsmokeC@gmail.com`) still need manual deletion from production Clerk.
 
 # Known Risks / Open Questions
 
-- **This fix is unverified against the actual bug.** Build/lint/test all pass, but none exercise real iOS
-  Safari OAuth navigation — the one thing that determines whether the detector actually fires correctly.
-  Treat as implemented-not-confirmed until Section 7 runs.
+- **This fix is live in production, unverified against the actual bug.** Build/lint/test all pass, but none
+  exercise real iOS Safari OAuth navigation — the one thing that determines whether the detector actually
+  fires correctly. It is now shipped, not just implemented — treat "confirm on-device" as an open follow-up,
+  not optional polish. Worst case if wrong: a no-op (criterion 6) or, unverified, a possible incorrect
+  reload trigger on iOS standalone PWA — worth prioritizing the on-device check soon rather than indefinitely.
 - If `document.referrer` is stripped/unavailable on-device (Referrer-Policy, WKWebView quirks), spec
   acceptance criterion 6 treats that as an acceptable degraded no-op, not a defect — but worth knowing going
   in that the fix could end up inert in practice.
-- Not yet committed to git — working tree has this change plus pre-existing, unrelated, untouched
-  modifications (`.claude/settings.local.json`, `ai/tasks/TASK-059-smoke-tests.md`,
-  `ai/handoffs/archive/TASK-061-implementation.md`).
+- Pre-existing, unrelated, untouched working-tree modifications remain
+  (`.claude/settings.local.json`, `ai/tasks/TASK-059-smoke-tests.md`,
+  `ai/handoffs/archive/TASK-061-implementation.md`) — not part of this commit.
 - Carried forward, unrelated: TASK-058/TASK-060 still placeholders; TASK-054's
   `consume_pantry_item`-on-truncated-item gap; Clerk Dashboard sign-up/bot-protection settings unverified;
   two disposable Clerk accounts left in production (Remaining Work #3).
@@ -110,13 +117,16 @@ behavior.
 - `npm test` (root): PASS — 98/98 tests, 0 failures. No existing test exercises `App.jsx` directly, so this
   confirms no regression in `shared/*` and `server/*` test coverage, not the OAuth fix itself.
 - Device-side verification (spec Section 7): NOT RUN — deferred by Connor, see Known Risks.
+- Deploy: `staging` push confirmed (`8ff523f`); production confirmed live via `vercel inspect
+  kitchenkeeper.kitchen` → `dpl_BJuJcKABnsKkYMcE3WftcyHhFeFa`, status Ready.
 
 # Recommended Next Action
 
-When Connor is ready to test on his phone: perform Section 7's on-device capture first. If the observed
-referrer matches expectations, run the remaining Section 7 verification steps (adversarial
-cancel/back-navigation test, post-correction navigation test, single-shot guard confirmation, non-standalone
-regression spot-check), then push `staging` → verify Preview → merge to `main`.
+When Connor is ready to test on his phone: perform Section 7's on-device capture against the now-live
+production build. If the observed referrer matches expectations, run the remaining Section 7 verification
+steps (adversarial cancel/back-navigation test, post-correction navigation test, single-shot guard
+confirmation, non-standalone regression spot-check). If it doesn't match, update
+`EXPECTED_OAUTH_CALLBACK_PATH` and re-deploy the same way this session did.
 
 # Forbidden Exploration
 
@@ -126,8 +136,7 @@ regression spot-check), then push `staging` → verify Preview → merge to `mai
 
 # Context Notes
 
-- branch: `staging` (no commit made this session — code changes are in the working tree only; see Known
-  Risks).
+- branch: `staging` (committed `8ff523f`, pushed to `staging`, fast-forward merged and pushed to `main`).
 - No dev servers started this session; verification was build/lint/test only, not a live browser session.
 - No worktree used.
 - Session followed the AI Development Agent Efficiency Guide's orientation protocol at Connor's request
