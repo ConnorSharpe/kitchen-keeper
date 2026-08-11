@@ -44,6 +44,14 @@ the *new* schema. Prefer an expand/contract pattern for destructive changes (add
 across separate migrations) rather than a single migration that drops/renames a column, so that window
 doesn't break the still-running old code.
 
+**Log every step in [MIGRATION_LEDGER.md](../migrations/MIGRATION_LEDGER.md) as it happens** — this order
+describes intent, the ledger records what actually occurred. Step 3 (migrate production) and step 4 (merge
+to `main`) are two separate manual actions with nothing forcing step 4 to actually follow step 3 — that gap
+is exactly what caused the 2026-08-10 production outage (`0021_drop_byok.sql` applied to production on
+2026-08-05, `main` not merged/deployed until 2026-08-10, five days of every authenticated request 500ing).
+Treat step 3 without step 4 as an open incident, not a pending to-do: log it as such in the ledger the
+moment step 3 completes, and don't consider the migration "done" until the ledger shows step 4 closed too.
+
 ## Staging / local branch runbook
 
 - **Mis-pointed env var** (Preview accidentally pointing at the wrong database): revert the affected

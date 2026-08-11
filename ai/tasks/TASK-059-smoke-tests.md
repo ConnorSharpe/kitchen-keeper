@@ -1,15 +1,44 @@
 # TASK-059 Full Regression Smoke Test
-## Comprehensive Pre-Production-Push Smoke Test (staging → main)
+## Post-Deploy Regression Smoke Test — now running directly against PRODUCTION
+
+---
+
+> ## ⚠️ STATUS UPDATE (2026-08-10): `staging` → `main` merge already happened. This is now a
+> ## PRODUCTION verification pass, not a pre-merge gate.
+>
+> This checklist was originally written as a *pre-merge* gate to run against the staging Preview
+> deployment before promoting `staging` to `main`. That plan changed: on 2026-08-10, production
+> (`kitchenkeeper.kitchen`, deployed from `main`) was found completely broken for every logged-in
+> user — `NeonDbError: column "openai_api_key" does not exist` on every authenticated request
+> (pantry, recipes, onboarding, chat). Root cause: the TASK-051 migration dropping that column had
+> already been applied directly to the **production** Neon database, but `main` was still 19 commits
+> behind `staging` and had never picked up the matching code. `staging` (including everything this
+> checklist was written to cover — TASK-051 through TASK-057) was merged into `main` and deployed to
+> production as the fix, out of band from this smoke test, because production was actively down and
+> couldn't wait for a full manual pass first.
+>
+> **Consequence for whoever runs this next: every environment reference below that says "staging
+> Preview" is now stale. Run this against production (`https://kitchenkeeper.kitchen`) instead — see
+> the rewritten Environment & Setup section immediately below.** The scope and expected behavior of
+> each individual check (AUTH-*, PANTRY-*, VIS-*, etc.) are unaffected and still apply — only *where*
+> you run them and *how carefully you clean up* has changed.
+>
+> Post-deploy log spot-check already done as part of the fix: `npm test` was 98/98 green on the merged
+> `main` before push, and a live `GET`-level check confirmed the `openai_api_key` error is gone after
+> deploy. The sections below have **not** been executed yet — treat all rows as still outstanding.
 
 ---
 
 ## Purpose & Scope
 
-Staging (`staging` branch) has accumulated multiple unreleased changes not yet on `main`/production —
+`main`/production has just received a large batch of previously-unreleased changes in one merge —
 most significantly the TASK-057 "Modern Farmhouse" visual redesign, which touched nearly every screen
-(Sidebar, Dashboard, Pantry, Chat, Recipes, Shopping, Household, Landing, `DietaryProfileForm`). This
-test exists to catch regressions across the **whole app**, not just the redesigned surface, before
-`staging` is merged into `main` and deployed to real users.
+(Sidebar, Dashboard, Pantry, Chat, Recipes, Shopping, Household, Landing, `DietaryProfileForm`), plus
+TASK-051 through TASK-056 (BYOK removal, structured AI outputs, streaming chat, context-size cap,
+post-audit hardening). This test exists to catch regressions across the **whole app**, not just the
+redesigned surface — normally *before* a merge to `main`, but in this case the merge and deploy already
+happened as an emergency fix, so this pass is confirming production is actually healthy after the fact
+rather than gating whether to proceed.
 
 This is a checklist for the agent to walk Connor through interactively (or execute directly via the
 Local Smoke Testing Protocol / browser tools where the step doesn't require a human judgment call —
@@ -21,23 +50,30 @@ regressions; this covers what only a real running app can show you.
 
 ## Environment & Setup
 
-- **Run this against the staging Preview deployment**, not production and not local — it's the only
-  environment that (a) reflects the actual deployed build users will hit next, and (b) has its own
-  isolated Neon branch and Clerk dev instance, so test writes can't pollute real user data. See
-  [CONVENTIONS.md](../handoffs/CONVENTIONS.md) for environment details.
-  - URL: `kitchen-keeper-git-staging-connorsharpes-projects.vercel.app`
-  - If local dev is used instead for faster iteration, note it explicitly in Results — local's Neon
-    branch is separate again, so a pass locally doesn't guarantee the staging *build* is clean (env
-    vars, CDN caching, and prod build optimizations only exist in the deployed Preview).
-- **Confirm the staging Neon branch has all pending migrations applied** before testing (per
+- **⚠️ This now runs against PRODUCTION (`https://kitchenkeeper.kitchen`), not the staging Preview.**
+  The merge this checklist was gating already happened and is already live — there is no
+  pre-merge staging Preview step left to run instead. See [CONVENTIONS.md](../handoffs/CONVENTIONS.md)
+  for environment details, but note it was written with staging-first testing in mind and may not yet
+  reflect this change.
+  - URL: `https://kitchenkeeper.kitchen`
+- **This means real consequences that did not apply when this doc was written for staging:**
+  - The Clerk instance is **production** (`pk_live_...`), not the isolated `pk_test_...` dev instance —
+    any account you sign up is a real account on the real Clerk instance, and any household/pantry/recipe
+    data you create is real production data other real users could theoretically see if anything about
+    household isolation is broken (which is exactly what §12 Authorization Boundaries is checking).
+  - The Neon database is the **production** branch — no isolated throwaway branch to blow away after.
+  - Test data discipline (see below) is not just tidiness here — it's the only thing preventing this
+    session from leaving visible junk in front of real users.
+- **Confirm production's Neon branch has all pending migrations applied** before testing (per
   CONVENTIONS.md's canonical migration order) — a schema mismatch here produces confusing failures that
-  look like app bugs.
-- **Test account**: use a disposable Clerk dev-instance account (or an existing throwaway one) — Clerk's
-  staging instance (`pk_test_...`) is separate from production, so no real user data is at risk here
-  regardless.
-- **Test data discipline**: prefix anything you create (household name, recipe titles, pantry items) with
-  a visually distinctive marker, e.g. `ZZSMOKE-`, so cleanup is a trivial visual scan, not a guess. Delete
-  everything you create before ending the session (create → verify → delete; see Cleanup section).
+  look like app bugs. (This was the actual root cause of the 2026-08-10 outage — verify it's now
+  actually resolved, don't assume it from this doc alone.)
+- **Test account**: use a disposable real account (a throwaway email you control) — there is no
+  dev-instance isolation net here. Do not use Connor's real/primary account for destructive test steps.
+- **Test data discipline (mandatory, higher stakes than before)**: prefix anything you create (household
+  name, recipe titles, pantry items) with a visually distinctive marker, e.g. `ZZSMOKE-`, so cleanup is a
+  trivial visual scan, not a guess. Delete everything you create before ending the session (create →
+  verify → delete; see Cleanup section) — on production this is not optional or a "nice to have."
 - Open DevTools/console tools alongside the browser pane for the whole session — several checks below are
   "no console errors," which is easy to miss without it open continuously.
 
@@ -47,9 +83,9 @@ regressions; this covers what only a real running app can show you.
 
 | # | Step | Expected |
 |---|------|----------|
-| PF-1 | Load the staging URL cold (no cache) | Landing page renders, no console errors, no failed network requests |
-| PF-2 | Check Network tab for the initial page load | No 4xx/5xx on any request; API calls hit the staging API origin, not localhost or production |
-| PF-3 | Confirm build freshness | Latest `staging` commit hash/timestamp matches what you expect (Vercel deployment log or a version marker if one exists) |
+| PF-1 | Load `https://kitchenkeeper.kitchen` cold (no cache) | Landing page renders, no console errors, no failed network requests |
+| PF-2 | Check Network tab for the initial page load | No 4xx/5xx on any request; API calls hit the production API origin |
+| PF-3 | Confirm build freshness | Deployed commit matches current `main` HEAD (Vercel deployment log / `vercel inspect kitchenkeeper.kitchen`) — as of the 2026-08-10 fix this should be the merge commit that brought `staging` into `main` |
 
 ---
 
@@ -196,7 +232,7 @@ confirmation still open — this isn't just a routine check, verify it deliberat
 |---|------|----------|
 | ADMIN-1 | As the owner account (`OWNER_CLERK_ID`), `GET /api/admin/platform-settings` | Returns current settings, 200 |
 | ADMIN-2 | As a non-owner account, `GET /api/admin/platform-settings` | 403, not a crash or data leak |
-| ADMIN-3 | Confirm `publicAiAccessEnabled` and `aiRateLimitMax` current values are intentional for what's about to ship to production | Flag to Connor if either looks unintended — this gate gets more consequential the moment `staging` merges to `main` |
+| ADMIN-3 | Confirm `publicAiAccessEnabled` and `aiRateLimitMax` current values are intentional now that `staging`'s changes are live in production | Flag to Connor if either looks unintended — this is no longer a pre-merge check, these values are already governing real traffic |
 
 ---
 
@@ -299,33 +335,38 @@ binary pass/fail forces premature judgment calls into the middle of testing. Use
 
 ---
 
-## Production Merge Decision
+## Production Health Decision (formerly "Production Merge Decision")
 
-This is a release gate, not just a checklist — state the decision explicitly at the end of the session.
+The merge already happened (2026-08-10, as an emergency fix for the `openai_api_key` outage — see the
+status banner at the top of this doc). There is no merge left to gate, so this section is no longer
+"should we merge" — it's "is production actually healthy now, and does anything here require an
+immediate rollback or hotfix." State the decision explicitly at the end of the session.
 
-**Proceed with `staging` → `main` merge only if:**
+**Production is confirmed healthy if:**
 - No ❌ Fail rows remain (or each has an explicit, written waiver from Connor).
 - No unresolved auth, data-isolation, or data-loss issue (any ❌/⚠️ in §12 Authorization Boundaries gets
-  priority triage — these regress silently and are the hardest class to notice after the fact).
+  priority triage — these regress silently and are the hardest class to notice after the fact, and are
+  now happening against real user data).
 - The *only* visual inconsistencies found are the named Known Accepted Gaps below — anything else
   orange/inconsistent is a new regression, not pre-approved debt.
-- `npm run build`, `npm run lint`, `npm test` are all green on `staging` immediately before merge.
-- Cleanup (§15) fully executed — no leftover `ZZSMOKE-` data, no diagnostic code in the diff.
+- `npm run build`, `npm run lint`, `npm test` are all green on `main` at the deployed commit.
+- Cleanup (§15) fully executed — no leftover `ZZSMOKE-` data left visible to real users, no diagnostic
+  code in the diff.
 
-**Do not merge — and if already merged, roll back immediately — if any of these show up:**
+**Roll back or hotfix `main` immediately if any of these show up:**
 - Sign-in/sign-up broken (AUTH-1–AUTH-3).
 - Household data isolation broken (SEC-2) — one household able to read or mutate another's data.
 - Core pantry mutations failing outright (add/edit/delete all broken, not just one edge case).
-- A production API error rate spike immediately after deploy (check Vercel logs post-merge, not just
-  pre-merge staging results — a staging pass doesn't guarantee identical production env vars/config).
+- A production API error rate spike is visible in Vercel logs (`vercel logs kitchenkeeper.kitchen`) beyond
+  what this session's own test traffic explains.
 - A database migration mismatch is detected (see CONVENTIONS.md's canonical migration order — confirm
-  production's Neon branch has every migration `staging` assumes, *before* merging code that depends on
-  them).
+  production's Neon branch has every migration `main`'s deployed code now assumes). This is the exact
+  failure class that caused the 2026-08-10 outage — treat any recurrence as high priority.
 
 ## Pass Criteria
 
-All rows pass or are explicitly ⚪ N/A with a documented reason, and the Production Merge Decision above
-resolves to "proceed."
+All rows pass or are explicitly ⚪ N/A with a documented reason, and the Production Health Decision above
+resolves to "healthy" (no rollback/hotfix triggered).
 
 ## Known Accepted Gaps (not failures)
 
