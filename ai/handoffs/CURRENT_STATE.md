@@ -8,8 +8,14 @@ TASK-063 implementation — iOS PWA double sign-in/sign-out: don't trust Clerk's
 
 Implemented DRAFT-3 in full per Section 3 and self-checked line-by-line against the Section 9 Final
 Acceptance Checklist (all code-side items ✅; the two deployment-verification-gate items are explicitly
-**not done** — see Remaining Work). **Not committed, not deployed** — this session only implemented and
-verified locally; the user did not ask for a commit/push, unlike the TASK-061/062 sessions.
+**not done** — see Remaining Work). **Committed and deployed to both `staging` and `production` at Connor's
+explicit request** (commit `d40a5cc`). `staging` pushed first (`461ab38..d40a5cc`), confirmed Ready via
+`vercel inspect` (`dpl_B8VF4dmj7apwcEgxotkzLoy9w7Bh`); then fast-forward merged into `main` and pushed
+(`461ab38..d40a5cc`, same commit — no divergence), confirmed Ready via `vercel inspect
+kitchenkeeper.kitchen` (`dpl_5VRE5u6DYHMskFNndtb3P9Js7BFW`, target `production`). No migration involved, so
+`MIGRATION_LEDGER.md` needs no new row. **Functionally unverified against the actual bug** — see Remaining
+Work #2; build/lint/test all green, but none of that exercises real iOS Safari OAuth/session-restoration
+timing.
 
 `OAuthReturnGuard` and `client/src/lib/oauthReturn.js` are fully removed (TASK-062's fix never actually fired
 in any of TASK-063's three real repro captures, per spec Section 0 — confirmed dead code, not a regression).
@@ -111,16 +117,15 @@ codebase's `node --test`-only setup (see Current Status for why `.jsx` files can
 
 # Remaining Work
 
-1. **Not committed or deployed this session** — the user asked to implement the spec, not to ship it; commit
-   is the user's call. `git status` currently shows the file set under Files Modified as unstaged changes.
-2. **Section 9's two deployment-verification-gate checklist items are still fully pending, same as TASK-062's
-   deferred on-device step was**: after this ships, perform the real iOS PWA repro (sign in, sign out, no
-   other screens — Connor's existing recipe) with debug logging enabled, confirm the captured log shows
+1. **Section 9's two deployment-verification-gate checklist items are still fully pending, same as TASK-062's
+   deferred on-device step was**: now that this is live, perform the real iOS PWA repro (sign in, sign out,
+   no other screens — Connor's existing recipe) with debug logging enabled, confirm the captured log shows
    `settling`→`settled` suppressing the previously-visible raw `clerk-auth-state` flips, and record the real
    `settleElapsedMs`/`settleReason`/`navigationType`/`settleInitialIsSignedIn`/`settleFinalIsSignedIn`
    distribution — the first real data toward validating or retuning `SETTLE_QUIET_MS`/`SETTLE_MAX_MS`.
    **TASK-063 is not "done" until this runs**, per the spec's own framing (approval covers the
-   architecture/spec, not a confirmed fix).
+   architecture/spec, not a confirmed fix). This is now live in production, unverified — same posture
+   TASK-062 shipped with.
 3. Unrelated, carried forward: TASK-059's remaining phone-driven checklist rows (AUTH-1–5, ONB, HH, DASH,
    PANTRY, REC, SHOP, CHAT, DIET, PUSH, VIS-2–5, ERR-2/3/5) still pending a human pass; two disposable Clerk
    accounts (`+zzsmokeB@gmail.com`, `+zzsmokeC@gmail.com`) still need manual deletion from production Clerk;
@@ -162,10 +167,9 @@ codebase's `node --test`-only setup (see Current Status for why `.jsx` files can
 
 # Recommended Next Action
 
-Review the diff (`git status`/`git diff`), and if it looks good, commit and deploy per the user's normal
-staging → production flow. No migration is involved, so `MIGRATION_LEDGER.md` needs no new row (confirmed:
-"None currently open" at session start, and this change touches no schema). After deploying, perform the
-real on-device repro (Remaining Work #2) before treating TASK-063 as solved, not just shipped.
+When Connor is ready to test on his phone: perform Section 7/Section 9's on-device repro against the now-live
+production build (sign in, sign out, no other screens). Record the `settling`→`settled` diagnostics from that
+real attempt — this is the only thing still standing between "shipped" and "confirmed fixed."
 
 # Forbidden Exploration
 
@@ -175,7 +179,8 @@ real on-device repro (Remaining Work #2) before treating TASK-063 as solved, not
 
 # Context Notes
 
-- branch: `staging` (working tree only — nothing committed this session).
+- branch: `staging` (committed `d40a5cc`, pushed to `staging`, fast-forward merged and pushed to `main`;
+  session ended back on `staging` per the repo's day-to-day-branch convention).
 - No dev servers started this session; verification was build/lint/test only, not a live browser session.
 - No worktree used.
 - Session followed the AI Development Agent Efficiency Guide's orientation protocol (read `CURRENT_STATE.md`,
