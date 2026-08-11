@@ -2,8 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ClerkProvider } from '@clerk/clerk-react';
 import App from './App.jsx';
-import { logEvent } from './lib/debugLog.js';
-import { isStandalonePwa } from './lib/oauthReturn.js';
+import { logEvent, isStandalonePwa } from './lib/debugLog.js';
 import { installLifecycleLogging } from './lib/lifecycleLog.js';
 import './index.css';
 

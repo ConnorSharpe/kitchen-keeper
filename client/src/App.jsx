@@ -1,20 +1,10 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import {
-  SignIn,
-  SignUp,
-  SignedIn,
-  SignedOut,
-  RedirectToSignIn,
-  useAuth,
-} from '@clerk/clerk-react';
-import {
-  cameFromOAuthCallback,
-  isStandalonePwa,
-  OAUTH_RELOAD_MARKER_KEY,
-} from './lib/oauthReturn.js';
+import { SignIn, SignUp, RedirectToSignIn, useAuth } from '@clerk/clerk-react';
 import { logEvent } from './lib/debugLog.js';
+import { resolveRouteDecision } from './lib/routeDecision.js';
+import { useSettledAuth } from './hooks/useSettledAuth.js';
 import { AuthProvider } from './context/AuthContext.jsx';
 import AppLayout from './components/layout/AppLayout.jsx';
 import ErrorBoundary from './components/layout/ErrorBoundary.jsx';
@@ -30,86 +20,43 @@ import JoinPage from './pages/JoinPage.jsx';
 
 function PrivateRoute({ children, publicHomeElement }) {
   const location = useLocation();
-  return (
-    <>
-      <SignedIn>{children}</SignedIn>
-      <SignedOut>
-        {publicHomeElement && location.pathname === '/'
-          ? publicHomeElement
-          : <RedirectToSignIn />}
-      </SignedOut>
-    </>
+  const { status, isSignedIn } = useSettledAuth();
+  const decision = resolveRouteDecision(
+    { status, isSignedIn },
+    { hasPublicHome: !!publicHomeElement, pathname: location.pathname }
   );
+
+  switch (decision) {
+    case 'render-children':
+      return children;
+    case 'render-public-home':
+      return publicHomeElement;
+    case 'redirect-to-sign-in':
+      return <RedirectToSignIn />;
+    case 'render-nothing':
+    default:
+      return null;
+  }
 }
 
 function PublicRoute({ children }) {
-  return (
-    <>
-      <SignedIn>
-        <Navigate to="/" replace />
-      </SignedIn>
-      <SignedOut>{children}</SignedOut>
-    </>
-  );
-}
-
-// TASK-062: on the installed iOS standalone PWA, the first render after a Google OAuth
-// redirect round-trip sometimes lands signed-out even though Clerk's session was actually
-// created (see ai/tasks/TASK-062-spec.md). Detect that specific case and force exactly one
-// reload so the webview re-evaluates current cookies/storage from scratch, rather than
-// trusting a possibly-stale restored render. Never fires outside standalone PWA + `/`.
-function OAuthReturnGuard() {
   const location = useLocation();
-  const { isLoaded, isSignedIn } = useAuth();
+  const { status, isSignedIn } = useSettledAuth();
+  const decision = resolveRouteDecision(
+    { status, isSignedIn },
+    { hasPublicHome: false, pathname: location.pathname }
+  );
 
-  useEffect(() => {
-    if (!isLoaded) return;
-
-    const marker = sessionStorage.getItem(OAUTH_RELOAD_MARKER_KEY);
-    const standalone = isStandalonePwa();
-    const fromCallback = cameFromOAuthCallback();
-
-    const shouldReload =
-      !marker &&
-      location.pathname === '/' &&
-      !isSignedIn &&
-      standalone &&
-      fromCallback;
-
-    logEvent('oauth-return-guard', {
-      pathname: location.pathname,
-      isSignedIn,
-      standalone,
-      referrer: document.referrer,
-      fromCallback,
-      marker: !!marker,
-      decision: shouldReload
-        ? 'reload'
-        : marker
-          ? 'marker-cleared'
-          : 'noop',
-    });
-
-    if (shouldReload) {
-      sessionStorage.setItem(OAUTH_RELOAD_MARKER_KEY, '1');
-      window.location.reload();
-      return;
-    }
-
-    // isLoaded has conclusively resolved (signed in or genuinely signed out) without firing
-    // a reload — end this OAuth return's lifecycle so a later, unrelated attempt isn't
-    // silently blocked (spec Section 3.3, step 3).
-    if (marker) {
-      sessionStorage.removeItem(OAUTH_RELOAD_MARKER_KEY);
-    }
-  }, [isLoaded, isSignedIn, location.pathname]);
-
-  return null;
+  if (decision === 'render-nothing') return null;
+  if (decision === 'render-children') return <Navigate to="/" replace />;
+  // 'redirect-to-sign-in' inverted: signed-out (with no public home to consider here) renders
+  // the actual public auth form instead of redirecting.
+  return children;
 }
 
 // TASK-063: logs every Clerk isLoaded/isSignedIn transition Clerk itself reports, independent
-// of the reload-guard's own decision above — distinguishes "Clerk flip-flopped" from
-// "the guard's heuristic misfired" when reading the captured sequence back.
+// of useSettledAuth()'s own settled snapshot above — diagnostic-only, kept reading raw
+// useAuth() so a captured log shows both the raw flips and how settlement suppressed them.
 function AuthStateLogger() {
   const location = useLocation();
   const { isLoaded, isSignedIn } = useAuth();
@@ -132,7 +79,6 @@ export default function App() {
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <AuthProvider>
-          <OAuthReturnGuard />
           <AuthStateLogger />
           <DebugPanel />
           <Toaster position="top-right" />

@@ -1,147 +1,186 @@
 # Task
 
-TASK-062 implementation — iOS standalone PWA Google OAuth self-correction (referrer-detect + single reload).
+TASK-063 implementation — iOS PWA double sign-in/sign-out: don't trust Clerk's first post-mount reading
+(`loading -> settling -> settled` state machine), per [TASK-063-spec.md](../tasks/TASK-063-spec.md) DRAFT-3
+(approved for implementation, architect review round 3).
 
 # Current Status
 
-Implemented [TASK-062-spec.md](../tasks/TASK-062-spec.md) DRAFT-4 (Sections 3.1–3.3) in full. **Connor
-explicitly approved implementing provisionally and deferring Section 7's on-device capture** — he has not yet
-walked the real Google OAuth flow on the affected iOS PWA to confirm `document.referrer` actually resolves to
-`/sign-in/sso-callback`. Per the spec's own design, this is a single named constant
-(`EXPECTED_OAUTH_CALLBACK_PATH` in `client/src/lib/oauthReturn.js`) specifically so that correcting it against
-the real observed value later is a one-line change, not a redesign.
+Implemented DRAFT-3 in full per Section 3 and self-checked line-by-line against the Section 9 Final
+Acceptance Checklist (all code-side items ✅; the two deployment-verification-gate items are explicitly
+**not done** — see Remaining Work). **Not committed, not deployed** — this session only implemented and
+verified locally; the user did not ask for a commit/push, unlike the TASK-061/062 sessions.
 
-**This fix is code-complete, build/lint/test-green, committed, and deployed to both `staging` and
-`production` (commit `8ff523f`) — but functionally unverified.** Connor explicitly instructed committing and
-pushing to both environments now, deferring only the device-side check. The actual bug (does this reload the
-stale render into a signed-in dashboard on iOS?) can only be confirmed device-side, which Connor deferred.
-Production deployment confirmed live via `vercel inspect kitchenkeeper.kitchen` (`dpl_BJuJcKABnsKkYMcE3WftcyHhFeFa`,
-status Ready). No migration involved, so `MIGRATION_LEDGER.md` has no new row. Do not treat this as fully
-verified — see Known Risks.
+`OAuthReturnGuard` and `client/src/lib/oauthReturn.js` are fully removed (TASK-062's fix never actually fired
+in any of TASK-063's three real repro captures, per spec Section 0 — confirmed dead code, not a regression).
+Replaced by `SettledAuthProvider`/`useSettledAuth()` — a shared `loading -> settling -> settled` state
+machine — and `PrivateRoute`/`PublicRoute` now branch on a pure, independently-tested routing-decision
+function instead of Clerk's `<SignedIn>`/`<SignedOut>` directly.
+
+One implementation deviation from the spec's literal file list, necessary and confirmed by direct
+measurement: `resolveRouteDecision()` could **not** stay inside `App.jsx` as spec Section 3.2 suggested,
+because this codebase's client tests run via plain `node --test` (no loader/transform), which cannot resolve
+`.jsx` files at all — confirmed directly (`ERR_UNKNOWN_FILE_EXTENSION`, thrown before any parsing). Extracted
+to `client/src/lib/routeDecision.js` (plain `.js`, no JSX) instead; `App.jsx` imports it. Same constraint
+didn't apply to `useSettledAuth.js` since it was already specified as `.js` and avoids JSX syntax internally
+(uses `createElement` directly for its one `Provider` element).
 
 # Files Modified
 
-- `client/src/lib/oauthReturn.js` — new file. `EXPECTED_OAUTH_CALLBACK_PATH` (`/sign-in/sso-callback`,
-  pending-verification default), `OAUTH_RELOAD_MARKER_KEY`, `cameFromOAuthCallback()`, `isStandalonePwa()`.
-- `client/src/App.jsx` — added `OAuthReturnGuard` component (mounted inside `AuthProvider`, sibling of
-  `<Routes>`, runs on every render regardless of matched route). Uses Clerk's `useAuth()`
-  (`isLoaded`/`isSignedIn`) + `useLocation()`. Implements spec Section 3.2's full AND'd guard and Section
-  3.3's marker lifecycle (set + reload when guard fires; cleared once `isLoaded` resolves on any load where
-  it doesn't — covers both "signed in after reload" and "genuinely still signed out"). `PrivateRoute`/
-  `PublicRoute` (TASK-061's surface) untouched — confirmed TASK-061 acceptance criterion 1 still holds.
-- `ai/handoffs/archive/TASK-062-spec-drafting.md` — new file, archived prior CURRENT_STATE.md content
-  per Size Discipline.
+- `client/src/hooks/useSettledAuth.js` — new. `SettledAuthProvider`, `useSettledAuth()`, exported pure
+  `settledAuthReducer()` (explicit state transitions) and `computeSettlement()` (pure model of the
+  settling-timing algorithm, used only for exhaustive unit testing — the real provider reacts to events via
+  actual `setTimeout`s, which a pure function evaluating an already-known trace can't do). `SETTLE_QUIET_MS`
+  = 400, `SETTLE_MAX_MS` = 2000 (both provisional per spec).
+- `client/src/hooks/useSettledAuth.test.js` — new. 19 tests: reducer transitions + terminal/passthrough
+  behavior, and every `computeSettlement` trace from Acceptance Criterion 2 (including both ~1500ms/~1900ms
+  debounce-reset boundary cases).
+- `client/src/lib/routeDecision.js` — new. `resolveRouteDecision()`, extracted out of `App.jsx` for the
+  reason above.
+- `client/src/lib/routeDecision.test.js` — new. 8 tests covering Acceptance Criterion 6, including both
+  `PrivateRoute`- and `PublicRoute`-shaped calls (PublicRoute inverts the result at its own call site, per
+  spec Section 3.2).
+- `client/src/App.jsx` — `PrivateRoute`/`PublicRoute` now call `useSettledAuth()` + `resolveRouteDecision()`;
+  `OAuthReturnGuard` and its `oauthReturn.js` imports removed; `AuthStateLogger` untouched (still reads raw
+  Clerk `useAuth()`, diagnostic-only, comment updated to no longer reference the removed guard).
+- `client/src/context/AuthContext.jsx` — mounts `SettledAuthProvider` inside `AuthProvider`, wrapping
+  `children`. Resulting order: `ClerkProvider` (main.jsx, unchanged) → `AuthProvider` → `SettledAuthProvider`
+  → rest of the app, exactly as spec Section 4 required.
+- `client/src/lib/debugLog.js` — gained `isStandalonePwa()`, relocated from the deleted `oauthReturn.js`
+  (still needed by `main.jsx`'s `app-boot` diagnostic).
+- `client/src/main.jsx` — imports `isStandalonePwa` from `debugLog.js` instead of the deleted file.
+- `client/src/lib/oauthReturn.js` — deleted.
+- `ai/handoffs/archive/TASK-062-implementation.md` — new, archived TASK-062's full write-up per Size
+  Discipline (superseded by this session; also records that `OAuthReturnGuard` turned out to be dead code).
 - `ai/handoffs/CURRENT_STATE.md` — this file.
 
 # Files Required Next
 
-- None to implement further — the code change is complete per spec. Next session's job is verification
-  (device-side) and, once confirmed, the staging → production push.
+- None to implement further. Next session's job (or later this session, if the user asks): review the diff,
+  commit, then handle deployment + the Section 9 deployment-verification gates (see Remaining Work).
 
 # Files Already Reviewed
 
-`client/src/App.jsx`, `client/src/main.jsx` (re-confirmed `ClerkProvider` has no `routerPush`/`routerReplace`
-wired, matching the spec's Section 3.1 premise), `client/node_modules/@clerk/clerk-react/dist/index.d.mts`
-(confirmed `useAuth` is exported by the installed `@clerk/clerk-react@5.61.8`, safe to use).
+`client/src/App.jsx`, `client/src/context/AuthContext.jsx`, `client/src/lib/oauthReturn.js`,
+`client/src/lib/debugLog.js`, `client/src/main.jsx`, `client/src/api/index.ndjson.test.js` and
+`index.authRetry.test.js` (existing test-style precedent), `client/package.json` / root `package.json` (test
+scripts — confirmed root `npm test` does **not** run any client tests, same gap noted in TASK-062's handoff;
+client tests only run via `node --test` inside `client/`), `client/vite.config.js` (confirmed no `.js`→JSX
+loader override, which is why plain `.js` files in this codebase must avoid JSX syntax to stay importable by
+`node --test`).
 
 # Dependency Chain
 
-Editing: `client/src/App.jsx`, `client/src/lib/oauthReturn.js` (new).
-Requires: Clerk's `useAuth()` (`isLoaded`/`isSignedIn`), React Router's `useLocation()`. No new npm
-dependency.
-Irrelevant: all of `server/*`, `client/src/api/index.js` (TASK-061's surface, untouched), any
-database/schema change (none — this is a client-only change; `MIGRATION_LEDGER.md` has no outstanding gaps
-and does not apply here, confirmed at session start).
+Editing: `client/src/hooks/useSettledAuth.js` (new), `client/src/lib/routeDecision.js` (new), `client/src/App.jsx`,
+`client/src/context/AuthContext.jsx`, `client/src/lib/debugLog.js`, `client/src/main.jsx`.
+Requires: Clerk's `useAuth()` (`isLoaded`/`isSignedIn`) via `@clerk/clerk-react` (no new dependency, already
+installed).
+Irrelevant: `client/src/api/index.js` and all of `server/*` — explicitly forbidden by TASK-063's own Files
+section (TASK-061's surface; confirmed untouched, its `authRetry` test suite still green).
 
 # Architecture Notes
 
-`OAuthReturnGuard` is a standalone component with no rendered output (`return null`), mounted once at the
-top of the route tree so it runs independent of which route matched — this was necessary because the guard
-needs to observe `location.pathname === '/'` itself (per spec Section 3.2) rather than being scoped to a
-specific `<Route>`. The single-shot `sessionStorage` marker (`kk_oauth_reload_consumed`) is the sole
-loop-prevention authority, structurally decoupled from whatever `document.referrer` does across
-`window.location.reload()` — per DRAFT-2/DRAFT-3's required corrections, correctness does not depend on that
-behavior.
+`useSettledAuth.js` splits into two independently-testable pure pieces plus a thin React adapter:
+`settledAuthReducer()` (explicit `loading`/`settling`/`settled` transitions, no timers/Clerk knowledge) and
+`computeSettlement()` (a pure model of the debounce/ceiling timing algorithm, fed a complete trace — used
+only by tests, since the real provider must react online to events it doesn't yet know the future of).
+`SettledAuthProvider` wires both to real Clerk state + real `setTimeout`s: a `rawRef` holds the latest Clerk
+`isSignedIn`, updated synchronously every render (never read from a timer-closure, per spec Section 3.1.2's
+hard requirement); the quiet timer clears and reschedules on every render where `isSignedIn` is a defined
+boolean; the max-deadline timer is armed exactly once, the first time `settling` is entered, and never reset.
+
+`resolveRouteDecision()` lives in its own plain-`.js` file specifically so it stays importable by this
+codebase's `node --test`-only setup (see Current Status for why `.jsx` files can't be).
 
 # Decisions Made
 
-- Implemented provisionally with the spec's expected `/sign-in/sso-callback` constant rather than waiting on
-  Section 7's on-device capture — explicit choice by Connor this session ("implement the login fix on the
-  latest spec, I will defer phone testing"), not an agent judgment call to skip a blocking spec requirement.
-  Flagging this clearly here rather than silently treating the task as fully verified.
-- Extracted detection/guard-condition helpers into `client/src/lib/oauthReturn.js` rather than inlining in
-  `App.jsx` — spec Section 4 explicitly allowed either; chose extraction since the constant is meant to be a
-  one-line edit point if Section 7's capture reveals a different callback path.
-- Did not touch `PrivateRoute`/`PublicRoute` or wire `routerPush`/`routerReplace` — both explicitly out of
-  scope per spec Section 5.
+- Extracted `resolveRouteDecision()` to `client/src/lib/routeDecision.js` instead of keeping it in `App.jsx`
+  as spec Section 3.2 suggested — confirmed necessary by direct measurement (`node --test` throws
+  `ERR_UNKNOWN_FILE_EXTENSION` on `.jsx`), not a stylistic preference. Spec explicitly left the exact
+  shape/location as "implementation's call."
+- Added `computeSettlement()` as a second pure function alongside the reducer, purely to make the timing
+  algorithm (debounce resets, max-ceiling boundary behavior) exhaustively testable without fake-timer or DOM
+  infrastructure — the real provider's `setTimeout`-based implementation is a separate (structurally
+  matching) implementation of the same rules, since a pure function can't react to not-yet-known future
+  events the way the real hook must. Documented this split explicitly in the file so it doesn't read as
+  redundant or drift silently.
+- Did not add any new test infrastructure (no `@testing-library/react`, no `jsdom`) — matches spec Section 7's
+  explicit instruction and this codebase's existing plain-`node:test` precedent.
+- Left `AuthStateLogger` untouched per spec (still reads raw Clerk `useAuth()` for diagnostic comparison
+  against the new settled snapshot) — only updated its comment, which referenced the now-removed guard.
 
 # Remaining Work
 
-1. **Section 7's on-device capture and verification — still fully pending, deferred by Connor.** When he's
-   ready: walk the real Google OAuth flow on the installed iOS PWA, record `document.referrer`/URL/
-   display-mode/Clerk state at each step. If it matches `/sign-in/sso-callback`, this implementation should
-   already work as-is — confirm via the adversarial cancellation test and post-correction navigation test in
-   spec Section 7. If it doesn't match, update `EXPECTED_OAUTH_CALLBACK_PATH` in `oauthReturn.js` (one line)
-   and re-verify; if the referrer approach doesn't hold at all, stop and bring findings back for a DRAFT-5
-   spec revision — do not add a lifecycle-heuristic fallback (spec explicitly forbids this).
-2. **Already committed and shipped to `staging` and `production`** (commit `8ff523f`, fast-forward
-   `staging` → `main`, both pushed). If Section 7's capture shows the referrer approach doesn't hold, the
-   fix as shipped is a safe no-op (criterion 6) but should still be corrected: update
-   `EXPECTED_OAUTH_CALLBACK_PATH` (or revise to DRAFT-5) and re-deploy the same way.
+1. **Not committed or deployed this session** — the user asked to implement the spec, not to ship it; commit
+   is the user's call. `git status` currently shows the file set under Files Modified as unstaged changes.
+2. **Section 9's two deployment-verification-gate checklist items are still fully pending, same as TASK-062's
+   deferred on-device step was**: after this ships, perform the real iOS PWA repro (sign in, sign out, no
+   other screens — Connor's existing recipe) with debug logging enabled, confirm the captured log shows
+   `settling`→`settled` suppressing the previously-visible raw `clerk-auth-state` flips, and record the real
+   `settleElapsedMs`/`settleReason`/`navigationType`/`settleInitialIsSignedIn`/`settleFinalIsSignedIn`
+   distribution — the first real data toward validating or retuning `SETTLE_QUIET_MS`/`SETTLE_MAX_MS`.
+   **TASK-063 is not "done" until this runs**, per the spec's own framing (approval covers the
+   architecture/spec, not a confirmed fix).
 3. Unrelated, carried forward: TASK-059's remaining phone-driven checklist rows (AUTH-1–5, ONB, HH, DASH,
    PANTRY, REC, SHOP, CHAT, DIET, PUSH, VIS-2–5, ERR-2/3/5) still pending a human pass; two disposable Clerk
-   accounts (`+zzsmokeB@gmail.com`, `+zzsmokeC@gmail.com`) still need manual deletion from production Clerk.
+   accounts (`+zzsmokeB@gmail.com`, `+zzsmokeC@gmail.com`) still need manual deletion from production Clerk;
+   Section 2 finding 7 (unhandled `forceRefreshToken()` rejection) still not addressed by any spec, per
+   TASK-063 Section 8.
 
 # Known Risks / Open Questions
 
-- **This fix is live in production, unverified against the actual bug.** Build/lint/test all pass, but none
-  exercise real iOS Safari OAuth navigation — the one thing that determines whether the detector actually
-  fires correctly. It is now shipped, not just implemented — treat "confirm on-device" as an open follow-up,
-  not optional polish. Worst case if wrong: a no-op (criterion 6) or, unverified, a possible incorrect
-  reload trigger on iOS standalone PWA — worth prioritizing the on-device check soon rather than indefinitely.
-- If `document.referrer` is stripped/unavailable on-device (Referrer-Policy, WKWebView quirks), spec
-  acceptance criterion 6 treats that as an acceptable degraded no-op, not a defect — but worth knowing going
-  in that the fix could end up inert in practice.
-- Pre-existing, unrelated, untouched working-tree modifications remain
-  (`.claude/settings.local.json`, `ai/tasks/TASK-059-smoke-tests.md`,
-  `ai/handoffs/archive/TASK-061-implementation.md`) — not part of this commit.
-- Carried forward, unrelated: TASK-058/TASK-060 still placeholders; TASK-054's
-  `consume_pantry_item`-on-truncated-item gap; Clerk Dashboard sign-up/bot-protection settings unverified;
-  two disposable Clerk accounts left in production (Remaining Work #3).
+- **Whether `SETTLE_MAX_MS = 2000` is safe against real-world slow OAuth/session-restoration latency remains
+  genuinely unresolved** — per spec Section 8, this is an empirical question no unit test can answer. The
+  boundary tests in `useSettledAuth.test.js` prove the debounce-reset mechanic behaves correctly right up to
+  the ceiling; they don't and can't prove 2000ms is long enough under real degraded network conditions.
+- **This is the third fix attempt at the same user-facing symptom (TASK-061, TASK-062, TASK-063)** — the
+  first two both shipped green-tested and the bug persisted; per spec Section 0, both were independently
+  confirmed from real captured logs not to be the mechanism (TASK-061's retry logic engaged correctly every
+  time; TASK-062's guard never fired even during an actual successful sign-in). Worth treating "tests pass"
+  as necessary but not sufficient evidence again this time — the deployment-verification gates (Remaining
+  Work #2) are load-bearing, not optional polish.
+- Every mount now incurs some settlement latency (up to `SETTLE_QUIET_MS`, or up to `SETTLE_MAX_MS` if never
+  quiet) — an accepted, spec-acknowledged UX cost, not a regression; `navigationType` + `settleElapsedMs`
+  diagnostics exist specifically so this is measurable from real usage once shipped.
+- Pre-existing, unrelated, untouched working-tree modifications remain (`.claude/settings.local.json`,
+  `ai/tasks/TASK-059-smoke-tests.md`) — not part of this change.
+- Carried forward, unrelated: TASK-058/TASK-060 still placeholders; TASK-054's `consume_pantry_item`-on-
+  truncated-item gap; Clerk Dashboard sign-up/bot-protection settings unverified.
 
 # Verification Results
 
 - `npm run lint` (root, `eslint .`): PASS, no warnings/errors.
 - `npm run build` (root → `client`): PASS, `vite build` succeeded (pre-existing >500kB chunk-size warning,
   unrelated to this change).
-- `npm test` (root): PASS — 98/98 tests, 0 failures. No existing test exercises `App.jsx` directly, so this
-  confirms no regression in `shared/*` and `server/*` test coverage, not the OAuth fix itself.
-- Device-side verification (spec Section 7): NOT RUN — deferred by Connor, see Known Risks.
-- Deploy: `staging` push confirmed (`8ff523f`); production confirmed live via `vercel inspect
-  kitchenkeeper.kitchen` → `dpl_BJuJcKABnsKkYMcE3WftcyHhFeFa`, status Ready.
+- `npm test` (root): PASS — 98/98 tests (shared + server only; root script does not include client tests,
+  same pre-existing gap noted in TASK-062's handoff).
+- `node --test "src/**/*.test.js"` (client, run directly — root `npm test` doesn't cover this): PASS — 35/35,
+  including the pre-existing `index.authRetry.test.js` (TASK-061's regression suite, confirmed still green
+  and unmodified) and `index.ndjson.test.js`.
+- Device-side verification (spec Section 7 / Section 9's deployment gates): **NOT RUN** — requires a human on
+  the real installed iOS PWA; see Remaining Work #2.
 
 # Recommended Next Action
 
-When Connor is ready to test on his phone: perform Section 7's on-device capture against the now-live
-production build. If the observed referrer matches expectations, run the remaining Section 7 verification
-steps (adversarial cancel/back-navigation test, post-correction navigation test, single-shot guard
-confirmation, non-standalone regression spot-check). If it doesn't match, update
-`EXPECTED_OAUTH_CALLBACK_PATH` and re-deploy the same way this session did.
+Review the diff (`git status`/`git diff`), and if it looks good, commit and deploy per the user's normal
+staging → production flow. No migration is involved, so `MIGRATION_LEDGER.md` needs no new row (confirmed:
+"None currently open" at session start, and this change touches no schema). After deploying, perform the
+real on-device repro (Remaining Work #2) before treating TASK-063 as solved, not just shipped.
 
 # Forbidden Exploration
 
-- `client/src/api/index.js` and all of `server/*` — explicitly forbidden by TASK-062's own Files section.
-- Any TASK-059 row requiring account creation/credential entry, and TASK-062's on-device capture step itself
-  — both require a human on a real device, not agent-driven browser tooling; standing project rule.
+- `client/src/api/index.js` and all of `server/*` — explicitly forbidden by TASK-063's own Files section.
+- Any TASK-059 row requiring account creation/credential entry, and the on-device repro itself — both
+  require a human on a real device, not agent-driven browser tooling; standing project rule.
 
 # Context Notes
 
-- branch: `staging` (committed `8ff523f`, pushed to `staging`, fast-forward merged and pushed to `main`).
+- branch: `staging` (working tree only — nothing committed this session).
 - No dev servers started this session; verification was build/lint/test only, not a live browser session.
 - No worktree used.
-- Session followed the AI Development Agent Efficiency Guide's orientation protocol at Connor's request
-  (read `CURRENT_STATE.md`, `TASK-062-spec.md`, `MIGRATION_LEDGER.md` — confirmed no outstanding gaps and
-  not applicable to this client-only change).
+- Session followed the AI Development Agent Efficiency Guide's orientation protocol (read `CURRENT_STATE.md`,
+  `TASK-063-spec.md`, `MIGRATION_LEDGER.md` — confirmed no outstanding gaps and not applicable to this
+  client-only change).
 
 ---
 
@@ -165,3 +204,5 @@ confirmation, non-standalone regression spot-check). If it doesn't match, update
   [archive/TASK-059-smoke-tests-resumed.md](archive/TASK-059-smoke-tests-resumed.md)
 - TASK-062 spec-drafting session (DRAFT-1 → DRAFT-4 approved, 4 architect review rounds): see
   [archive/TASK-062-spec-drafting.md](archive/TASK-062-spec-drafting.md)
+- TASK-062 implementation/deploy session (OAuth-return reload guard, shipped to staging + production, later
+  found dead code and removed by TASK-063): see [archive/TASK-062-implementation.md](archive/TASK-062-implementation.md)

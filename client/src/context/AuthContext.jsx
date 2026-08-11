@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { api } from '../api/index.js';
+import { SettledAuthProvider } from '../hooks/useSettledAuth.js';
 
 const AuthContext = createContext(null);
 const ONBOARDING_RETRY_DELAY_MS = 2000;
@@ -76,7 +77,7 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider
       value={{ user, loading: !isLoaded, onboarding, logout, completeOnboarding }}
     >
-      {children}
+      <SettledAuthProvider>{children}</SettledAuthProvider>
     </AuthContext.Provider>
   );
 }

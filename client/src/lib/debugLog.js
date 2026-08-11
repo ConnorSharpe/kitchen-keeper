@@ -60,3 +60,12 @@ export function getLog() {
 export function clearLog() {
   writeLog([]);
 }
+
+// Relocated from the now-removed oauthReturn.js (TASK-063) — still needed by main.jsx's
+// app-boot diagnostic log, independent of the OAuth-return heuristic that used to live there.
+export function isStandalonePwa() {
+  return (
+    window.matchMedia?.('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true
+  );
+}
