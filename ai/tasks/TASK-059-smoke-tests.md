@@ -313,21 +313,31 @@ binary pass/fail forces premature judgment calls into the middle of testing. Use
 
 | Area | Test | Status | Notes |
 |------|------|--------|-------|
-| Pre-flight | PF-1 – PF-3 | ⬜ | |
-| Auth | AUTH-1 – AUTH-5 | ⬜ | |
-| Onboarding | ONB-1 – ONB-4 | ⬜ | |
-| Household | HH-1 – HH-5 | ⬜ | |
-| Dashboard | DASH-1 – DASH-5 | ⬜ | |
-| Pantry | PANTRY-1 – PANTRY-8 | ⬜ | |
-| Recipes | REC-1 – REC-8 | ⬜ | |
-| Shopping | SHOP-1 – SHOP-7 | ⬜ | |
-| Chat | CHAT-1 – CHAT-5 | ⬜ | |
-| Dietary Profile | DIET-1 – DIET-6 | ⬜ | |
-| Push | PUSH-1 – PUSH-3 | ⬜ | |
-| Admin | ADMIN-1 – ADMIN-3 | ⬜ | |
-| Authorization Boundaries | SEC-1 – SEC-6 | ⬜ | |
-| Visual/Responsive | VIS-1 – VIS-5 | ⬜ | |
-| Error Handling | ERR-1 – ERR-5 | ⬜ | |
+| Pre-flight | PF-1 | ✅ | Cold load clean, no console errors |
+| Pre-flight | PF-2 | ✅ | No 4xx/5xx on initial load; all requests hit production origin |
+| Pre-flight | PF-3 | ✅ | Deployment `dpl_DsDc33aKHBFLraaxR3wrcvdN5S4b` created 08:35:19 matches `main` HEAD `cb5e5fd` (08:35:13) |
+| Auth | AUTH-1 – AUTH-5 | ⬜ | Handed off — user running full walkthrough on phone with disposable test account |
+| Onboarding | ONB-1 – ONB-4 | ⬜ | Handed off — user, phone |
+| Household | HH-1 – HH-5 | ⬜ | Handed off — user, phone |
+| Dashboard | DASH-1 – DASH-5 | ⬜ | Handed off — user, phone |
+| Pantry | PANTRY-1 – PANTRY-8 | ⬜ | Handed off — user, phone |
+| Recipes | REC-1 – REC-8 | ⬜ | Handed off — user, phone |
+| Shopping | SHOP-1 – SHOP-7 | ⬜ | Handed off — user, phone |
+| Chat | CHAT-1 – CHAT-5 | ⬜ | Handed off — user, phone |
+| Dietary Profile | DIET-1 – DIET-6 | ⬜ | Handed off — user, phone |
+| Push | PUSH-1 – PUSH-3 | ⬜ | Handed off — user, phone (real OS push required) |
+| Admin | ADMIN-1 – ADMIN-3 | ⬜ | Needs an authenticated session — blocked, pending decision on curl-with-token vs. Clerk backend API vs. user-driven |
+| Authorization Boundaries | SEC-1 | ✅ | `PATCH /api/pantry/:id` with no auth token → 401 |
+| Authorization Boundaries | SEC-2 | ⬜ | Needs two authenticated accounts — blocked, same as ADMIN |
+| Authorization Boundaries | SEC-3 | ⬜ | Needs an authenticated account — blocked, same as ADMIN |
+| Authorization Boundaries | SEC-4 | ⬜ | Needs an authenticated account — blocked, same as ADMIN |
+| Authorization Boundaries | SEC-5 | ✅ | `GET /api/push/cron` with no auth header, no `?secret=` → 401 |
+| Authorization Boundaries | SEC-6 | ⬜ | Duplicate of ADMIN-2, will resolve together |
+| Visual/Responsive | VIS-1 | ✅ | `grep -rn "orange-" client/src` → 13 files match, but only the 5 known-accepted CRUD modals (`AddItemModal`, `SplitItemModal`, `BuildListModal`, `AddToListModal`, `AddRecipesModal`) plus 8 files never touched by TASK-057 (`ShoppingResultSummary`, `RecipeSelectList`, `SuggestionBox`, `ErrorBoundary`, `RecipeUpload`, `ReceiptUpload`, `RecipeUrlImport`, `JoinPage`) — zero matches among TASK-057's actual touched-file list, no regression |
+| Visual/Responsive | VIS-2 – VIS-5 | ⬜ | Handed off — user, phone |
+| Error Handling | ERR-1 | ⬜ | Needs authenticated session — blocked, same as ADMIN |
+| Error Handling | ERR-2, ERR-3, ERR-5 | ⬜ | Handed off — user, phone |
+| Error Handling | ERR-4 | ⬜ | Needs authenticated session — blocked, same as ADMIN |
 | Cleanup | — | ⬜ | |
 
 (Fill in per the legend above as testing proceeds — mirror the granularity used in

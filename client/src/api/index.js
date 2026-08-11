@@ -5,29 +5,73 @@ async function getClerkToken() {
   return window.Clerk?.session?.getToken() ?? null;
 }
 
-async function request(method, path, body) {
+let refreshPromise = null;
+
+// Single-flight: N concurrent 401s trigger exactly one forced network refresh, not N.
+function forceRefreshToken() {
+  if (!refreshPromise) {
+    refreshPromise = window.Clerk.session
+      .getToken({ skipCache: true })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
+let redirecting = false;
+
+// Dedup: if many callers' retries all still 401, redirect exactly once.
+function redirectToSignIn() {
+  if (redirecting || window.location.pathname.startsWith('/sign-in')) return;
+  redirecting = true;
+  window.location.href = '/sign-in';
+}
+
+// Owns token acquisition, the 401 retry-with-forced-refresh, and the redirect
+// decision. Callers only handle their own response body (JSON vs. stream).
+async function authorizedFetch(path, opts = {}) {
   const token = await getClerkToken();
+  const headers = { ...(opts.headers || {}) };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  let res = await fetch(path, { ...opts, headers });
+  if (res.status !== 401) return res;
+
+  // Forced refresh itself throwing (network error, not a 401) is not evidence of an
+  // invalid session — propagate that error normally, do not redirect.
+  const freshToken = await forceRefreshToken();
+
+  // No token at all means Clerk has nothing to give us — a retry would just send an
+  // unauthenticated request guaranteed to 401 again. Skip the pointless round-trip and
+  // go straight to the same outcome a second 401 would produce.
+  if (!freshToken) {
+    redirectToSignIn();
+    throw new Error('Session expired');
+  }
+
+  const retryHeaders = { ...(opts.headers || {}), Authorization: `Bearer ${freshToken}` };
+  res = await fetch(path, { ...opts, headers: retryHeaders });
+
+  if (res.status === 401) {
+    redirectToSignIn();
+    throw new Error('Session expired');
+  }
+  return res;
+}
+
+async function request(method, path, body) {
   const opts = {
     method,
     headers: {},
   };
-
-  if (token) {
-    opts.headers['Authorization'] = `Bearer ${token}`;
-  }
 
   if (body !== undefined) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
   }
 
-  const res = await fetch(path, opts);
-
-  // Mid-session 401: redirect to sign-in. Skip if already on /sign-in to avoid redirect loops.
-  if (res.status === 401 && !window.location.pathname.startsWith('/sign-in')) {
-    window.location.href = '/sign-in';
-    throw new Error('Session expired');
-  }
+  const res = await authorizedFetch(path, opts);
 
   let data;
   try {
@@ -67,21 +111,15 @@ export function splitNdjsonLines(buffer, onLine) {
 }
 
 async function postStream(path, body, { onToken, signal } = {}) {
-  const token = await getClerkToken();
-  const headers = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
-  const res = await fetch(path, {
+  const opts = {
     method: 'POST',
-    headers,
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     signal,
-  });
+  };
 
-  if (res.status === 401 && !window.location.pathname.startsWith('/sign-in')) {
-    window.location.href = '/sign-in';
-    throw new Error('Session expired');
-  }
+  const res = await authorizedFetch(path, opts);
+
   if (!res.ok) {
     let data = {};
     try {

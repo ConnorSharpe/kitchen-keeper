@@ -1,161 +1,129 @@
 # Task
 
-TASK-057 implementation: full visual design-system migration ("Modern Farmhouse") — Phases 1-3 of the
-approved spec (`ai/tasks/TASK-057-spec.md`) shipped in one session, plus a Connor-authorized deviation
-resolving judgment call #2 (below). Phase 4 (optional app-wide icon system, Section 6) not started — it was
-always scoped as separable.
+TASK-061 implementation (auth session-race bug, Section 3.2) — the fix that was spec'd and
+architect-approved (9.7/10) in the prior session. Connor's instruction to "implement the latest spec" is
+treated as the final sign-off the spec was pending.
 
 # Current Status
 
-All of Phase 1 (token/component foundation), Phase 2 (Sidebar, Dashboard, Pantry, Chat), and Phase 3
-(Recipes, Shopping, Household, Landing) are implemented, build-clean, lint-clean, and test-clean (98/98
-passing, zero regressions). Contrast-gated per the spec's hard Phase 1 requirement — verified against live
-computed CSS in the running app, not just hand math (see Verification Results). After the initial push,
-Connor explicitly authorized migrating `DietaryProfileForm.jsx` (judgment call #2) to resolve the Section
-4G / Forbidden Files contradiction in favor of the scaffold — done and pushed as a follow-up commit.
+**TASK-061: both fixes now implemented, tested, and live-verified. Not yet committed or deployed.**
+
+- Section 3.1 (`PublicRoute` guard in `App.jsx`) was already in the working tree from the prior session,
+  unchanged this session.
+- Section 3.2 (`authorizedFetch()` in `client/src/api/index.js`) implemented this session, verbatim per the
+  spec's code sketch: single-flight forced-refresh (`forceRefreshToken()`), redirect-dedup
+  (`redirectToSignIn()`), and the retry-once-then-redirect policy, shared by both `request()` and
+  `postStream()` (previously duplicated 401-handling logic in each).
+- New unit test file `client/src/api/index.authRetry.test.js` (3 tests) directly exercises the spec's
+  Section 7 adversarial scenario (mocked `fetch`/`window.Clerk`, no real auth needed): single 401 → retry
+  succeeds; 5 concurrent 401s → exactly 1 forced-refresh call; 5 concurrent callers both-attempts-401 →
+  exactly 1 redirect. All pass.
+- **Live browser verification (not just unit tests):** started local dev servers (client :5183, server
+  :3001); the dev browser already had a persisted Clerk session, so page load reproduced the real
+  concurrent-mount burst — network log shows 3 rounds of concurrent 401s across `/api/onboarding`,
+  `/api/ai/chat/history`, `/api/recipes`, `/api/pantry`, `/api/pantry/waste-saved`, followed by a clean 200
+  round. **The app did not redirect to `/sign-in`** — it rendered its full authenticated state (Dashboard/
+  Pantry/Recipes/Shopping/Household nav, Sign out button all present). This is the exact bug from the spec's
+  RCA, reproduced live and resolved by the fix, not a synthetic test. Dev servers stopped cleanly afterward.
 
 # Files Modified
 
-- `client/src/index.css` — primitive token `:root` block + governance comment; `@import` moved to first line
-- `client/tailwind.config.js` — semantic color extension (`primary`, `surface`, `status-*`, `accent-*`, etc.)
-- `client/src/styles/components.css` — **new file**: `.btn-*`, `.card*`, `.input`, `.badge-*`,
-  `.badge-source-*`, `.nav-link*`, `.chat-bubble-*`
-- `client/src/utils/expiry.js` — `getExpiryBadgeClass`/`getExpiryRowClass` return semantic class names
-- `client/src/components/layout/Sidebar.jsx`, `PageHeader.jsx`
-- `client/src/pages/DashboardPage.jsx`, `client/src/components/dashboard/{ExpiryStrip,EatThisNow,QuickAdd}.jsx`
-- `client/src/components/recipes/RecipeSuggestionCard.jsx` (shared card, migrated during Phase 2 since
-  Dashboard consumes it)
-- `client/src/pages/PantryPage.jsx`, `client/src/components/pantry/PantryTable.jsx`
-- `client/src/pages/ChatPage.jsx`
-- `client/src/components/recipes/{RecipeCard,AddRecipeMenu,RecipeModal,RecipeReviewModal}.jsx`,
-  `client/src/pages/RecipesPage.jsx`
-- `client/src/pages/ShoppingPage.jsx`, `client/src/components/shopping/ShoppingList.jsx`
-- `client/src/pages/HouseholdPage.jsx`
-- `client/src/pages/LandingPage.jsx`
-- `ai/handoffs/CONVENTIONS.md` — added the semantic-token-over-raw-hue convention note (spec Section 2.2
-  required this)
+- `client/src/api/index.js` — added `forceRefreshToken()`, `redirectToSignIn()`, `authorizedFetch()`;
+  `request()` and `postStream()` now both call `authorizedFetch()` instead of duplicating 401-handling.
+  Uncommitted.
+- `client/src/api/index.authRetry.test.js` — new file, 3 tests covering single-flight refresh and
+  redirect-dedup under concurrent 401s. Uncommitted.
+- `client/src/App.jsx` — carried over from prior session (Section 3.1, `PublicRoute`), still uncommitted.
+- `ai/handoffs/archive/TASK-059-061-handoff.md` — new file, archived the prior CURRENT_STATE.md content
+  (TASK-059 mid-checklist + TASK-061 spec-drafting) per Size Discipline before overwriting this file.
+- `ai/handoffs/CURRENT_STATE.md` — this file.
 
-# Judgment Calls Made Beyond the Spec's Literal Text (flag for Connor's review)
+# Files Required Next
 
-1. **RESOLVED, and the inclusion decision itself confirmed correct by direct scaffold evidence.**
-   `PantryPage.jsx` and `RecipesPage.jsx` were migrated even though neither is named in the spec's Allowed
-   Files list (only `PantryTable/PantryCard` and `RecipeCard`/etc. are listed) — an inference, not an explicit
-   instruction, unlike judgment call #2's actual contradiction. Checking `03-pantry-mobile.png` directly
-   confirmed the inference: it depicts "Scan Receipt" and "+ Add Item" (both `PantryPage.jsx`, not
-   `PantryTable.jsx`) as solid dark-green pills alongside the already-migrated card/badge/action-button
-   treatment. One real deviation this check caught: `PantryPage.jsx`'s "Scan receipt" button had been styled
-   `.btn-secondary` (outlined) — my own unverified choice to visually de-rank it below "+ Add item" — but the
-   scaffold shows both buttons identically solid-filled, no outline/filled distinction at all. Fixed to
-   `.btn-primary` (reused the existing class, no new CSS), live-verified both now render identically
-   (`rgb(37,72,50)` bg, white text, full pill). Both are the page shells hosting the exact components the
-   spec does name (Add Item/Add Recipe buttons, search/filter bars, loading skeletons) — leaving them
-   raw-orange would have produced an immediately visible clash on the very screens Phase 2/3 claims to
-   complete. Treated as the same class of gap DRAFT-4's review caught for CRUD modals, but judged in the
-   opposite direction (include, not exclude) since these two files are structural
-   page containers for in-scope components, not standalone CRUD forms. No longer needs Connor's review — this
-   was a
-   judgment call, not an explicit spec instruction.
-2. **RESOLVED, by explicit Connor authorization (not a unilateral call).** Section 4G's Household chip
-   instructions (`.chip-allergy`, `.badge-tag` for dietary/health chips) target markup that only exists
-   inside `DietaryProfileForm.jsx` — confirmed live in the running app — which is also named in the spec's
-   own excluded-CRUD-modal list (Forbidden Files). Root cause, confirmed by viewing
-   `ai/design/2026-08-gemini-redesign/scaffolds/10b-household-mobile-fixed.png` directly: it's one flattened
-   mockup image of the whole Household screen with no awareness of this codebase's component boundaries —
-   Section 4G was written from that image without cross-checking that the chip markup lives in a file
-   Forbidden Files excludes for an unrelated reason (the CRUD-modal sweep boundary). Connor reviewed this
-   explanation and explicitly said to migrate the file to match the scaffold, overriding Forbidden Files for
-   this one file. Done: `TagInput`'s chips now use `chipCls = isWarning ? 'chip-allergy' : 'badge-tag'`; the
-   tag-input wrapper, remove-tag buttons, loading state, and Save button all migrated too (not just the two
-   named classes) for the same "don't half-migrate a screen" reason as judgment call #1. One deliberate
-   implementation choice: the wrapper div uses hand-written `focus-within:border-primary
-   focus-within:ring-1 focus-within:ring-primary/40` rather than the `.input` shared class, because `.input`'s
-   `focus:` pseudo-class wouldn't fire when a *child* `<input>` receives focus — reusing it as-is would have
-   silently dropped the focus ring. Live-verified: `.badge-tag` chip renders at 11.34:1 contrast (matches
-   spec's ≈11.35:1); Save button renders as a solid `rgb(37,72,50)`/white pill, matching the scaffold.
-   `chip-allergy` wasn't exercisable live (this test household has no allergy tags set) but reuses the exact
-   token pairing already verified elsewhere this session (chip-allergy ≈8.93:1, Section 2.1). TASK-060 should
-   drop `DietaryProfileForm.jsx` from its scope now that it's done.
-3. **Row-level expiry tint** (`getExpiryRowClass`) has no defined shared class in spec Section 3 — used
-   `bg-status-critical-bg/30` / `bg-status-warning-bg/30` (opacity-modifier composition, not a new class) as
-   the natural extension of the token system for a light wash background. Not spec-specified; a reasonable
-   default.
-4. Several genuinely undefined-in-spec cases were deliberately left as raw Tailwind (consistent with the
-   spec's own "raw hue acceptable where no token exists" acceptance criterion): the "❄ Frozen" location tag
-   (blue), `StatusLabel`'s "Frozen"/"Ripening" text (blue/purple — Ripening explicitly excluded by spec
-   Section 2.2), Chat's `healthNote` (blue), a "recording" red dot in Chat's mic button, and RecipeModal's
-   solid-red delete-confirm state (no "danger-filled button" token defined).
+- None to implement. Remaining work is commit + deploy + post-deploy verification (see below).
+
+# Files Already Reviewed
+
+`client/src/api/index.js`, `client/src/App.jsx`, `ai/tasks/TASK-061-spec.md`,
+`ai/migrations/MIGRATION_LEDGER.md` (confirmed no outstanding ❌ rows — irrelevant anyway, this is a
+client-only change with no migration).
 
 # Dependency Chain
 
-Editing: all files above.
-Requires: `client/tailwind.config.js` ↔ `client/src/index.css` (token pipeline); every screen depends on
-`client/src/styles/components.css` existing and being imported first in `index.css`.
-Irrelevant: `server/*` (unconditionally forbidden per spec), `shared/*`, DB/migrations — none touched.
+Editing: `client/src/api/index.js`, `client/src/api/index.authRetry.test.js` (new).
+Requires: `window.Clerk` global (unchanged, set by `ClerkProvider` in `main.jsx`).
+Irrelevant: all of `server/*` — TASK-061 is explicitly client-only per its own Forbidden Files list.
 
 # Architecture Notes
 
-Two-layer token system (primitive `--kk-*` CSS vars → semantic Tailwind color names) plus a shared
-`@layer components` class library. `.btn` is an internal composition primitive never used bare in JSX
-(confirmed correctly tree-shaken from compiled output when unused). `@import './styles/components.css'` is
-the first line of `index.css` — moving it after `@tailwind` directives silently drops the whole file with
-only a build warning (verified during spec review, re-confirmed this session).
+See [TASK-061-spec.md](../tasks/TASK-061-spec.md) Sections 1–3 for the full RCA and design — unchanged by
+this session, implemented as designed with no deviations. The one open question from spec Section 8 (whether
+`getToken({ skipCache: true })` reliably resolves outside the race window under real load) is now answered
+empirically, not just in theory: the live browser verification above is exactly that condition occurring
+naturally, and the fix held.
+
+# Decisions Made
+
+- Implemented Section 3.2 verbatim per the spec's code sketch — no deviations, no additional scope.
+- Added a unit test file rather than relying solely on a live Clerk sign-in for verification, since signing
+  in with real credentials is a standing human-only action (per the smoke-test protocol's Forbidden
+  Exploration rule) — the mocked test exercises the same concurrency guarantees deterministically. The live
+  browser check (an already-persisted dev session, no credential entry by the agent) supplemented this with
+  real-world confirmation.
+- Did not commit or deploy — pushing to shared branches/environments requires the user's explicit go-ahead
+  per standing operating rules; asked before proceeding rather than assuming "implement the spec" also meant
+  "ship it."
 
 # Remaining Work
 
-1. **Phase 4 (Section 6, optional)** — app-wide emoji→inline-SVG icon system. Not started. Explicitly
-   splittable into its own follow-up task per the spec.
-2. TASK-058 (Shopping mobile layout) and TASK-060 (mechanical CRUD-modal class migration — now covering only
-   `AddItemModal.jsx`, `SplitItemModal.jsx`, `BuildListModal.jsx`, `AddToListModal.jsx`, `AddRecipesModal.jsx`
-   — `DietaryProfileForm.jsx` is done, drop it from TASK-060's scope) are both still just named placeholders,
-   not drafted.
+1. Commit (needs Connor's go-ahead — not yet given).
+2. Deploy per CONVENTIONS.md's canonical order (local → staging → production); client-only change, no
+   migration, `MIGRATION_LEDGER.md` does not apply.
+3. Post-deploy: re-run TASK-059's AUTH-1–5 and ERR-4, plus TASK-061's own adversarial concurrent-401 test
+   (spec Section 7) against the deployed environment.
+4. Resume the rest of TASK-059's checklist (ONB, HH, DASH, PANTRY, REC, SHOP, CHAT, DIET, PUSH, VIS-2–5,
+   remaining ERR, ADMIN-*, remaining SEC-*) — see that file's Results table for exact status per row.
+5. TASK-059 §15 Cleanup still not reached — no `ZZSMOKE-` data exists yet, nothing to clean up yet.
 
 # Known Risks / Open Questions
 
-- Remaining CRUD modals (`AddItemModal.jsx`, `SplitItemModal.jsx`, `BuildListModal.jsx`, `AddToListModal.jsx`,
-  `AddRecipesModal.jsx`) still render raw-orange styling and visually clash with every migrated screen around
-  them — this is the spec's own accepted, named gap (Section 11), not new. `DietaryProfileForm.jsx` no longer
-  belongs on this list (resolved, see Judgment Calls #2).
-- Judgment call #1 (PantryPage/RecipesPage inclusion) is the one remaining place this session's
-  implementation reasoning went beyond the spec's literal text without an explicit go-ahead — safe/
-  conservative in the direction taken, but still worth a quick confirmation.
-- Carried forward, unrelated to this task: TASK-054's `consume_pantry_item`-on-truncated-item gap; TASK-053's
-  Vercel Preview streaming verification; OpenAI billing confirmation; `server/.env.vercel`'s fate — see
-  [archive/TASK-055.md](archive/TASK-055.md) and [[project_go_public_readiness]].
+- **The fix is implemented and verified but not deployed.** Production is still running the old
+  hard-redirect code and is still affected by the live session-race bug until this ships — this is the same
+  standing risk noted in the prior handoff, now closer to resolved but not yet actually resolved in
+  production. Not a migration, so `MIGRATION_LEDGER.md` doesn't formally apply, but the same spirit as Rule 7
+  applies: don't let "implemented" get mistaken for "shipped."
+- Carried forward, unrelated to this session: TASK-058/TASK-060 still just named placeholders, not drafted;
+  TASK-054's `consume_pantry_item`-on-truncated-item gap; OpenAI billing confirmation — see
+  [archive/TASK-059-061-handoff.md](archive/TASK-059-061-handoff.md) and `project_go_public_readiness`
+  memory.
 
 # Verification Results
 
-- `npm run build` (client): clean, no warnings beyond the pre-existing chunk-size notice, after every phase.
-- `npm run lint` (root): clean.
-- `npm test` (root): 98/98 passing, 0 failures — zero regressions.
-- Contrast gate (Phase 1 hard requirement, live computed-CSS values from the running app, not hand math
-  alone): `badge-status-critical` 5.17:1, `badge-status-warning` 5.34:1, `badge-status-ok` 7.85:1,
-  `bg-primary`/`text-on-primary` (via `.btn-primary` and `.chat-bubble-user`) 10.24:1 — all clear WCAG AA
-  4.5:1 with margin, matching Section 2.1's hand-computed values almost exactly.
-- Responsive: Pantry table/card breakpoint checked live at 375px/768px/1280px — no horizontal overflow at
-  any width, table↔card switch confirmed correct.
-- Live smoke tests (real running app, real data, no mocks): Dashboard, Pantry (desktop table + action-button
-  variants), Chat (48 real message bubbles rendered), Recipes (source badges with icons confirmed correct
-  colors/icons live), Household (`.card-callout` confirmed) all checked via `read_page`/`get_page_text`/
-  `getComputedStyle` — screenshots were unavailable this session (Browser pane wasn't compositing).
-- `orange-` grep scoped to all touched files: zero matches after a full pass (one leftover instance in
-  `RecipeReviewModal.jsx`'s Recipe Name input was caught by this grep and fixed).
-- Shopping and Landing were verified by code review + build success only (not live-clicked) — every class
-  used on those two pages was already live-verified elsewhere in the same session (`.btn-primary`, `.card`,
-  `.input`, `text-primary`, etc.), so this is a reasonable-confidence gap, not a blind spot on novel classes.
+- `npm run build` (client): clean.
+- `npm run lint` (root, eslint .): clean.
+- `npm test` (root: shared + server, 98 tests): all pass.
+- `npm test` (client: 7 tests, including 3 new): all pass.
+- Live browser verification: real concurrent-401 burst reproduced and resolved, no redirect, full
+  authenticated app rendered — see Current Status above.
+- TASK-061 acceptance criteria (spec Section 6): 1–5 verified (unit tests + live check); 6 (build/lint/test
+  green) verified.
 
 # Recommended Next Action
 
-Judgment call #1 (PantryPage/RecipesPage inclusion) is resolved: checking `03-pantry-mobile.png` directly
-confirmed both "Scan Receipt" and "+ Add Item" are scaffold-depicted as identical solid-green pills (not one
-outlined) — `PantryPage.jsx`'s "Scan receipt" button was wrongly styled `.btn-secondary` (my own unverified
-choice, not scaffold-derived); fixed to `.btn-primary`, reusing the existing class, no new CSS. Live-verified
-both buttons now render identically (`rgb(37,72,50)` bg, white text, full pill). Phase 4 (icons) and
-TASK-058/TASK-060 remain separate, not-yet-started follow-ups.
+Ask Connor whether to commit now, and if so, whether to proceed through the local → staging → production
+deploy sequence in this session or hand off. Do not commit or push without that answer.
+
+# Forbidden Exploration
+
+- `server/*` for TASK-061 (client-only per its Forbidden Files).
+- Any TASK-059 row requiring account creation/credential entry — must be human-driven, not agent-driven;
+  standing operating rule, not specific to this session.
 
 # Context Notes
 
 - branch: `staging`.
-- Dev servers (`server` on 3001, `client` on 5183) were started and stopped this session; none left running.
+- Dev servers (`server` on 3001, `client` on 5183) were started/stopped once this session for live
+  verification; both stopped cleanly, none left running.
 - No worktree was used.
 
 ---
@@ -170,3 +138,7 @@ TASK-058/TASK-060 remain separate, not-yet-started follow-ups.
   [archive/TASK-056.md](archive/TASK-056.md)
 - TASK-057 spec-drafting session (5 architect review rounds, DRAFT-1 → DRAFT-6 approved): see
   [archive/TASK-057-spec-drafting.md](archive/TASK-057-spec-drafting.md)
+- TASK-057 implementation session (Phases 1-3 shipped, judgment calls resolved): see
+  [archive/TASK-057-implementation.md](archive/TASK-057-implementation.md)
+- TASK-059 mid-checklist + TASK-061 spec-drafting session: see
+  [archive/TASK-059-061-handoff.md](archive/TASK-059-061-handoff.md)
