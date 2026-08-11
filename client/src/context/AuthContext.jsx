@@ -9,6 +9,7 @@ import {
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { api } from '../api/index.js';
 import { SettledAuthProvider } from '../hooks/useSettledAuth.js';
+import { logEvent } from '../lib/debugLog.js';
 
 const AuthContext = createContext(null);
 const ONBOARDING_RETRY_DELAY_MS = 2000;
@@ -65,7 +66,14 @@ export function AuthProvider({ children }) {
     : null;
 
   async function logout() {
-    await signOut();
+    logEvent('signout-start', {});
+    try {
+      await signOut();
+      logEvent('signout-resolved', {});
+    } catch (err) {
+      logEvent('signout-threw', { message: err?.message || String(err) });
+      throw err;
+    }
   }
 
   const completeOnboarding = useCallback(async () => {

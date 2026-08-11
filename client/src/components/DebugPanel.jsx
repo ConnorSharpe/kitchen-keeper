@@ -12,6 +12,7 @@ export default function DebugPanel() {
   const [enabled, setEnabled] = useState(() => isDebugEnabled());
   const [open, setOpen] = useState(false);
   const [count, setCount] = useState(() => getLog().length);
+  const [copyStatus, setCopyStatus] = useState('idle'); // 'idle' | 'copied' | 'failed'
   const tapTimes = useRef([]);
 
   useEffect(() => {
@@ -19,6 +20,32 @@ export default function DebugPanel() {
     const id = setInterval(() => setCount(getLog().length), 1000);
     return () => clearInterval(id);
   }, [enabled]);
+
+  // TASK-063 (follow-up): highlighting the raw <pre> body to copy it is difficult on a touch
+  // screen. navigator.clipboard is the primary path; execCommand('copy') via a hidden textarea
+  // is a fallback for contexts where the async Clipboard API isn't available (e.g. older iOS).
+  async function handleCopy() {
+    const text = JSON.stringify(getLog(), null, 2);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopyStatus('copied');
+    } catch {
+      setCopyStatus('failed');
+    }
+    setTimeout(() => setCopyStatus('idle'), 2000);
+  }
 
   function handleCornerTap() {
     const now = Date.now();
@@ -81,6 +108,13 @@ export default function DebugPanel() {
         >
           <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
             <button onClick={() => setOpen(false)}>Close</button>
+            <button onClick={handleCopy}>
+              {copyStatus === 'copied'
+                ? 'Copied!'
+                : copyStatus === 'failed'
+                  ? 'Copy failed'
+                  : 'Copy all'}
+            </button>
             <button
               onClick={() => {
                 clearLog();

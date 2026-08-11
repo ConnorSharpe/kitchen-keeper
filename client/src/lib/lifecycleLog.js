@@ -27,4 +27,45 @@ export function installLifecycleLogging() {
   window.addEventListener('resume', () => {
     logEvent('lifecycle-resume', {});
   });
+
+  // TASK-063 (follow-up): logout() previously had no try/catch, so a thrown/rejected signOut()
+  // would have been an invisible unhandled rejection -- the same blind spot TASK-061 already
+  // found once with forceRefreshToken(). This is a global backstop independent of any one call
+  // site, in case something else in Clerk's own SDK (e.g. the OAuth continuation) rejects
+  // silently too.
+  window.addEventListener('unhandledrejection', (e) => {
+    logEvent('unhandled-rejection', {
+      message: e.reason?.message || String(e.reason),
+    });
+  });
+}
+
+// TASK-063 (follow-up): a real on-device repro showed a sign-in round-trip landing on `/sign-up`
+// with no matching entry in the `clerk-auth-state` log at all -- meaning whatever routed there
+// didn't go through React Router's `useLocation()` (which we already log on every change). This
+// watches the URL directly, independent of any router, so the next capture shows every navigation
+// regardless of what triggered it.
+export function installUrlChangeLogging() {
+  function logUrl(source) {
+    logEvent('url-change', {
+      source,
+      pathname: window.location.pathname,
+      href: window.location.href,
+    });
+  }
+
+  const originalPushState = history.pushState.bind(history);
+  const originalReplaceState = history.replaceState.bind(history);
+
+  history.pushState = function (...args) {
+    originalPushState(...args);
+    logUrl('pushState');
+  };
+
+  history.replaceState = function (...args) {
+    originalReplaceState(...args);
+    logUrl('replaceState');
+  };
+
+  window.addEventListener('popstate', () => logUrl('popstate'));
 }

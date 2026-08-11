@@ -1,7 +1,14 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { SignIn, SignUp, RedirectToSignIn, useAuth } from '@clerk/clerk-react';
+import {
+  SignIn,
+  SignUp,
+  RedirectToSignIn,
+  useAuth,
+  useSignIn,
+  useSignUp,
+} from '@clerk/clerk-react';
 import { logEvent } from './lib/debugLog.js';
 import { resolveRouteDecision } from './lib/routeDecision.js';
 import { useSettledAuth } from './hooks/useSettledAuth.js';
@@ -72,6 +79,29 @@ function AuthStateLogger() {
   return null;
 }
 
+// TASK-063 (follow-up): read-only, diagnostic-only. AuthStateLogger only ever saw the *outcome*
+// (isSignedIn), never Clerk's own in-progress sign-in/sign-up step machine -- so a real repro
+// where a Google sign-in round-trip landed on /sign-up instead of completing sign-in left no
+// trace of *why*. This watches signIn.status/signUp.status directly, without altering the
+// hosted <SignIn>/<SignUp> components' own behavior at all.
+function SignFlowStateLogger() {
+  const location = useLocation();
+  const { isLoaded: signInLoaded, signIn } = useSignIn();
+  const { isLoaded: signUpLoaded, signUp } = useSignUp();
+
+  useEffect(() => {
+    logEvent('sign-flow-state', {
+      pathname: location.pathname,
+      signInLoaded,
+      signInStatus: signIn?.status,
+      signUpLoaded,
+      signUpStatus: signUp?.status,
+    });
+  }, [location.pathname, signInLoaded, signIn?.status, signUpLoaded, signUp?.status]);
+
+  return null;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -80,6 +110,7 @@ export default function App() {
       >
         <AuthProvider>
           <AuthStateLogger />
+          <SignFlowStateLogger />
           <DebugPanel />
           <Toaster position="top-right" />
           <Routes>
