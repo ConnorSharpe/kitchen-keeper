@@ -1,25 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 680">
-  <rect width="680" height="680" rx="120" fill="#fff7ed"/>
+  <rect width="680" height="680" rx="120" fill="#fdfaf5"/>
 
   <!-- Spoon -->
-  <ellipse cx="250" cy="188" rx="58" ry="72" fill="#ea580c"/>
-  <ellipse cx="244" cy="182" rx="36" ry="46" fill="#c2410c" opacity="0.22"/>
-  <rect x="231" y="252" width="38" height="242" rx="19" fill="#ea580c"/>
-  <rect x="235" y="262" width="16" height="222" rx="8" fill="#c2410c" opacity="0.22"/>
-
-  <!-- Fork tines -->
-  <rect x="394" y="118" width="10" height="102" rx="5" fill="#ea580c"/>
-  <rect x="408" y="106" width="10" height="114" rx="5" fill="#ea580c"/>
-  <rect x="422" y="106" width="10" height="114" rx="5" fill="#ea580c"/>
-  <rect x="436" y="118" width="10" height="102" rx="5" fill="#ea580c"/>
-
-  <!-- Fork base connecting all tines -->
-  <rect x="394" y="210" width="52" height="58" rx="3" fill="#ea580c"/>
-
-  <!-- Fork taper -->
-  <polygon points="394,262 446,262 439,286 401,286" fill="#ea580c"/>
-
-  <!-- Fork handle -->
-  <rect x="401" y="280" width="38" height="216" rx="19" fill="#ea580c"/>
-  <rect x="405" y="290" width="16" height="196" rx="8" fill="#c2410c" opacity="0.22"/>
+  <ellipse cx="340" cy="235" rx="95" ry="120" fill="#254832"/>
+  <ellipse cx="326" cy="220" rx="58" ry="76" fill="#21442e" opacity="0.3"/>
+  <rect x="308" y="344" width="64" height="256" rx="32" fill="#254832"/>
+  <rect x="316" y="356" width="26" height="228" rx="13" fill="#21442e" opacity="0.28"/>
 </svg>
