@@ -3,11 +3,16 @@ import ReactDOM from 'react-dom/client';
 import { ClerkProvider } from '@clerk/clerk-react';
 import App from './App.jsx';
 import { logEvent, isStandalonePwa } from './lib/debugLog.js';
-import { installLifecycleLogging, installUrlChangeLogging } from './lib/lifecycleLog.js';
+import {
+  installLifecycleLogging,
+  installUrlChangeLogging,
+  installClickLogging,
+} from './lib/lifecycleLog.js';
 import './index.css';
 
 installLifecycleLogging();
 installUrlChangeLogging();
+installClickLogging();
 
 // TASK-063: earliest possible capture point, before Clerk or React mount — if the double
 // sign-in is caused by something that resets state before the app even renders, this is the

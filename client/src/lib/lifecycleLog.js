@@ -45,6 +45,41 @@ export function installLifecycleLogging() {
 // didn't go through React Router's `useLocation()` (which we already log on every change). This
 // watches the URL directly, independent of any router, so the next capture shows every navigation
 // regardless of what triggered it.
+// TASK-063 (follow-up): a real on-device repro showed a tap on Clerk's own "Continue with
+// Google" button producing zero trace anywhere in the diagnostics -- no state change, no
+// reload, nothing -- for ~3s before a second tap actually triggered the OAuth flow. We have no
+// visibility into Clerk's own hosted button internals, so this instead watches at the DOM level,
+// capture-phase (before anything can stopPropagation), to answer a narrower question: does the
+// tap even reach the page as a click at all, and what element receives it?
+export function installClickLogging() {
+  function describeTarget(e) {
+    const target = e.target;
+    return {
+      tag: target?.tagName,
+      id: target?.id || undefined,
+      className:
+        typeof target?.className === 'string'
+          ? target.className.slice(0, 80)
+          : undefined,
+      text: target?.textContent?.trim().slice(0, 40),
+      isTrusted: e.isTrusted,
+    };
+  }
+
+  // pointerdown fires on touch contact even if the browser never promotes it to a click (e.g.
+  // something intercepts/cancels it) -- logging both tells us whether a "lost" tap never reached
+  // the page at all, versus reached it but didn't turn into a click.
+  document.addEventListener(
+    'pointerdown',
+    (e) => logEvent('pointerdown', describeTarget(e)),
+    { capture: true }
+  );
+
+  document.addEventListener('click', (e) => logEvent('click', describeTarget(e)), {
+    capture: true,
+  });
+}
+
 export function installUrlChangeLogging() {
   function logUrl(source) {
     logEvent('url-change', {

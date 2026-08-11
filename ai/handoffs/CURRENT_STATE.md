@@ -1,35 +1,54 @@
 # Task
 
 TASK-063 implementation + follow-up investigation — iOS PWA double sign-in/sign-out: `loading -> settling
--> settled` auth state machine shipped, confirmed NOT to fix the user-facing symptom, root cause reframed and
-new diagnostics added, not yet redeployed with those diagnostics live. Per
-[TASK-063-spec.md](../tasks/TASK-063-spec.md) DRAFT-3.
+-> settled` auth state machine shipped, confirmed NOT to fix the user-facing symptom on its own. Two rounds
+of on-device diagnostics have now separated this into two distinct, differently-evidenced bugs (see Current
+Status). Per [TASK-063-spec.md](../tasks/TASK-063-spec.md) DRAFT-3.
 
 # Current Status
 
-**TASK-063's `settling`/`settled` state machine is implemented, tested, and live in `staging` + `production`
-(commit `a3f942f`)** — confirmed via a real on-device capture that the mechanism itself works exactly as
-designed (every settlement in that capture was `"stable"` at ~401-402ms, `settleInitial === settleFinal`
-every time). **But Connor confirmed the double sign-in/sign-out symptom still occurred during that same
-test** — so TASK-063 fixed a real, correctly-identified problem (an unstable first post-mount reading) that
-turned out not to be *this* problem. The two are architecturally distinct: TASK-063 catches a value that's
-wrong-then-self-corrects within one mount; what actually happened is a first attempt whose outcome never
-self-corrected (required a literal second tap) — settling has nothing to buffer in that case, because Clerk's
-raw value was consistent throughout, just consistently reflecting a genuinely-not-yet-completed action.
+**Second real on-device capture (2026-08-11 23:39-23:40) analyzed — sign-in and sign-out are two separate
+bugs with different mechanisms, not one shared root cause as previously hypothesized:**
 
-Connor's detailed description of what he saw on-device narrowed this further:
-- **Sign-in**: tap → Google → lands on `/sign-up` (not the app) → tap sign-in again → Google → lands on
-  `/chat`. No `/sign-up` pathname ever appeared in the captured `clerk-auth-state` log, meaning if this really
-  happened, whatever routed there didn't go through React Router's `useLocation()` at all — a blind spot in
-  the existing diagnostics.
-- **Sign-out**: tap → menu closes, still in the app → reopen menu, the button already shows its
-  pressed/active style (consistent with iOS Safari's known `:active`-sticks-after-tap quirk, i.e. the first
-  tap's `onClick` did fire) → tap again → redirects to sign-in. `logout()`
-  (`AuthContext.jsx`) had **no error handling at all** around `await signOut()` — an exact repeat of the
-  blind spot TASK-061 already found once with `forceRefreshToken()`.
+- **Sign-out: mechanism directly confirmed by this capture.** `signout-start` → `signout-resolved` (309ms,
+  no error) → an uncommanded reload (`pagehide` persisted:false → `app-boot`, ~800ms after resolve, zero
+  `window.location.reload()` calls exist anywhere in this codebase) → the freshly-booted app reads back
+  `isSignedIn: true`. The reload landed in the gap between `signOut()`'s promise resolving and its effect
+  becoming durable (most likely Clerk's local persisted-session cache, not yet confirmed which layer). Second
+  attempt, no reload in between, works cleanly.
+- **Sign-in: different mechanism, NOT yet directly evidenced.** Connor confirmed he tapped "Continue with
+  Google" twice, but the capture shows only one `/sign-in` navigation, one OAuth round-trip, and zero events
+  of any kind in the ~3s between arriving at `/sign-in` and the (single, successful) OAuth flow starting. No
+  reload occurred in that gap either — ruling out the sign-out-style "reload undoes a completed action"
+  mechanism for this case. The first tap on Clerk's own hosted Google button appears to have produced **no
+  observable effect at all**, consistent with a lost/ignored touch event rather than a completed-then-reverted
+  action. We have no visibility into Clerk's hosted button internals, so root cause is still open.
 
-Web research (see Sources in conversation) surfaced a concrete, testable explanation rather than pure
-speculation:
+**New diagnostics added this round (build/lint/test-green, NOT yet committed/deployed) to close the sign-in
+gap**: `installClickLogging()` (`lifecycleLog.js`) — logs every `pointerdown` and `click` app-wide,
+capture-phase (before anything can `stopPropagation`), with target tag/id/className/text/`isTrusted`. Answers
+the narrower question a state-only diagnostic can't: does a "lost" tap reach the page as an event at all, and
+what element receives it. Wired up in `main.jsx` alongside the existing lifecycle/URL-change installers.
+
+No further sign-out-specific diagnostics added this round — its mechanism is already well-evidenced by the
+existing `signout-*`/lifecycle/`auth-settled` logging; another capture with the same instrumentation would
+likely just reconfirm it. Cookie-level inspection was considered and rejected: Clerk's actual session cookie
+is almost certainly `HttpOnly` (standard practice, not independently confirmed) and therefore invisible to
+client JS regardless of instrumentation.
+
+Original TASK-063 on-device finding (2026-08-11 23:06-23:07, first capture) remains valid background: the
+`settling`/`settled` state machine itself works exactly as designed (every settlement was `"stable"`,
+`initial === final`) — it was solving a real, correctly-identified problem that turned out not to be *this*
+one.
+
+**Prior-round context (still relevant background, superseded in specifics by the Current Status above):**
+TASK-063's `settling`/`settled` state machine shipped in commit `a3f942f`. The first on-device capture led to
+a (now superseded) hypothesis that a single shared root cause — Clerk's transfer-to-signup mechanism plus a
+WebKit-level reload racing an in-flight auth action — explained both symptoms. The second capture confirmed
+this for sign-out specifically but left sign-in's mechanism open (see Current Status above); the transfer
+mechanism remains plausible for sign-in but is not yet directly evidenced the way the sign-out race now is.
+
+Web research (see Sources earlier in conversation) that's still relevant:
 - Clerk has a **documented, intentional "transfer" mechanism**: an OAuth sign-in Clerk can't confirm maps to
   an existing account gets automatically transferred into the sign-up flow (`missing_requirements` status →
   the `/sign-up` form, pre-filled from Google). Default `transfer: true`. This is very likely exactly what
@@ -48,39 +67,28 @@ speculation:
   (and no browser has actually shipped a non-WebKit iOS engine yet even where it's legally permitted). All
   prior WebKit/Safari-standalone-PWA research genuinely applies here.
 
-**New diagnostics added this session, targeting exactly these gaps — implemented, build/lint/test-green, NOT
-YET committed or deployed:**
-1. `logout()` now wraps `await signOut()` with `logEvent('signout-start'/'signout-resolved'/'signout-threw')`.
-2. A global `unhandledrejection` listener (`lifecycleLog.js`) — catches any silently-rejected promise
-   anywhere in the app, not just `signOut()`.
-3. `SignFlowStateLogger` (`App.jsx`) — new diagnostic-only component reading Clerk's own
-   `useSignIn()`/`useSignUp()` step-machine state (`signIn.status`/`signUp.status`), independent of and
-   invisible to the existing `isSignedIn`-only `AuthStateLogger`.
-4. Raw `pushState`/`replaceState`/`popstate` URL logging (`lifecycleLog.js`), independent of React Router —
-   closes the blind spot that let the `/sign-up` landing go completely unlogged.
-5. `DebugPanel.jsx` gained a "Copy all" button (`navigator.clipboard.writeText`, with an
-   `execCommand('copy')` fallback) — highlighting the raw log body was difficult on Connor's touch screen.
+**Diagnostics shipped in the previous round (commit `707f8f8`, live in `staging`+`production`, produced the
+second capture analyzed above):**
+1. `logout()` wraps `await signOut()` with `logEvent('signout-start'/'signout-resolved'/'signout-threw')`.
+2. A global `unhandledrejection` listener (`lifecycleLog.js`).
+3. `SignFlowStateLogger` (`App.jsx`) — reads Clerk's own `useSignIn()`/`useSignUp()` step-machine state.
+4. Raw `pushState`/`replaceState`/`popstate` URL logging (`lifecycleLog.js`), independent of React Router.
+5. `DebugPanel.jsx` "Copy all" button.
+
+**New this round (implemented, build/lint/test-green, NOT yet committed/deployed):**
+6. `installClickLogging()` (`lifecycleLog.js`) — global `pointerdown` + `click` logging, capture-phase, with
+   target tag/id/className/text/`isTrusted`. Targets the sign-in gap specifically (see Current Status).
 
 # Files Modified
 
-Since TASK-063's implementation commit (`a3f942f`, already live) — this round, uncommitted as of this
-handoff:
-- `client/src/context/AuthContext.jsx` — `logout()` instrumented (see above).
-- `client/src/lib/lifecycleLog.js` — `installUrlChangeLogging()` (new export) + `unhandledrejection` listener
-  added to `installLifecycleLogging()`.
-- `client/src/main.jsx` — calls `installUrlChangeLogging()` alongside the existing
-  `installLifecycleLogging()`.
-- `client/src/App.jsx` — new `SignFlowStateLogger` component, mounted alongside `AuthStateLogger`.
-- `client/src/components/DebugPanel.jsx` — "Copy all" button + `copyStatus` state.
-
-(TASK-063's own implementation files — `useSettledAuth.js`, `routeDecision.js`, etc. — are unchanged this
-round; see the commit `a3f942f` already shipped, described in the prior handoff entry below this one before
-it was overwritten by this update.)
+This round, uncommitted as of this handoff (on top of `707f8f8`, already live):
+- `client/src/lib/lifecycleLog.js` — new `installClickLogging()` export.
+- `client/src/main.jsx` — calls `installClickLogging()` alongside the existing installers.
 
 # Files Required Next
 
 None to implement further before deploying this round. Next: commit, push `staging`, fast-forward `main`,
-confirm both `Ready` via `vercel inspect` — same pattern as TASK-063's own deploy.
+confirm both `Ready` via `vercel inspect` — same pattern as before.
 
 # Files Already Reviewed
 
@@ -118,49 +126,53 @@ since `logEvent` itself no-ops unless debug mode is on.
 
 # Remaining Work
 
-1. **Deploy this round's diagnostics to `staging` + `production`** (about to happen this session, per
-   Connor's go-ahead).
-2. **Capture a fresh on-device repro** with the new diagnostics live — specifically watching for: (a)
-   `sign-flow-state` showing `signIn.status`/`signUp.status` right before/after the `/sign-up` landing, to
-   confirm or rule out Clerk's transfer-to-signup mechanism; (b) `url-change` events showing whether that
-   landing happened via `pushState` (client-side, would show in React Router too — contradiction worth
-   noting) or some other path; (c) `signout-start`/`signout-resolved`/`signout-threw`/`unhandled-rejection`
-   around the sign-out button's first, ineffective tap.
-3. TASK-063's own Section 9 deployment-verification-gate checklist items remain open pending this next
-   capture's analysis (see prior entry, superseded by this one).
-4. Unrelated, carried forward: TASK-059's remaining phone-driven checklist rows; two disposable Clerk
-   accounts still need manual deletion from production Clerk; Section 2 finding 7 territory now directly
-   addressed by item 2 in this round's diagnostics (`unhandled-rejection` listener).
+1. **Deploy this round's click/pointerdown logging to `staging` + `production`** (about to happen this
+   session, per Connor's go-ahead — he wants both sign-in and sign-out mechanisms understood, not just
+   sign-out).
+2. **Capture a third on-device repro**, deliberately tapping "Continue with Google" twice again, watching
+   for: does `pointerdown`/`click` fire for the first tap at all, and if so, on what element? This is the
+   specific open question — the second capture ruled out both "reload undoes it" (sign-out's mechanism) and
+   "nothing happens at all, ever" (something changed state 3s later) for sign-in, but couldn't see what the
+   first tap actually did or didn't hit.
+3. **Sign-out's mechanism is well-evidenced enough to consider drafting a TASK-064 fix spec for** — the open
+   question is whether Connor wants to fix sign-out now while sign-in investigation continues, or hold both
+   for one combined spec once sign-in is equally well-evidenced. Not yet decided.
+4. TASK-063's own Section 9 deployment-verification-gate checklist items remain open pending full resolution
+   of both mechanisms (see prior entries, superseded by this one).
+5. Unrelated, carried forward: TASK-059's remaining phone-driven checklist rows; two disposable Clerk
+   accounts still need manual deletion from production Clerk.
 
 # Known Risks / Open Questions
 
-- **The actual root cause is still not confirmed, only hypothesized** — the Clerk-transfer + WebKit-reload
-  interruption theory is well-supported by external sources and internal evidence, but not yet proven by a
-  capture that directly shows it happening. Don't treat it as settled until the next capture confirms it.
-- **This is now the fourth investigation round of the same symptom** (TASK-061, TASK-062, TASK-063, and this
-  diagnostic follow-up) — worth being direct with Connor that "tests pass + fix looks architecturally sound"
-  has now been true three times without resolving the actual symptom. Evidence from real on-device captures
-  is the only thing that's moved this investigation forward at each step.
-- Carried forward, unchanged from the prior entry: `SETTLE_MAX_MS = 2000`'s real-world safety remains
-  unresolved by any unit test (spec Section 8); every mount incurs some settlement latency by design.
+- **Sign-in and sign-out are confirmed to be two separate bugs, not one shared root cause** — don't design a
+  single unified fix without re-confirming both mechanisms independently.
+- **Sign-out's mechanism is well-evidenced** (signOut() resolves, uncommanded reload lands ~800ms later
+  before the result is durable, stale signed-in state reads back) but the exact layer that's not-yet-durable
+  (Clerk's local cache vs. cookie propagation vs. something else) is still inferred, not directly observed.
+- **Sign-in's mechanism is still open** — ruled out both "reload interrupts a completed action" and "nothing
+  ever happens," but the actual first-tap failure mode is unknown pending the next capture.
+- **This is now the fourth-plus investigation round of the same symptom** (TASK-061, TASK-062, TASK-063, and
+  two diagnostic follow-up rounds) — worth being direct with Connor that "tests pass + fix looks
+  architecturally sound" has repeatedly not resolved the actual symptom; only real on-device captures have
+  moved this forward.
+- Carried forward, unchanged: `SETTLE_MAX_MS = 2000`'s real-world safety remains unresolved by any unit test
+  (spec Section 8); every mount incurs some settlement latency by design.
 
 # Verification Results
 
 - `npm run lint` (root): PASS.
 - `npm run build` (root → `client`): PASS (pre-existing >500kB chunk-size warning, unrelated).
 - `npm test` (root): PASS — 98/98.
-- `node --test "src/**/*.test.js"` (client): PASS — 35/35, unchanged from TASK-063's own run (this round's
-  changes are diagnostic-only additions with no new test coverage of their own, since they only add logging
-  around existing, already-tested code paths).
-- On-device verification: performed once already (captured log analyzed above) — confirmed TASK-063's
-  mechanism works, confirmed the user-facing symptom persists. Next capture (with this round's diagnostics
-  live) is the open item.
+- `node --test "src/**/*.test.js"` (client): PASS — 35/35, unchanged (this round's changes are diagnostic-only
+  additions with no new test coverage of their own).
+- On-device verification: performed twice now (both captures analyzed above). Sign-out's mechanism is
+  confirmed; sign-in's is not. A third capture is the open item.
 
 # Recommended Next Action
 
 Deploy this round (staging → production, same pattern as before), then wait for Connor's next on-device
-repro capture. Analyze that capture specifically against the Clerk-transfer and signOut-interruption
-hypotheses above before proposing any actual behavioral fix.
+repro capture — specifically a deliberate double-tap on "Continue with Google" with click/pointerdown logging
+live. Once sign-in's mechanism is equally well-evidenced, draft TASK-064 covering a fix for both.
 
 # Forbidden Exploration
 
