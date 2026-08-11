@@ -1,158 +1,138 @@
 # Task
 
-TASK-062 spec drafting — iOS standalone PWA Google OAuth sign-in requires a duplicate manual "Log in" tap.
-Reported by Connor with screenshots; investigated, spec'd, and taken through four rounds of architect review
-this session. No implementation performed — spec-drafting only.
+TASK-062 implementation — iOS standalone PWA Google OAuth self-correction (referrer-detect + single reload).
 
 # Current Status
 
-**[TASK-062-spec.md](../tasks/TASK-062-spec.md) is DRAFT-4, APPROVED FOR IMPLEMENTATION (9.5/10, pending
-Connor's own final sign-off).** Ready for the next session to implement.
+Implemented [TASK-062-spec.md](../tasks/TASK-062-spec.md) DRAFT-4 (Sections 3.1–3.3) in full. **Connor
+explicitly approved implementing provisionally and deferring Section 7's on-device capture** — he has not yet
+walked the real Google OAuth flow on the affected iOS PWA to confirm `document.referrer` actually resolves to
+`/sign-in/sso-callback`. Per the spec's own design, this is a single named constant
+(`EXPECTED_OAUTH_CALLBACK_PATH` in `client/src/lib/oauthReturn.js`) specifically so that correcting it against
+the real observed value later is a one-line change, not a redesign.
 
-Diagnosis: not the same bug as TASK-061 (already-authenticated session race). This is the *initial* OAuth
-redirect round-trip failing to resolve into a signed-in render, specific to the installed iOS PWA
-(`display-mode: standalone`) — Google's OAuth policy forces the round-trip out of the standalone webview,
-and the returning `/` load renders `LandingPage` even though the session was genuinely created (proven by an
-immediate, credential-free success on a second manual attempt).
-
-Fix strategy (see spec Section 3 for full detail): detect a candidate OAuth return via a passive
-`document.referrer` check (no lifecycle heuristic — that was DRAFT-1's rejected approach), gate the
-corrective action on `standalone` display-mode + Clerk `isLoaded === true` + `isSignedIn === false`, then
-force exactly one `window.location.reload()` at `/` (never re-entering `/sign-in`). Loop-safety is an
-explicit `sessionStorage` marker, structurally independent of whatever `document.referrer` does across a
-reload (this was DRAFT-3's required correction).
-
-**The one genuinely open empirical question, and it is a blocking implementation prerequisite, not
-optional**: Section 3.1's expected OAuth callback path (`/sign-in/sso-callback`) is confirmed as far as
-static analysis of this repo allows (`@clerk/clerk-react@5.61.8`'s real router-integration props —
-`routerPush`/`routerReplace` — are unwired in `main.jsx`; `@clerk/shared`'s own type comments describe
-`/sso-callback` as Clerk's convention) but **cannot be fully confirmed from source** — the code that actually
-executes OAuth (`@clerk/clerk-js`) hot-loads from Clerk's CDN at runtime and isn't in `node_modules`. Section
-7's first verification step is therefore a **blocking prerequisite**: capture the real on-device navigation
-sequence (URL/referrer/display-mode/Clerk state at each step of an actual Google sign-in on the affected iOS
-PWA build) before writing the detector. **If that capture doesn't support a referrer-based detector at all,
-implementation must stop and return with a DRAFT-5 redesign — do not substitute a `beforeunload`/`pagehide`
-lifecycle heuristic to keep moving.** This was explicitly re-affirmed in every review round from DRAFT-1
-onward; DRAFT-1 was rejected specifically for that kind of heuristic.
+**This fix is code-complete and build/lint/test-green, but functionally unverified.** The actual bug (does
+this reload the stale render into a signed-in dashboard on iOS?) can only be confirmed device-side, which
+Connor deferred. Do not treat this as "done" — see Known Risks.
 
 # Files Modified
 
-- `ai/tasks/TASK-062-spec.md` — new file, this session's entire deliverable (spec only, DRAFT-1 → DRAFT-4).
-- `ai/handoffs/archive/TASK-059-smoke-tests-resumed.md` — new file, archived the prior CURRENT_STATE.md
-  content (TASK-059 resumed smoke-test session) per Size Discipline before overwriting this file.
+- `client/src/lib/oauthReturn.js` — new file. `EXPECTED_OAUTH_CALLBACK_PATH` (`/sign-in/sso-callback`,
+  pending-verification default), `OAUTH_RELOAD_MARKER_KEY`, `cameFromOAuthCallback()`, `isStandalonePwa()`.
+- `client/src/App.jsx` — added `OAuthReturnGuard` component (mounted inside `AuthProvider`, sibling of
+  `<Routes>`, runs on every render regardless of matched route). Uses Clerk's `useAuth()`
+  (`isLoaded`/`isSignedIn`) + `useLocation()`. Implements spec Section 3.2's full AND'd guard and Section
+  3.3's marker lifecycle (set + reload when guard fires; cleared once `isLoaded` resolves on any load where
+  it doesn't — covers both "signed in after reload" and "genuinely still signed out"). `PrivateRoute`/
+  `PublicRoute` (TASK-061's surface) untouched — confirmed TASK-061 acceptance criterion 1 still holds.
+- `ai/handoffs/archive/TASK-062-spec-drafting.md` — new file, archived prior CURRENT_STATE.md content
+  per Size Discipline.
 - `ai/handoffs/CURRENT_STATE.md` — this file.
-- No application code touched this session (spec-drafting only, per this project's spec+review workflow —
-  implementation is a separate, later session per Connor's usual pattern, same as TASK-057/TASK-061).
 
 # Files Required Next
 
-For implementation:
-- `client/src/App.jsx` — where the detection/guard/reload logic goes (spec Section 4, Allowed Files).
-- Possibly a new small file (e.g. `client/src/lib/oauthReturn.js`) if the detection logic is extracted —
-  left to implementation, not decided in the spec.
-- `client/src/main.jsx` — read-only reference; confirms `ClerkProvider`'s current prop list (no
-  `routerPush`/`routerReplace` wired), do not modify (spec Section 5 explicitly defers wiring those props).
+- None to implement further — the code change is complete per spec. Next session's job is verification
+  (device-side) and, once confirmed, the staging → production push.
 
 # Files Already Reviewed
 
-`client/src/App.jsx`, `client/src/main.jsx`, `client/package.json` (confirmed `@clerk/clerk-react@^5.61.8`),
-`client/node_modules/@clerk/shared/dist/types/index.d.mts` (confirmed `ClerkOptionsNavigation`'s actual
-`routerPush`/`routerReplace`/`routerDebug` props for this installed version, and `IsomorphicClerkOptions`'s
-`clerkJSUrl`/`clerkJSVersion` confirming `@clerk/clerk-js` hot-loads from Clerk's CDN rather than being a
-static dependency), `client/public/sw.js` (ruled out as a contributing cause — network-first on navigation),
-`vercel.json` (SPA rewrite confirmed not to interfere), `ai/tasks/TASK-061-spec.md` and
-`ai/handoffs/archive/TASK-061-implementation.md` (confirmed this is a different bug/mechanism, not a TASK-061
-regression).
+`client/src/App.jsx`, `client/src/main.jsx` (re-confirmed `ClerkProvider` has no `routerPush`/`routerReplace`
+wired, matching the spec's Section 3.1 premise), `client/node_modules/@clerk/clerk-react/dist/index.d.mts`
+(confirmed `useAuth` is exported by the installed `@clerk/clerk-react@5.61.8`, safe to use).
 
 # Dependency Chain
 
-Editing (next session): `client/src/App.jsx`, possibly one new small client file.
-Requires: a real iOS device with the PWA installed for the blocking on-device capture step (Section 7) —
-human-driven, not agent-drivable, per this project's standing rule on account/credential-involving browser
-testing.
-Irrelevant: all of `server/*`, `client/src/api/index.js` (TASK-061's surface — explicitly forbidden in the
-spec to avoid mixing failure domains), any database/schema change (none proposed).
+Editing: `client/src/App.jsx`, `client/src/lib/oauthReturn.js` (new).
+Requires: Clerk's `useAuth()` (`isLoaded`/`isSignedIn`), React Router's `useLocation()`. No new npm
+dependency.
+Irrelevant: all of `server/*`, `client/src/api/index.js` (TASK-061's surface, untouched), any
+database/schema change (none — this is a client-only change; `MIGRATION_LEDGER.md` has no outstanding gaps
+and does not apply here, confirmed at session start).
 
 # Architecture Notes
 
-See [TASK-062-spec.md](../tasks/TASK-062-spec.md) Sections 1–3 for full RCA and design, and its Architect
-Review History table for the reasoning behind each of the four drafts. Key invariant for the implementer:
-loop-prevention (Section 3.3) must never depend on `document.referrer`'s behavior across
-`window.location.reload()` — that dependency was DRAFT-2's rejected design. The `sessionStorage` marker is
-the sole authority, and must not be cleared until the reloaded page's Clerk `isLoaded` has resolved
-(DRAFT-3's required correction) — clearing it merely because the marker was observed present at mount would
-reopen the loop risk.
+`OAuthReturnGuard` is a standalone component with no rendered output (`return null`), mounted once at the
+top of the route tree so it runs independent of which route matched — this was necessary because the guard
+needs to observe `location.pathname === '/'` itself (per spec Section 3.2) rather than being scoped to a
+specific `<Route>`. The single-shot `sessionStorage` marker (`kk_oauth_reload_consumed`) is the sole
+loop-prevention authority, structurally decoupled from whatever `document.referrer` does across
+`window.location.reload()` — per DRAFT-2/DRAFT-3's required corrections, correctness does not depend on that
+behavior.
 
 # Decisions Made
 
-- Spec-only session, no implementation — matches this project's established spec+architect-review workflow
-  (`feedback_spec_workflow` memory); Connor has not yet given the "implement the spec" go-ahead that started
-  TASK-061's implementation session.
-- Rejected DRAFT-1's `beforeunload`/`pagehide` lifecycle-flag detection in favor of passive
-  `document.referrer` checking — a lifecycle event only means "this context is going away," not
-  specifically "an OAuth hop started," per architect review.
-- Rejected DRAFT-1/DRAFT-2's `sessionStorage`-flag fallback as a standing implementation-time option (removed
-  entirely in DRAFT-3/confirmed in DRAFT-4) — if referrer detection doesn't pan out on-device, the spec
-  requires stopping for a DRAFT-5 redesign rather than quietly reaching for a lifecycle heuristic.
-- Verified Clerk version/API claims against the actual installed `node_modules` package rather than relying
-  on documentation paraphrase alone (DRAFT-4) — found `@clerk/clerk-react@5.61.8`'s real router props are
-  `routerPush`/`routerReplace` (not the `navigate` prop DRAFT-1–3 referenced), and that `@clerk/clerk-js`
-  loads dynamically from Clerk's CDN, which is *why* the callback path can't be fully confirmed from source
-  and must be captured on-device before implementation relies on it.
-- Kept the fix's file scope to `App.jsx` (+ maybe one small file) and explicitly forbade
-  `client/src/api/index.js` and all of `server/*`, to avoid mixing this bug's failure domain with TASK-061's.
+- Implemented provisionally with the spec's expected `/sign-in/sso-callback` constant rather than waiting on
+  Section 7's on-device capture — explicit choice by Connor this session ("implement the login fix on the
+  latest spec, I will defer phone testing"), not an agent judgment call to skip a blocking spec requirement.
+  Flagging this clearly here rather than silently treating the task as fully verified.
+- Extracted detection/guard-condition helpers into `client/src/lib/oauthReturn.js` rather than inlining in
+  `App.jsx` — spec Section 4 explicitly allowed either; chose extraction since the constant is meant to be a
+  one-line edit point if Section 7's capture reveals a different callback path.
+- Did not touch `PrivateRoute`/`PublicRoute` or wire `routerPush`/`routerReplace` — both explicitly out of
+  scope per spec Section 5.
 
 # Remaining Work
 
-1. **Implementation session**: perform Section 7's blocking on-device capture first (real iOS device,
-   Connor's own hands per the account/credential-entry rule), confirm or redefine the callback-path constant,
-   then implement Sections 3.1–3.3 in `App.jsx`.
-2. If on-device capture doesn't support a referrer-based detector, return here for a DRAFT-5 spec revision —
-   do not implement a lifecycle-heuristic substitute.
-3. Once implemented: run the full Verification Steps in spec Section 7 (adversarial cancellation test,
-   post-correction navigation test, single-shot guard test, non-standalone regression checks), then follow
-   CONVENTIONS.md's canonical local → staging → production order before considering this closed.
-4. Unrelated, carried forward from the prior handoff (see archive): TASK-059's remaining phone-driven
-   checklist rows (AUTH-1–5, ONB, HH, DASH, PANTRY, REC, SHOP, CHAT, DIET, PUSH, VIS-2–5, ERR-2/3/5) are
-   still pending a human pass; two disposable Clerk accounts (`+zzsmokeB@gmail.com`, `+zzsmokeC@gmail.com`)
-   still need manual deletion from production Clerk when convenient, low urgency.
+1. **Section 7's on-device capture and verification — still fully pending, deferred by Connor.** When he's
+   ready: walk the real Google OAuth flow on the installed iOS PWA, record `document.referrer`/URL/
+   display-mode/Clerk state at each step. If it matches `/sign-in/sso-callback`, this implementation should
+   already work as-is — confirm via the adversarial cancellation test and post-correction navigation test in
+   spec Section 7. If it doesn't match, update `EXPECTED_OAUTH_CALLBACK_PATH` in `oauthReturn.js` (one line)
+   and re-verify; if the referrer approach doesn't hold at all, stop and bring findings back for a DRAFT-5
+   spec revision — do not add a lifecycle-heuristic fallback (spec explicitly forbids this).
+2. Once device-verified: follow CONVENTIONS.md's canonical push workflow (this is client-only, no migration,
+   so no `MIGRATION_LEDGER.md` entry is needed) — push to `staging`, confirm on the Preview URL, then merge
+   `staging` → `main` for production.
+3. Unrelated, carried forward: TASK-059's remaining phone-driven checklist rows (AUTH-1–5, ONB, HH, DASH,
+   PANTRY, REC, SHOP, CHAT, DIET, PUSH, VIS-2–5, ERR-2/3/5) still pending a human pass; two disposable Clerk
+   accounts (`+zzsmokeB@gmail.com`, `+zzsmokeC@gmail.com`) still need manual deletion from production Clerk.
 
 # Known Risks / Open Questions
 
-- **The core open question is Section 7's on-device capture — see Current Status.** Everything else in the
-  spec is settled pending that one empirical check.
-- `.claude/settings.local.json` and `ai/tasks/TASK-059-smoke-tests.md` remain modified in the working tree
-  from before this session, untouched and not committed here — pre-existing, unrelated to TASK-062.
-- Carried forward, unrelated to this session: TASK-058/TASK-060 still just named placeholders, not drafted;
-  TASK-054's `consume_pantry_item`-on-truncated-item gap; Clerk Dashboard sign-up/bot-protection settings
-  still unverified; two disposable Clerk accounts left in production (see Remaining Work #4).
+- **This fix is unverified against the actual bug.** Build/lint/test all pass, but none exercise real iOS
+  Safari OAuth navigation — the one thing that determines whether the detector actually fires correctly.
+  Treat as implemented-not-confirmed until Section 7 runs.
+- If `document.referrer` is stripped/unavailable on-device (Referrer-Policy, WKWebView quirks), spec
+  acceptance criterion 6 treats that as an acceptable degraded no-op, not a defect — but worth knowing going
+  in that the fix could end up inert in practice.
+- Not yet committed to git — working tree has this change plus pre-existing, unrelated, untouched
+  modifications (`.claude/settings.local.json`, `ai/tasks/TASK-059-smoke-tests.md`,
+  `ai/handoffs/archive/TASK-061-implementation.md`).
+- Carried forward, unrelated: TASK-058/TASK-060 still placeholders; TASK-054's
+  `consume_pantry_item`-on-truncated-item gap; Clerk Dashboard sign-up/bot-protection settings unverified;
+  two disposable Clerk accounts left in production (Remaining Work #3).
 
 # Verification Results
 
-- No code changes this session — nothing to build/lint/test. Spec-only.
-- `npm run build`/`npm run lint`/`npm test` will be required verification once TASK-062 is implemented (spec
-  Section 6, criterion 8).
+- `npm run lint` (root, `eslint .`): PASS, no warnings/errors.
+- `npm run build` (root → `client`): PASS, `vite build` succeeded (pre-existing >500kB chunk-size warning,
+  unrelated to this change).
+- `npm test` (root): PASS — 98/98 tests, 0 failures. No existing test exercises `App.jsx` directly, so this
+  confirms no regression in `shared/*` and `server/*` test coverage, not the OAuth fix itself.
+- Device-side verification (spec Section 7): NOT RUN — deferred by Connor, see Known Risks.
 
 # Recommended Next Action
 
-Start a TASK-062 implementation session once Connor gives the go-ahead: begin with Section 7's blocking
-on-device capture step before writing any detector code.
+When Connor is ready to test on his phone: perform Section 7's on-device capture first. If the observed
+referrer matches expectations, run the remaining Section 7 verification steps (adversarial
+cancel/back-navigation test, post-correction navigation test, single-shot guard confirmation, non-standalone
+regression spot-check), then push `staging` → verify Preview → merge to `main`.
 
 # Forbidden Exploration
 
-- `client/src/api/index.js` and all of `server/*` — explicitly forbidden by TASK-062's own Files section, to
-  keep this bug's fix isolated from TASK-061's surface.
+- `client/src/api/index.js` and all of `server/*` — explicitly forbidden by TASK-062's own Files section.
 - Any TASK-059 row requiring account creation/credential entry, and TASK-062's on-device capture step itself
   — both require a human on a real device, not agent-driven browser tooling; standing project rule.
 
 # Context Notes
 
-- branch: `staging` (no code changes, no deploy this session — spec-drafting only).
-- No dev servers started this session.
+- branch: `staging` (no commit made this session — code changes are in the working tree only; see Known
+  Risks).
+- No dev servers started this session; verification was build/lint/test only, not a live browser session.
 - No worktree used.
-- Session included checking the AI Development Agent Efficiency Guide (`Sharpe_AI_Dev_Agent_Efficiency_Guide.md`,
-  Rev 7) at Connor's request at session start — informed the spec-drafting workflow but no repo files from
-  that guide's structure (e.g. `MIGRATION_LEDGER.md`) needed touching, since TASK-062 has no migration.
+- Session followed the AI Development Agent Efficiency Guide's orientation protocol at Connor's request
+  (read `CURRENT_STATE.md`, `TASK-062-spec.md`, `MIGRATION_LEDGER.md` — confirmed no outstanding gaps and
+  not applicable to this client-only change).
 
 ---
 
@@ -174,3 +154,5 @@ on-device capture step before writing any detector code.
   [archive/TASK-061-implementation.md](archive/TASK-061-implementation.md)
 - TASK-059 resumed smoke-test session (ADMIN/SEC/ERR rows via real browser sessions): see
   [archive/TASK-059-smoke-tests-resumed.md](archive/TASK-059-smoke-tests-resumed.md)
+- TASK-062 spec-drafting session (DRAFT-1 → DRAFT-4 approved, 4 architect review rounds): see
+  [archive/TASK-062-spec-drafting.md](archive/TASK-062-spec-drafting.md)
