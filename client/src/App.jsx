@@ -17,6 +17,7 @@ import { AuthProvider } from './context/AuthContext.jsx';
 import AppLayout from './components/layout/AppLayout.jsx';
 import ErrorBoundary from './components/layout/ErrorBoundary.jsx';
 import DebugPanel from './components/DebugPanel.jsx';
+import PreconnectGoogleOAuth from './components/PreconnectGoogleOAuth.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import LandingPage from './pages/LandingPage.jsx';
 import PantryPage from './pages/PantryPage.jsx';
@@ -124,7 +125,9 @@ function AppRoutes() {
         path="/sign-in/*"
         element={
           <PublicRoute recovering={recovering}>
-            <SignIn routing="path" path="/sign-in" />
+            <PreconnectGoogleOAuth>
+              <SignIn routing="path" path="/sign-in" />
+            </PreconnectGoogleOAuth>
           </PublicRoute>
         }
       />
@@ -132,7 +135,9 @@ function AppRoutes() {
         path="/sign-up/*"
         element={
           <PublicRoute recovering={recovering}>
-            <SignUp routing="path" path="/sign-up" />
+            <PreconnectGoogleOAuth>
+              <SignUp routing="path" path="/sign-up" />
+            </PreconnectGoogleOAuth>
           </PublicRoute>
         }
       />

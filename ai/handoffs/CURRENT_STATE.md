@@ -1,104 +1,161 @@
 # Task
 
-TASK-064 follow-up — investigating whether iOS PWA sign-in can drop from two taps to one. On-device
-verification (this session) confirmed TASK-064's mechanism itself works as designed (see
-[archive/TASK-064-implementation.md](archive/TASK-064-implementation.md)): sign-out self-repairs invisibly
-(one tap), sign-in shows an explicit re-prompt after an interrupting reload (still two taps, by deliberate
-design — spec §3.3 rejected auto-retry). This session is testing a specific hypothesis for why the sign-in
-redirect gets interrupted at all, before committing to a larger fix.
+TASK-065 — iOS PWA sign-in: preconnect to Google's OAuth endpoint. Implementation of the architect-approved
+spec ([TASK-065-spec.md](../tasks/TASK-065-spec.md), DRAFT-3, round-2 review ~9.3/10 APPROVE WITH MINOR
+CHANGE).
 
 # Current Status
 
-**Hypothesis under test**: WebKit's transient user-activation window (~1s after a tap — see
-[WebKit's own writeup](https://webkit.org/blog/13862/the-user-activation-api/)) expires before Clerk's own
-async round-trip (creating the sign-in attempt, fetching the OAuth authorize URL) completes and calls
-`window.location.href =`. A captured real repro showed a ~1.8s gap between the tap and the interrupting
-reload — past that ~1s window. If the redirect fires after activation has expired, iOS's standalone-PWA
-navigation policy may no longer trust it as user-initiated, producing the observed bounce-back-to-`/` reload
-instead of a real navigation to Google. This would also explain the field-documented "first attempt fails,
-retry succeeds" pattern (warm connection on retry → faster round-trip → still inside the window). Sourced
-from: [WebKitErrorDomain 102 reports](https://github.com/pwa-builder/PWABuilder/issues/5115),
-[Apple Developer Forums #649699](https://developer.apple.com/forums/thread/649699) — this is a known,
-long-standing, still-unresolved iOS/WebKit limitation, not unique to this app or to Clerk.
+Code implemented, both scoped routes wired, `lint`/`build` green. Two items the spec explicitly called out as
+needing human input before/during implementation were raised with Connor this session and resolved:
 
-**Shipped this session (diagnostic only, no behavior change)**: timing instrumentation to confirm or refute
-the hypothesis before designing a fix.
-- `client/src/lib/authTransition.js` — `oauth-marker-installed` log now includes `perfNowMs`
-  (`performance.now()` at the moment of the Google-button tap). Synchronous read, doesn't change the
-  synchronous-only click-listener contract (spec §3.5).
-- `client/src/lib/lifecycleLog.js` — `lifecycle-pagehide` log now includes, when debug mode is enabled,
-  `perfNowMs` plus Resource Timing entries for any request whose URL matches `/clerk/i` (host+pathname only,
-  query strings stripped in case of tokens), each with `startMs`/`durationMs`/`responseEndMs`. Captured at
-  `pagehide` specifically, since Resource Timing entries for this page load are gone once the interrupting
-  reload actually lands. Gated behind `isDebugEnabled()` so it costs real users nothing.
+1. **`/sign-up`'s OAuth destination** (spec §2.2's implementation-time gate) — the spec's own curl-based
+   verification technique (used successfully for `/sign-in` during spec-drafting) is blocked by Clerk's
+   bot-protection on `/sign-up` specifically. Resolved this session: with Connor's permission, signed out of
+   his live production session in a Chrome tab, clicked "Continue with Google" on `/sign-up`, and the
+   resulting tab landed on a Google sign-in page — Connor confirmed this directly. **Gate satisfied**:
+   `/sign-up` shares `/sign-in`'s `accounts.google.com` destination, so it's in scope per §2.2 (not deferred
+   to a follow-up).
+2. **The ~20-cycle manual on-device sampling ask** (spec §5 criterion 4 / §7) — not yet actually performed;
+   this requires Connor's physical iPhone in standalone-PWA mode (WebKit's transient-activation window is
+   iOS/WebKit-specific — desktop Chrome automation can't reproduce the mechanism being measured, confirmed
+   with Connor this session). Remains outstanding, see Remaining Work.
 
-Commit `2af6d6d`, fast-forwarded onto both `staging` and `main`, confirmed deployed and `kitchenkeeper.kitchen`
-aliased to the new production deployment (`dpl_5HbzKUKLhRAVykLdRTEckVEBGojc`).
+**One verification gap, explicitly skipped at Connor's instruction**: §6-A's live DOM check (confirming the
+`<link rel="preconnect">` tag actually lands in `document.head` at runtime) was not completed. The Chrome
+extension used for browser automation this session blocks navigation to `localhost` entirely
+("Navigation to this domain is not allowed") pending what looks like a one-time site-access grant on Connor's
+end — not attempted further per his explicit "skip it, note it in the handoff." Confidence in the
+implementation itself is based on code review (`lint`/`build` pass; the logic is a standard
+`useLayoutEffect` doing plain DOM `querySelector`/`createElement`/`appendChild`, no framework-specific
+gotchas) rather than an observed runtime DOM check.
 
 # Files Modified
 
-- `client/src/lib/authTransition.js` — added `perfNowMs` to the existing `oauth-marker-installed` diagnostic.
-- `client/src/lib/lifecycleLog.js` — added `captureClerkNetworkTiming()`, wired into the `pagehide` listener.
+- `client/src/components/PreconnectGoogleOAuth.jsx` (new) — wrapper component; on mount (`useLayoutEffect`,
+  not a DOM mutation during render — spec §2.2's round-2 correction), injects
+  `<link rel="preconnect" href="https://accounts.google.com">` (no `crossorigin` — spec §2.1's credentialed-
+  connection rationale) into `document.head` if not already present; removes it on unmount only if this
+  instance created it (dedupes against Strict Mode's dev-mode double-invocation).
+- `client/src/App.jsx` — wraps `<SignIn>` (`/sign-in/*` route) and `<SignUp>` (`/sign-up/*` route) elements in
+  `<PreconnectGoogleOAuth>`, inside the existing `<PublicRoute>` wrapper (so the hint only fires once
+  `PublicRoute` actually decides to render the public auth form, not during a redirect-away decision for an
+  already-authenticated user — matches spec §2.2's "unsolicited connection cost" concern for the common
+  already-signed-in launch case).
+
+# Files Required Next
+
+None to implement further — remaining work is verification only (see below), not code changes, unless the
+on-device timing comparison (§5 criterion 4) surfaces something the spec didn't anticipate.
+
+# Files Already Reviewed
+
+- `client/src/App.jsx` (full file, route structure, `PublicRoute`/`PrivateRoute` wrappers, TASK-063/064
+  diagnostic components) — reviewed before editing to place the wrapper correctly relative to `PublicRoute`.
+- `ai/tasks/TASK-065-spec.md` (full spec, both architect review rounds) — authoritative source for this
+  implementation; no deviations from its Allowed/Forbidden file lists (§3) or acceptance criteria (§5).
+
+# Dependency Chain
+
+Editing:
+- `client/src/App.jsx`
+- `client/src/components/PreconnectGoogleOAuth.jsx`
+
+Requires:
+- Clerk's `<SignIn>`/`<SignUp>` components already imported in `App.jsx` (`@clerk/clerk-react`) — unchanged.
+
+Irrelevant:
+- `client/src/lib/authTransition.js`, `client/src/hooks/useAuthRecovery.js`,
+  `client/src/lib/routeDecision.js`, `client/src/context/AuthContext.jsx`, `client/src/lib/lifecycleLog.js`,
+  all of `server/*` — spec §3's explicit Forbidden list; not touched, matches TASK-064's recovery mechanism
+  staying untouched per spec §2.3.
+
+# Architecture Notes
+
+- No new route-level wrapper component existed before this task (spec §1); `PreconnectGoogleOAuth` is the
+  first one, scoped narrowly (children pass-through, single responsibility: the resource hint).
+- Placement inside `<PublicRoute>` rather than outside it was a judgment call not explicitly specified by the
+  spec — the spec only required the hint fire "as early as reasonably possible after the auth route becomes
+  active, and before the Google OAuth control becomes interactive" (§2.2). Placing it inside means an
+  already-authenticated user hitting `/sign-in`/`/sign-up` (who `PublicRoute` immediately redirects away
+  from) never triggers the connection at all — directly serving §2.2's stated concern about unsolicited
+  connection cost for the common already-signed-in case.
+
+# Decisions Made
+
+- No `crossorigin` attribute on the `<link>` — spec §2.1, verified against the HTML Standard's own preconnect
+  algorithm during spec-drafting (credentialed by default, matching a normal top-level OAuth navigation).
+- `/sign-up` is in scope (not deferred) — the implementation-time gate (§2.2) was satisfied this session via
+  a live browser check, described above.
+- Cleanup on unmount (`link.remove()`) — not explicitly required by the spec, but chosen to cleanly satisfy
+  acceptance criterion 2 ("no other route's rendered output or behavior changes") when navigating away from
+  the auth routes, and to dedupe correctly under Strict Mode.
 
 # Remaining Work
 
-1. **Connor to capture a fresh on-device repro** (enable debug mode, repeat the sign-in tap → reload →
-   retry sequence, "Copy all" from the debug panel, same flow as before).
-2. **Analyze the captured `lifecycle-pagehide` / `oauth-marker-installed` pairs**: compute
-   `responseEndMs - perfNowMs` (tap-to-Clerk-request-finish) for both the failing first attempt and the
-   succeeding retry. If the failing attempt's value is consistently ≥~1000ms and the succeeding retry's is
-   consistently <~1000ms, that's strong confirmation. If both are far above or far below ~1000ms regardless
-   of outcome, the activation-expiry theory is likely wrong and shouldn't be pursued further.
-3. **If confirmed**: the fix candidates discussed (not yet started) are (a) `<link rel="preconnect">` to
-   Clerk's Frontend API domain to shrink the round-trip below the activation window — cheap, low-risk,
-   worth trying first; (b) eagerly pre-fetching the OAuth authorize URL on `/sign-in` mount via Clerk's
-   custom OAuth flow, so the actual redirect can fire synchronously inside the click handler — the more
-   complete fix, but requires moving off Clerk's default hosted button, larger scope.
-4. **If refuted**: fall back to the smaller, already-identified friction fix — the interrupting reload lands
-   at `/` (the PWA's `start_url`), not `/sign-in` as spec §3.3 assumed, so the recovery toast currently fires
-   on the wrong page and costs an extra "Log in" tap to get back to the Google button. Routing the recovery
-   flow back to `/sign-in` directly would cut that tap regardless of the activation-expiry theory's outcome.
+1. **Connor: perform the ~20-cycle paired before/after on-device timing comparison** (spec §5 criterion 4) —
+   alternating baseline/treatment attempts, force-quit/relaunch discipline, discard incomplete captures, using
+   the existing debug-mode instrumentation from the TASK-064-followup session (still shipped, untouched).
+   Compare against this investigation's baseline numbers (554ms success / 1708ms failure) — see spec §0 for
+   full methodology and what counts as a meaningful result either direction.
+2. **Optional, not blocking**: if/when Connor grants the Chrome extension access to `localhost`, a quick
+   live-DOM check (`document.head.querySelectorAll('link[rel="preconnect"]')` on `/sign-in` and `/sign-up`,
+   confirming absence elsewhere) would close the one skipped verification step (§6-A). Not required to ship —
+   code review plus green `lint`/`build` is the current basis for confidence.
+3. **Not yet pushed** — this session's changes are committed to the working tree but not yet committed/pushed
+   to `staging`. See PowerShell Merge Block below; awaiting Connor's go-ahead per this agent's standing policy
+   of confirming before pushing shared branches.
 
 # Known Risks / Open Questions
 
-- The activation-expiry theory is a hypothesis backed by timing correlation and general WebKit documentation,
-  not yet confirmed against this app's actual Clerk request timing — do not treat it as fact until the
-  captured data in Remaining Work #2 supports it.
-- Same-session OAuth cancellation remains a documented, unsolved gap (spec §3.3, carried forward).
-- Keyboard/assistive-tech sign-in activation remains uncovered (carried forward, not regressed).
+- Spec §7, carried forward: preconnect is a hint, not a guarantee — actual WebKit/iOS honoring of it is
+  unverified on-device (§6-B, genuinely optional per the spec, not attempted this session — no iOS device
+  access).
+- Spec §7, carried forward: absence of measurable timing improvement (Remaining Work #1) wouldn't
+  definitively rule out connection-setup time as a contributor — WebKit could simply decline to honor the
+  hint. Either outcome is a valid, useful finding per spec §0's confidence calibration.
+- The skipped §6-A live-DOM check (see Current Status) is a real, if low-severity, verification gap — flagged
+  explicitly rather than silently treated as done.
+- Connor was signed out of his live `kitchenkeeper.kitchen` session during the `/sign-up` gate check this
+  session (with his permission) — he'll need to sign back in if he hasn't already.
 
 # Verification Results
 
-- `npm run lint`: PASS. `npm run build`: PASS (pre-existing >500kB chunk warning, unrelated).
-- `node --test "src/lib/authTransition.test.js"` (client): PASS 18/18, unaffected by the diagnostic addition.
-- No test suite exists for `lifecycleLog.js` (pre-existing state, not introduced this session).
-- Deploy confirmed live via `vercel ls`/`vercel inspect`: both `staging` Preview and `production` deployments
-  `Ready`; `kitchenkeeper.kitchen` alias confirmed pointing at the new production deployment ID.
-- On-device verification of the timing capture itself: **not yet performed** — this is diagnostic
-  instrumentation; its own correctness will be confirmed by whether Connor's next capture actually contains
-  the new fields, at the same time as it answers the underlying hypothesis question.
+- `npm run lint` (root, `eslint .`): PASS.
+- `npm run build` (root → `vite build` in `client/`): PASS. Pre-existing >500kB chunk warning, unrelated to
+  this change (same warning noted in prior handoffs).
+- Live DOM check (§6-A): **not performed** — see Current Status/Known Risks.
+- On-device timing comparison (§5 criterion 4 / §6-C): **not performed** — Remaining Work #1, Connor's to do.
+- `/sign-up` destination gate (§2.2): confirmed via live browser check this session (see Current Status).
 
 # Recommended Next Action
 
-Connor: reproduce the sign-in double-tap on-device with debug mode on, copy the log, and share it. That
-single capture both validates this instrumentation and (per Remaining Work #2) answers whether the
-activation-expiry theory holds — no further code changes needed until that data comes back.
+Confirm with Connor whether to commit/push these changes to `staging` now (see PowerShell Merge Block) — no
+migration/schema involved, no `MIGRATION_LEDGER.md` concern, so this is a plain code push once approved. After
+that, the ball is in Connor's court for the on-device timing comparison (Remaining Work #1); no further code
+changes are anticipated unless that data surfaces something unexpected.
 
 # Context Notes
 
-- branch: `staging` (working tree here; `main` fast-forwarded to the same commit `2af6d6d` and pushed, then
-  checked back out to `staging`). No dev server started — this is server-agnostic client instrumentation, no
-  new UI surface. No migration/schema work — `MIGRATION_LEDGER.md` doesn't exist in this repo (no
-  multi-environment schema-lineage concern here beyond the existing per-environment Neon branches, which this
-  task doesn't touch).
-- Left uncommitted/untouched, pre-existing and unrelated to this task: `.claude/settings.local.json`,
-  `ai/tasks/TASK-059-smoke-tests.md` (both modified), `ai/handoffs/archive/TASK-061-implementation.md`
-  (untracked) — not staged or committed this session either.
+- branch: `staging` (working tree here, matching the pattern established for TASK-064's own implementation
+  session — no worktree, no feature branch).
+- No migration/schema work — `MIGRATION_LEDGER.md` doesn't apply to this task.
+- Left uncommitted/untouched, pre-existing and unrelated to this task (carried forward from the prior
+  session's handoff, still true): `.claude/settings.local.json`, `ai/tasks/TASK-059-smoke-tests.md` (both
+  modified), `ai/handoffs/archive/TASK-061-implementation.md` (untracked) — not staged or committed this
+  session either.
+- Local dev server (client on `:5173`, server on `:3001`) was started for verification purposes this session
+  and has been stopped; nothing left running.
 
 # PowerShell Merge Block
 
-Not applicable this session — commits were made directly on `staging`/`main` (no worktree, no feature branch),
-matching the pattern already established for TASK-064's own implementation session.
+Not applicable in the worktree sense — no worktree or feature branch was used, matching TASK-064's own
+pattern of committing directly on `staging`. Suggested commit (not yet run, pending Connor's go-ahead):
+
+```powershell
+git add client/src/App.jsx client/src/components/PreconnectGoogleOAuth.jsx ai/handoffs/CURRENT_STATE.md ai/handoffs/archive/TASK-064-followup-timing-diagnostics.md
+git commit -m "TASK-065: add scoped Google OAuth preconnect hint to /sign-in and /sign-up"
+```
 
 ---
 
@@ -121,3 +178,6 @@ matching the pattern already established for TASK-064's own implementation sessi
   [archive/TASK-063-064-diagnostics-and-spec.md](archive/TASK-063-064-diagnostics-and-spec.md)
 - TASK-064 implementation/deploy (marker-based recovery mechanism, on-device verification confirmed working
   as designed): see [archive/TASK-064-implementation.md](archive/TASK-064-implementation.md)
+- TASK-064 follow-up (timing diagnostics, confirmed the WebKit activation-expiry hypothesis with paired
+  on-device data, feeding directly into TASK-065): see
+  [archive/TASK-064-followup-timing-diagnostics.md](archive/TASK-064-followup-timing-diagnostics.md)
