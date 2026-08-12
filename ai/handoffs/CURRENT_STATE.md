@@ -102,9 +102,9 @@ Irrelevant:
    live-DOM check (`document.head.querySelectorAll('link[rel="preconnect"]')` on `/sign-in` and `/sign-up`,
    confirming absence elsewhere) would close the one skipped verification step (§6-A). Not required to ship —
    code review plus green `lint`/`build` is the current basis for confidence.
-3. **Not yet pushed** — this session's changes are committed to the working tree but not yet committed/pushed
-   to `staging`. See PowerShell Merge Block below; awaiting Connor's go-ahead per this agent's standing policy
-   of confirming before pushing shared branches.
+3. Pushed — commit `7492198` pushed to `staging`, then fast-forwarded to `main` (production) at Connor's
+   explicit request, both via plain `git push` (no polling of deploy platform status afterward, per this
+   guide's Rule 8 — push exit 0 is the completion signal).
 
 # Known Risks / Open Questions
 
@@ -130,10 +130,9 @@ Irrelevant:
 
 # Recommended Next Action
 
-Confirm with Connor whether to commit/push these changes to `staging` now (see PowerShell Merge Block) — no
-migration/schema involved, no `MIGRATION_LEDGER.md` concern, so this is a plain code push once approved. After
-that, the ball is in Connor's court for the on-device timing comparison (Remaining Work #1); no further code
-changes are anticipated unless that data surfaces something unexpected.
+Pushed to `staging` and `main`/production (commit `7492198`). The ball is now in Connor's court for the
+on-device timing comparison (Remaining Work #1); no further code changes are anticipated unless that data
+surfaces something unexpected.
 
 # Context Notes
 
