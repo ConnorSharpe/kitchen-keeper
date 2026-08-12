@@ -119,8 +119,9 @@ fresh session per Rule 5 — that's a distinct phase from this implementation se
 
 # Context Notes
 
-- branch: `staging`, this session's edits are uncommitted (not yet staged/committed/pushed — pending
-  Connor's go-ahead).
+- branch: `staging` and `main` both pushed to commit `f11678e` (Connor confirmed this diagnostic-only,
+  debug-gated change is safe to also push straight to production — no on-device verification blocks this
+  per Rule 8, push success is the completion signal, not confirmed-live).
 - No migration/schema work — `MIGRATION_LEDGER.md` doesn't apply to this task.
 - Pre-existing, unrelated to this task (carried forward, untouched): `.claude/settings.local.json`,
   `ai/tasks/TASK-059-smoke-tests.md` (both modified), `ai/handoffs/archive/TASK-061-implementation.md`
