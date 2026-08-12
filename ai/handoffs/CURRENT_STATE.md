@@ -1,170 +1,123 @@
 # Task
 
-TASK-064 implementation — iOS PWA double sign-in/sign-out recovery mechanism, per
-[TASK-064-spec.md](../tasks/TASK-064-spec.md) DRAFT-6 (approved, ~9.5/10). **Implemented, committed
-(`10fff5e`), and deployed to both `staging` and `production` this session, on Connor's explicit instruction —
-ahead of the on-device verification this task's own spec calls load-bearing (spec Section 7). That
-verification is now the very next step, against a real, already-live environment.**
+TASK-064 follow-up — investigating whether iOS PWA sign-in can drop from two taps to one. On-device
+verification (this session) confirmed TASK-064's mechanism itself works as designed (see
+[archive/TASK-064-implementation.md](archive/TASK-064-implementation.md)): sign-out self-repairs invisibly
+(one tap), sign-in shows an explicit re-prompt after an interrupting reload (still two taps, by deliberate
+design — spec §3.3 rejected auto-retry). This session is testing a specific hypothesis for why the sign-in
+redirect gets interrupted at all, before committing to a larger fix.
 
 # Current Status
 
-Marker-based recovery mechanism implemented, surviving the uncommanded WebKit-level reload (spec Section 2)
-that can land mid-`signOut()` or mid-Google-sign-in-tap. Sign-out gets a bounded, session-ID-verified
-automatic repair (Rule 1 + Rule 2, spec Section 3.2); sign-in gets an explicit re-prompt toast, never
-automatic navigation (spec Section 3.3). All 20 acceptance criteria (spec Section 6) verified against the
-implementation.
+**Hypothesis under test**: WebKit's transient user-activation window (~1s after a tap — see
+[WebKit's own writeup](https://webkit.org/blog/13862/the-user-activation-api/)) expires before Clerk's own
+async round-trip (creating the sign-in attempt, fetching the OAuth authorize URL) completes and calls
+`window.location.href =`. A captured real repro showed a ~1.8s gap between the tap and the interrupting
+reload — past that ~1s window. If the redirect fires after activation has expired, iOS's standalone-PWA
+navigation policy may no longer trust it as user-initiated, producing the observed bounce-back-to-`/` reload
+instead of a real navigation to Google. This would also explain the field-documented "first attempt fails,
+retry succeeds" pattern (warm connection on retry → faster round-trip → still inside the window). Sourced
+from: [WebKitErrorDomain 102 reports](https://github.com/pwa-builder/PWABuilder/issues/5115),
+[Apple Developer Forums #649699](https://developer.apple.com/forums/thread/649699) — this is a known,
+long-standing, still-unresolved iOS/WebKit limitation, not unique to this app or to Clerk.
+
+**Shipped this session (diagnostic only, no behavior change)**: timing instrumentation to confirm or refute
+the hypothesis before designing a fix.
+- `client/src/lib/authTransition.js` — `oauth-marker-installed` log now includes `perfNowMs`
+  (`performance.now()` at the moment of the Google-button tap). Synchronous read, doesn't change the
+  synchronous-only click-listener contract (spec §3.5).
+- `client/src/lib/lifecycleLog.js` — `lifecycle-pagehide` log now includes, when debug mode is enabled,
+  `perfNowMs` plus Resource Timing entries for any request whose URL matches `/clerk/i` (host+pathname only,
+  query strings stripped in case of tokens), each with `startMs`/`durationMs`/`responseEndMs`. Captured at
+  `pagehide` specifically, since Resource Timing entries for this page load are gone once the interrupting
+  reload actually lands. Gated behind `isDebugEnabled()` so it costs real users nothing.
+
+Commit `2af6d6d`, fast-forwarded onto both `staging` and `main`, confirmed deployed and `kitchenkeeper.kitchen`
+aliased to the new production deployment (`dpl_5HbzKUKLhRAVykLdRTEckVEBGojc`).
 
 # Files Modified
 
-New:
-- `client/src/lib/authTransition.js` — marker read/write/clear/expiry for `kk_pending_signout` +
-  `kk_pending_oauth`, fail-closed parsing, plus `installOauthMarkerListener()` (production Google-button click
-  listener, separate from `lifecycleLog.js`'s diagnostic-only click logging).
-- `client/src/lib/authTransition.test.js` — 18 tests (round-trip, monotonicity, expiry, fail-closed parsing,
-  storage-failure-never-blocks).
-- `client/src/hooks/useAuthRecovery.js` — `decideSignoutRecovery()`/`decideSigninRecovery()` (pure, exported)
-  implementing Rule 1 (continuous raw-`isSignedIn`-false clearing), Rule 2 (bounded, session-ID-verified
-  repair), and the sign-in re-prompt table. `useAuthRecovery()` hook wires these up, returns
-  `{ recovering, recoveryMessage }`.
-- `client/src/hooks/useAuthRecovery.test.js` — 14 tests, all spec Section 7 named regressions incl. both P0
-  variants, null-sessionId guard, attempt:1-never-retries.
-
-Modified:
-- `client/src/context/AuthContext.jsx` — `logout()` writes the marker before `signOut()`, no longer clears it
-  itself (ownership moved to `useAuthRecovery()` — DRAFT-1's original bug, now structurally unrepeatable).
-- `client/src/lib/routeDecision.js` + `.test.js` — `resolveRouteDecision()` gains `recovering`; forces
-  `render-nothing` even when settled + signed in.
-- `client/src/App.jsx` — added `AppRoutes()`, the single call site for `useAuthRecovery()` (see Architecture
-  Notes). `PrivateRoute`/`PublicRoute` take `recovering` as a prop, never call the hook. `recoveryMessage`
-  surfaced via the existing `Toaster`/`toast()` (no new dependency).
-- `client/src/main.jsx` — calls `installOauthMarkerListener()` alongside existing diagnostic installers.
-
-Untouched (forbidden by spec Section 4, confirmed via `git status`): `useSettledAuth.js`, `api/index.js`, all
-of `server/*`. No new npm dependencies.
-
-# Files Required Next
-
-None to implement. Next: **on-device verification against the now-live deployments** (see Recommended Next
-Action).
-
-# Dependency Chain
-
-Editing: `authTransition.js` (new), `useAuthRecovery.js` (new), `AuthContext.jsx`, `routeDecision.js`,
-`App.jsx`, `main.jsx`.
-Requires: `@clerk/clerk-react` v5.61.8's `useAuth()` (`sessionId`), `useClerk()` — already installed.
-Irrelevant: `api/index.js`, all of `server/*`, `useSettledAuth.js` (read for interface only, never modified).
-
-# Architecture Notes
-
-**Structural gap in the spec, resolved during implementation**: spec Section 3.4 names the single call site
-as literally "`App()`," which is impossible — `useSettledAuth()` (which the hook needs) is only provided
-inside `<AuthProvider>`'s subtree, so the top-level `App()` function can't call it before `AuthProvider`
-mounts. Resolved with `AppRoutes()`, a new component rendered as `AuthProvider`'s child (alongside
-`AuthStateLogger`/`SignFlowStateLogger`) that plays `App()`'s structural role: exactly one call site,
-`recovering` flows down as a prop, routes never call the hook (acceptance criterion 20 verified against this
-actual structure).
-
-Everything else matches the spec directly: `authTransition.js` holds only pure marker functions + the click
-listener (kept out of `lifecycleLog.js` so a future "strip debug logging" cleanup can't delete load-bearing
-behavior). Decision logic lives in `useAuthRecovery.js` as pure, exported, unit-tested functions, mirroring
-this codebase's `routeDecision.js` pattern (no jsdom/@testing-library here — plain `node:test` only).
-
-# Decisions Made
-
-- Google-button click detection uses `click` (capture-phase), not `pointerdown` — satisfies the
-  synchronous-only requirement trivially; unrelated to `installClickLogging()`'s diagnostic `pointerdown`.
-- Sign-out-exhausted toast copy ("Sign out didn't complete — please try again.") wasn't specified verbatim in
-  the spec (only sign-in's was) — chosen to match its tone; trivially changeable.
-- Sign-out and sign-in markers are evaluated in one shared post-settle effect (`evaluatedRef` guard) rather
-  than two — simpler, spec doesn't require independent gating.
+- `client/src/lib/authTransition.js` — added `perfNowMs` to the existing `oauth-marker-installed` diagnostic.
+- `client/src/lib/lifecycleLog.js` — added `captureClerkNetworkTiming()`, wired into the `pagehide` listener.
 
 # Remaining Work
 
-1. **On-device verification (mandatory, still outstanding)** — repeated sign-in/sign-out repro on the real
-   device against production/staging (both now live, see Verification Results), confirming the repair/message
-   actually fires and the symptom is gone. Four prior rounds all had green tests without fixing the real bug;
-   this round shipped to production *before* that check, on explicit instruction — the check itself hasn't
-   moved, only its order relative to deploy.
-2. If on-device verification finds the fix doesn't work (or makes things worse): this commit
-   (`10fff5e`) is a single clean fast-forward on both branches, so `git revert 10fff5e` on `staging`,
-   re-push, re-fast-forward `main`, is a clean rollback path if needed — not yet required, noted for
-   next agent.
-3. Unrelated, carried forward: TASK-059's remaining phone-driven checklist rows; two disposable Clerk accounts
-   still need manual deletion from production Clerk.
+1. **Connor to capture a fresh on-device repro** (enable debug mode, repeat the sign-in tap → reload →
+   retry sequence, "Copy all" from the debug panel, same flow as before).
+2. **Analyze the captured `lifecycle-pagehide` / `oauth-marker-installed` pairs**: compute
+   `responseEndMs - perfNowMs` (tap-to-Clerk-request-finish) for both the failing first attempt and the
+   succeeding retry. If the failing attempt's value is consistently ≥~1000ms and the succeeding retry's is
+   consistently <~1000ms, that's strong confirmation. If both are far above or far below ~1000ms regardless
+   of outcome, the activation-expiry theory is likely wrong and shouldn't be pursued further.
+3. **If confirmed**: the fix candidates discussed (not yet started) are (a) `<link rel="preconnect">` to
+   Clerk's Frontend API domain to shrink the round-trip below the activation window — cheap, low-risk,
+   worth trying first; (b) eagerly pre-fetching the OAuth authorize URL on `/sign-in` mount via Clerk's
+   custom OAuth flow, so the actual redirect can fire synchronously inside the click handler — the more
+   complete fix, but requires moving off Clerk's default hosted button, larger scope.
+4. **If refuted**: fall back to the smaller, already-identified friction fix — the interrupting reload lands
+   at `/` (the PWA's `start_url`), not `/sign-in` as spec §3.3 assumed, so the recovery toast currently fires
+   on the wrong page and costs an extra "Log in" tap to get back to the Google button. Routing the recovery
+   flow back to `/sign-in` directly would cut that tap regardless of the activation-expiry theory's outcome.
 
 # Known Risks / Open Questions
 
-- Fix reduces but does not mathematically eliminate the symptom (spec Section 8) — a repair could in
-  principle be caught by a second unlucky reload; bounded-retry prevents looping, falls through to the
-  message path instead.
-- Same-session OAuth cancellation remains a documented, unsolved gap (spec Section 3.3).
-- Keyboard/assistive-tech sign-in activation is uncovered (doesn't regress it, doesn't extend to it either).
-- Fourth fix attempt at the same symptom — on-device evidence, not test-green status, is what's moved this
-  forward each round. Not optional here either.
+- The activation-expiry theory is a hypothesis backed by timing correlation and general WebKit documentation,
+  not yet confirmed against this app's actual Clerk request timing — do not treat it as fact until the
+  captured data in Remaining Work #2 supports it.
+- Same-session OAuth cancellation remains a documented, unsolved gap (spec §3.3, carried forward).
+- Keyboard/assistive-tech sign-in activation remains uncovered (carried forward, not regressed).
 
 # Verification Results
 
-- `npm run lint` (root): PASS. `npm run build`: PASS (pre-existing >500kB chunk warning, unrelated).
-- `npm test` (root, server): PASS — 98/98, unaffected.
-- `node --test "src/**/*.test.js"` (client): PASS — **69/69** (35 pre-existing + 18 + 14 + 2 new).
-- `client/src/api/index.authRetry.test.js` (TASK-061, criterion 18): re-run individually, PASS — 3/3.
-- All 20 spec acceptance criteria checked against the actual implementation.
-- Deploy confirmed live via `vercel inspect`/`vercel ls`: `staging` Preview deployment `Ready` (~1 min old at
-  confirmation time); `production` deployment `dpl_6EUH2PKa2j9TfbYb7WymvUaTZA6a` `Ready`, and
-  `kitchenkeeper.kitchen`'s alias confirmed pointing at that same deployment ID.
-- On-device verification: **still not performed** — deployed ahead of it, on Connor's explicit instruction
-  (see Task). This remains the load-bearing check regardless of deploy status.
+- `npm run lint`: PASS. `npm run build`: PASS (pre-existing >500kB chunk warning, unrelated).
+- `node --test "src/lib/authTransition.test.js"` (client): PASS 18/18, unaffected by the diagnostic addition.
+- No test suite exists for `lifecycleLog.js` (pre-existing state, not introduced this session).
+- Deploy confirmed live via `vercel ls`/`vercel inspect`: both `staging` Preview and `production` deployments
+  `Ready`; `kitchenkeeper.kitchen` alias confirmed pointing at the new production deployment ID.
+- On-device verification of the timing capture itself: **not yet performed** — this is diagnostic
+  instrumentation; its own correctness will be confirmed by whether Connor's next capture actually contains
+  the new fields, at the same time as it answers the underlying hypothesis question.
 
 # Recommended Next Action
 
-Connor to run the real repro on-device against the now-live `staging`/`production` deployments (repeated
-sign-in/sign-out, watching for the repair/re-prompt toast and confirming the symptom is actually gone). If it
-doesn't resolve it, `10fff5e` reverts cleanly (see Remaining Work #2) — this investigation has been burned by
-"tests passed, shipped, symptom persisted" three times already (spec Section 0), so treat this deploy as
-unconfirmed until that on-device check actually happens, not as done.
-
-# Forbidden Exploration
-
-- `client/src/hooks/useSettledAuth.js` — must not be modified.
-- `client/src/api/index.js`, all of `server/*` — unchanged.
-- The on-device repro itself — requires Connor on the real device.
+Connor: reproduce the sign-in double-tap on-device with debug mode on, copy the log, and share it. That
+single capture both validates this instrumentation and (per Remaining Work #2) answers whether the
+activation-expiry theory holds — no further code changes needed until that data comes back.
 
 # Context Notes
 
-- branch: `staging` (working tree currently here; `main` was fast-forwarded to the same commit `10fff5e` and
-  pushed, then checked back out to `staging`). No dev server started (no new UI surface beyond a toast; the
-  bug needs a real WebKit reload agent-driven browser tooling can't induce). No worktree used. No
-  migration/schema work — `MIGRATION_LEDGER.md` checked at session start, no outstanding ❌ rows, this task
-  doesn't touch the database, so Rule 7's migration/code-deploy coupling concern doesn't apply here.
+- branch: `staging` (working tree here; `main` fast-forwarded to the same commit `2af6d6d` and pushed, then
+  checked back out to `staging`). No dev server started — this is server-agnostic client instrumentation, no
+  new UI surface. No migration/schema work — `MIGRATION_LEDGER.md` doesn't exist in this repo (no
+  multi-environment schema-lineage concern here beyond the existing per-environment Neon branches, which this
+  task doesn't touch).
 - Left uncommitted/untouched, pre-existing and unrelated to this task: `.claude/settings.local.json`,
   `ai/tasks/TASK-059-smoke-tests.md` (both modified), `ai/handoffs/archive/TASK-061-implementation.md`
-  (untracked) — not part of TASK-064's scope, deliberately not staged or committed this session.
+  (untracked) — not staged or committed this session either.
+
+# PowerShell Merge Block
+
+Not applicable this session — commits were made directly on `staging`/`main` (no worktree, no feature branch),
+matching the pattern already established for TASK-064's own implementation session.
 
 ---
 
 ## Archived History
 
-- TASK-047 through TASK-053 (spec-drafting + TASK-053 streaming implementation session): see
-  [archive/TASK-047-053.md](archive/TASK-047-053.md)
-- TASK-054 (chat context-size cap implementation session): see [archive/TASK-054.md](archive/TASK-054.md)
-- TASK-055 (post-audit hardening implementation session): see [archive/TASK-055.md](archive/TASK-055.md)
-- TASK-056 (UI/UX effort-reduction redesign implementation session): see
-  [archive/TASK-056.md](archive/TASK-056.md)
-- TASK-057 spec-drafting session (5 architect review rounds, DRAFT-1 → DRAFT-6 approved): see
-  [archive/TASK-057-spec-drafting.md](archive/TASK-057-spec-drafting.md)
-- TASK-057 implementation session (Phases 1-3 shipped, judgment calls resolved): see
-  [archive/TASK-057-implementation.md](archive/TASK-057-implementation.md)
-- TASK-059 mid-checklist + TASK-061 spec-drafting session: see
+- TASK-047 through TASK-053: see [archive/TASK-047-053.md](archive/TASK-047-053.md)
+- TASK-054: see [archive/TASK-054.md](archive/TASK-054.md)
+- TASK-055: see [archive/TASK-055.md](archive/TASK-055.md)
+- TASK-056: see [archive/TASK-056.md](archive/TASK-056.md)
+- TASK-057 spec-drafting: see [archive/TASK-057-spec-drafting.md](archive/TASK-057-spec-drafting.md)
+- TASK-057 implementation: see [archive/TASK-057-implementation.md](archive/TASK-057-implementation.md)
+- TASK-059 mid-checklist + TASK-061 spec-drafting: see
   [archive/TASK-059-061-handoff.md](archive/TASK-059-061-handoff.md)
-- TASK-061 implementation/deploy session (auth session-race fix, shipped to staging + production): see
-  [archive/TASK-061-implementation.md](archive/TASK-061-implementation.md)
-- TASK-059 resumed smoke-test session (ADMIN/SEC/ERR rows via real browser sessions): see
+- TASK-061 implementation/deploy: see [archive/TASK-061-implementation.md](archive/TASK-061-implementation.md)
+- TASK-059 resumed smoke-test session: see
   [archive/TASK-059-smoke-tests-resumed.md](archive/TASK-059-smoke-tests-resumed.md)
-- TASK-062 spec-drafting session (DRAFT-1 → DRAFT-4 approved, 4 architect review rounds): see
-  [archive/TASK-062-spec-drafting.md](archive/TASK-062-spec-drafting.md)
-- TASK-062 implementation/deploy session (OAuth-return reload guard, shipped to staging + production, later
-  found dead code and removed by TASK-063): see [archive/TASK-062-implementation.md](archive/TASK-062-implementation.md)
-- TASK-063 implementation/deploy session through TASK-063 diagnostics follow-up + TASK-064 spec-drafting
-  (settling->settled state machine shipped; two more on-device captures isolated sign-in/sign-out as separate
-  mechanisms; four architect review rounds converged on DRAFT-6): see
+- TASK-062 spec-drafting: see [archive/TASK-062-spec-drafting.md](archive/TASK-062-spec-drafting.md)
+- TASK-062 implementation/deploy: see [archive/TASK-062-implementation.md](archive/TASK-062-implementation.md)
+- TASK-063 implementation/deploy through TASK-064 spec-drafting: see
   [archive/TASK-063-064-diagnostics-and-spec.md](archive/TASK-063-064-diagnostics-and-spec.md)
+- TASK-064 implementation/deploy (marker-based recovery mechanism, on-device verification confirmed working
+  as designed): see [archive/TASK-064-implementation.md](archive/TASK-064-implementation.md)
