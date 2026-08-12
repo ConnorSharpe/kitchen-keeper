@@ -1,131 +1,58 @@
 # Task
 
-TASK-066 — Main-thread rAF heartbeat diagnostic (instrumentation implemented; on-device capture not yet run).
+TASK-066 — Main-thread rAF heartbeat diagnostic: **complete, conclusive result.** See
+[archive/TASK-066-implementation.md](archive/TASK-066-implementation.md) for the full implementation and
+on-device capture write-up.
 
 # Current Status
 
-Implemented per DRAFT-4 spec ([TASK-066-spec.md](../tasks/TASK-066-spec.md)), §2.1-2.3 in full. All
-code-side acceptance criteria (1-4, 7, 9) verified. On-device paired-capture criteria (5, 6, 8) require
-Connor's physical device and were **not attempted this session** — see Remaining Work.
+Code shipped to `staging`/`main` (commit `f11678e`), diagnostic-only and debug-gated (no behavior change for
+real users). Connor ran the on-device paired captures the same day and got a clean, unanimous result on the
+first export — the spec's early-stop rule was satisfied immediately, no further cycles needed.
 
-# Files Modified
-
-- `client/src/lib/authTransition.js` — exported the existing `GOOGLE_BUTTON_SELECTOR` const (no behavior
-  change).
-- `client/src/main.jsx` — added `userAgent`, `devicePixelRatio` to the existing `app-boot` `logEvent()` call.
-- `client/src/lib/lifecycleLog.js` — added the rAF main-thread heartbeat: capture-phase click listener on
-  `GOOGLE_BUTTON_SELECTOR` starts a heartbeat; checkpoint-zero first-gap definition; 50ms-threshold gap
-  recording (`{startMs, gapMs}`); 3-frame observed-initial-cadence array; 5000ms safety-ceiling timeout;
-  `completed`/`superseded`/`timed-out` terminal states (mutually exclusive, torn down via
-  `cancelAnimationFrame`/`clearTimeout`); failure-isolated (try/catch around click handler and each rAF
-  callback, never blocks the real Google-button click or `pagehide` handling); no-duplicate-registration
-  guard if `installLifecycleLogging()` ever runs twice; a `completed` heartbeat is folded into the existing
-  `lifecycle-pagehide` log entry, `superseded`/`timed-out` are logged separately as
-  `heartbeat-superseded`/`heartbeat-timed-out`.
-
-# Files Required Next
-
-None for continuing code work. The next step is on-device capture (needs Connor's iPhone, the Chrome-for-iOS
-home-screen PWA, and the existing DebugPanel debug-mode toggle), not further file changes.
-
-# Files Already Reviewed
-
-`client/src/lib/lifecycleLog.js`, `authTransition.js`, `main.jsx`, `debugLog.js` — all read in full before
-editing.
-
-# Dependency Chain
-
-Editing:
-- `client/src/lib/lifecycleLog.js`
-- `client/src/lib/authTransition.js`
-- `client/src/main.jsx`
-
-Requires:
-- `client/src/lib/debugLog.js` (`logEvent`/`isDebugEnabled` contract, unchanged)
-
-Irrelevant:
-- `client/src/hooks/useAuthRecovery.js`
-- `client/src/lib/routeDecision.js`
-- `client/src/context/AuthContext.jsx`
-- `server/*`
-
-# Architecture Notes
-
-Heartbeat state is module-scoped (`activeHeartbeat`, a single instance) in `lifecycleLog.js`, not React
-state — mirrors the existing pattern in that file, where every diagnostic is a plain module-level listener
-installed once from `main.jsx`. Reuses the already-running tap-triggered loop for both the thresholded gap
-array and the observed-initial-cadence fields (spec §2.3), rather than adding a second, always-on loop.
-
-# Decisions Made
-
-- Severity bands and overlap-flag classification (spec §2.2) are analysis-time calculations for the handoff
-  document, not runtime code — the spec explicitly says not to compute bands in the recording hot path. The
-  instrument itself only records raw `{startMs, gapMs}` pairs and the three cadence intervals.
-- `heartbeat-timed-out` is logged (mirroring `heartbeat-superseded`) even though acceptance criterion 4 only
-  explicitly requires a log entry for the superseded case — free to add given the existing `logEvent()` call,
-  and keeps the timed-out path from being invisible if it ever fires during a real capture.
-- The new click listener lives inside `installLifecycleLogging()` itself (not a new function called
-  separately from `main.jsx`), since the spec's Allowed Files list for `main.jsx` only permits the app-boot
-  line addition, not a new install call.
+**Conclusion**: across 3 failed + 3 succeeded sign-in attempts, the rAF heartbeat recorded **zero** scheduling
+gaps over 50ms in any attempt — including inside the three failed attempts' 878-998ms unexplained
+`sign_ins`→`pagehide` windows. Per spec's required wording: *"no sustained main-thread execution stall was
+observed by this instrument; the evidence therefore shifts the investigation downstream of JS execution."*
+Our own code, a re-render storm, and a blocking JS task are now evidenced against, not just unproven.
 
 # Remaining Work
 
-1. On-device paired captures (spec §5.5-5.8, acceptance criteria 5/6/8) — 3-5 failed/succeeded pairs on
-   Connor's real device (Chrome-for-iOS home-screen icon, not Safari), using the existing DebugPanel toggle.
-   Not started this session; requires Connor's manual involvement, cannot be done by an agent.
-2. Per-attempt analysis (spec §2.2's required correlation: `signInsElapsedMs`, overlap flags, the
-   qualifying-evidence rule) — done at handoff-writing time from the captured raw log data, once step 1
-   produces captures.
-3. Explicit yes/no/mixed conclusion (acceptance criterion 8) — depends on steps 1-2.
+The diagnostic instrument's job is done. What's left is a decision, not code:
+
+1. **Splitting WebKit-proper from Chrome's own iOS shell code** (spec §0/§7's stated residual limit — this
+   instrument can't tell the two apart, both are downstream of JS). The suggested next diagnostic — Chrome's
+   Web Inspector via a Mac's Safari Develop menu — is **blocked**: Connor confirmed he does not have Mac
+   access (Windows only), and Apple restricts iOS Safari/Chrome remote debugging to a Mac; there's no
+   Windows-native substitute.
+2. Given that block, the practical options are: (a) borrow/access a Mac somewhere (friend, coworker, Apple
+   Store) for a one-off Web Inspector session, or (b) treat this task's finding as the practical stopping
+   point — TASK-064's two-tap recovery mechanism already mitigates the user-facing symptom regardless of root
+   cause, and further root-causing a downstream WebKit/Chrome-shell behavior we can't fix in our own code has
+   diminishing return. **Not decided yet — Connor's call, not made this session.**
+3. §6-A (whether TASK-065's preconnect `<link>` lands in the DOM in production) remains unconfirmed, separate
+   from this task, not blocking.
 
 # Known Risks / Open Questions
 
-- Carried forward from TASK-065's negative-signal finding (archived —
-  [archive/TASK-065-negative-signal.md](archive/TASK-065-negative-signal.md)): the core premise that the
-  delay is main-thread-attributable is still unconfirmed either way; this instrument is what will actually
-  test it.
-- §6-A (whether TASK-065's preconnect `<link>` actually lands in the DOM in production) remains unconfirmed —
-  separate from this task's scope, not blocking.
-- No regression risk: TASK-064's recovery mechanism is untouched; this is diagnostic-only, gated behind
-  `isDebugEnabled()`, and failure-isolated from all real click/pagehide handling.
-
-# Verification Results
-
-- `npm run lint` (repo root, `eslint .`): PASS, 0 errors.
-- `npm run build` (client, `vite build`): PASS, no new dependency, bundle size unchanged in kind (pre-existing
-  >500kB chunk-size warning, not introduced by this change).
-- `node --test src/lib/authTransition.test.js` (client): PASS, 18/18.
-- No new automated test added — matches spec acceptance criterion 9 (same category as `lifecycleLog.js`'s
-  other untested browser-timing diagnostics, precedent TASK-064 §1).
-- On-device smoke test: **not performed this session** — requires Connor's physical device; this
-  instrumentation only activates on the real Clerk Google-OAuth button, with no equivalent surface to
-  exercise in a desktop browser.
+- No regression risk: TASK-064's recovery mechanism is untouched; this diagnostic is debug-gated and
+  failure-isolated from all real click/pagehide handling, and stays in the codebase as a diagnostic-only
+  extension (no follow-up code work required to consider TASK-066 itself closed).
+- If TASK-066 is picked back up later purely to close the WebKit-vs-Chrome-shell gap, that requires Mac
+  access first — don't re-scope code work before that's resolved.
 
 # Recommended Next Action
 
-Hand this to Connor for the on-device paired-capture phase (spec §5.5-5.8): enable debug mode via
-DebugPanel, run 3-5 alternating failed/succeeded sign-in attempts on the actual Chrome-for-iOS home-screen
-PWA, export the debug log, and bring the raw log back for analysis (§2.2's correlation calculations) in a
-fresh session per Rule 5 — that's a distinct phase from this implementation session.
-
-# Forbidden Exploration
-
-- `client/src/hooks/useAuthRecovery.js`
-- `client/src/lib/routeDecision.js`
-- `client/src/context/AuthContext.jsx`
-- `authTransition.js`'s marker read/write/expiry logic
-- TASK-065's preconnect wrapper
-- `server/*`
+Await Connor's decision on Mac access vs. accepting the current finding. No code or further on-device
+capture work is queued until that's decided.
 
 # Context Notes
 
-- branch: `staging` and `main` both pushed to commit `f11678e` (Connor confirmed this diagnostic-only,
-  debug-gated change is safe to also push straight to production — no on-device verification blocks this
-  per Rule 8, push success is the completion signal, not confirmed-live).
+- branch: `staging` and `main` both at commit `f11678e`.
 - No migration/schema work — `MIGRATION_LEDGER.md` doesn't apply to this task.
 - Pre-existing, unrelated to this task (carried forward, untouched): `.claude/settings.local.json`,
   `ai/tasks/TASK-059-smoke-tests.md` (both modified), `ai/handoffs/archive/TASK-061-implementation.md`
-  (untracked) — not staged or committed by this session.
+  (untracked) — not staged or committed by this task's sessions.
 - context pressure: low
 - token usage concerns: none
 
@@ -157,3 +84,5 @@ fresh session per Rule 5 — that's a distinct phase from this implementation se
   [archive/TASK-065-implementation.md](archive/TASK-065-implementation.md)
 - TASK-065 post-deploy negative signal + TASK-066 diagnosis handoff: see
   [archive/TASK-065-negative-signal.md](archive/TASK-065-negative-signal.md)
+- TASK-066 implementation + on-device capture results (conclusive: no main-thread stall observed): see
+  [archive/TASK-066-implementation.md](archive/TASK-066-implementation.md)
