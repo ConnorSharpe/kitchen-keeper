@@ -1,8 +1,10 @@
 # Task
 
 TASK-064 implementation — iOS PWA double sign-in/sign-out recovery mechanism, per
-[TASK-064-spec.md](../tasks/TASK-064-spec.md) DRAFT-6 (approved, ~9.5/10). **Implemented this session, all
-acceptance criteria verified, NOT yet committed or deployed.**
+[TASK-064-spec.md](../tasks/TASK-064-spec.md) DRAFT-6 (approved, ~9.5/10). **Implemented, committed
+(`10fff5e`), and deployed to both `staging` and `production` this session, on Connor's explicit instruction —
+ahead of the on-device verification this task's own spec calls load-bearing (spec Section 7). That
+verification is now the very next step, against a real, already-live environment.**
 
 # Current Status
 
@@ -42,7 +44,8 @@ of `server/*`. No new npm dependencies.
 
 # Files Required Next
 
-None to implement. Next: **on-device verification**, then commit + deploy once Connor confirms.
+None to implement. Next: **on-device verification against the now-live deployments** (see Recommended Next
+Action).
 
 # Dependency Chain
 
@@ -77,9 +80,15 @@ this codebase's `routeDecision.js` pattern (no jsdom/@testing-library here — p
 
 # Remaining Work
 
-1. **On-device verification (mandatory)** — repeated sign-in/sign-out repro confirming the repair/message
-   actually fires and the symptom is gone. Four prior rounds all had green tests without fixing the real bug.
-2. Commit + deploy to `staging`, confirm, then promote to `production` — not started this session.
+1. **On-device verification (mandatory, still outstanding)** — repeated sign-in/sign-out repro on the real
+   device against production/staging (both now live, see Verification Results), confirming the repair/message
+   actually fires and the symptom is gone. Four prior rounds all had green tests without fixing the real bug;
+   this round shipped to production *before* that check, on explicit instruction — the check itself hasn't
+   moved, only its order relative to deploy.
+2. If on-device verification finds the fix doesn't work (or makes things worse): this commit
+   (`10fff5e`) is a single clean fast-forward on both branches, so `git revert 10fff5e` on `staging`,
+   re-push, re-fast-forward `main`, is a clean rollback path if needed — not yet required, noted for
+   next agent.
 3. Unrelated, carried forward: TASK-059's remaining phone-driven checklist rows; two disposable Clerk accounts
    still need manual deletion from production Clerk.
 
@@ -100,12 +109,19 @@ this codebase's `routeDecision.js` pattern (no jsdom/@testing-library here — p
 - `node --test "src/**/*.test.js"` (client): PASS — **69/69** (35 pre-existing + 18 + 14 + 2 new).
 - `client/src/api/index.authRetry.test.js` (TASK-061, criterion 18): re-run individually, PASS — 3/3.
 - All 20 spec acceptance criteria checked against the actual implementation.
-- On-device verification: **not yet performed this session** — required before deploy (Remaining Work #1).
+- Deploy confirmed live via `vercel inspect`/`vercel ls`: `staging` Preview deployment `Ready` (~1 min old at
+  confirmation time); `production` deployment `dpl_6EUH2PKa2j9TfbYb7WymvUaTZA6a` `Ready`, and
+  `kitchenkeeper.kitchen`'s alias confirmed pointing at that same deployment ID.
+- On-device verification: **still not performed** — deployed ahead of it, on Connor's explicit instruction
+  (see Task). This remains the load-bearing check regardless of deploy status.
 
 # Recommended Next Action
 
-Hand to Connor for on-device testing before committing. Do not deploy on green tests alone — this
-investigation has been burned by exactly that pattern three times already (spec Section 0).
+Connor to run the real repro on-device against the now-live `staging`/`production` deployments (repeated
+sign-in/sign-out, watching for the repair/re-prompt toast and confirming the symptom is actually gone). If it
+doesn't resolve it, `10fff5e` reverts cleanly (see Remaining Work #2) — this investigation has been burned by
+"tests passed, shipped, symptom persisted" three times already (spec Section 0), so treat this deploy as
+unconfirmed until that on-device check actually happens, not as done.
 
 # Forbidden Exploration
 
@@ -115,9 +131,14 @@ investigation has been burned by exactly that pattern three times already (spec 
 
 # Context Notes
 
-- branch: `staging`. No dev server started (no new UI surface beyond a toast; the bug needs a real WebKit
-  reload agent-driven browser tooling can't induce). No worktree used; changes are uncommitted in the working
-  tree. No migration/schema work — `MIGRATION_LEDGER.md` checked at session start, no outstanding ❌ rows.
+- branch: `staging` (working tree currently here; `main` was fast-forwarded to the same commit `10fff5e` and
+  pushed, then checked back out to `staging`). No dev server started (no new UI surface beyond a toast; the
+  bug needs a real WebKit reload agent-driven browser tooling can't induce). No worktree used. No
+  migration/schema work — `MIGRATION_LEDGER.md` checked at session start, no outstanding ❌ rows, this task
+  doesn't touch the database, so Rule 7's migration/code-deploy coupling concern doesn't apply here.
+- Left uncommitted/untouched, pre-existing and unrelated to this task: `.claude/settings.local.json`,
+  `ai/tasks/TASK-059-smoke-tests.md` (both modified), `ai/handoffs/archive/TASK-061-implementation.md`
+  (untracked) — not part of TASK-064's scope, deliberately not staged or committed this session.
 
 ---
 
