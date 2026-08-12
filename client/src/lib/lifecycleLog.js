@@ -1,4 +1,38 @@
-import { logEvent } from './debugLog.js';
+import { logEvent, isDebugEnabled } from './debugLog.js';
+
+// TASK-064 follow-up: testing whether the uncommanded reload correlates with Clerk's own
+// pre-redirect network round-trip outlasting WebKit's ~1s transient user-activation window
+// (see ai/handoffs/CURRENT_STATE.md). Diagnostic only, gated the same as logEvent() so it never
+// runs extra work for a real user unless the DebugPanel is explicitly enabled. Captured at
+// pagehide, not at click time, because performance entries for this page load are gone once the
+// interrupting reload actually lands. Path only (no query string) is logged, in case a Clerk
+// request URL ever carries a token in its query params.
+function captureClerkNetworkTiming() {
+  try {
+    const entries = performance
+      .getEntriesByType('resource')
+      .filter((entry) => /clerk/i.test(entry.name))
+      .slice(-10)
+      .map((entry) => {
+        let label = entry.name.slice(0, 60);
+        try {
+          const u = new URL(entry.name);
+          label = (u.host + u.pathname).slice(0, 60);
+        } catch {
+          /* keep the truncated raw name */
+        }
+        return {
+          name: label,
+          startMs: Math.round(entry.startTime),
+          durationMs: Math.round(entry.duration),
+          responseEndMs: Math.round(entry.responseEnd),
+        };
+      });
+    return { clerkRequests: entries, perfNowMs: Math.round(performance.now()) };
+  } catch {
+    return {};
+  }
+}
 
 // TASK-063: the double-sign-in repro log showed two unexplained full-page reloads with no
 // matching call anywhere in our own code (confirmed by repo-wide grep) — the leading hypothesis
@@ -13,7 +47,10 @@ export function installLifecycleLogging() {
   });
 
   window.addEventListener('pagehide', (e) => {
-    logEvent('lifecycle-pagehide', { persisted: e.persisted });
+    logEvent('lifecycle-pagehide', {
+      persisted: e.persisted,
+      ...(isDebugEnabled() ? captureClerkNetworkTiming() : {}),
+    });
   });
 
   window.addEventListener('pageshow', (e) => {

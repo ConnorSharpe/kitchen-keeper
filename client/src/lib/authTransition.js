@@ -189,7 +189,14 @@ export function installOauthMarkerListener() {
       const match = e.target?.closest?.(GOOGLE_BUTTON_SELECTOR);
       if (!match) return;
       writeOauthMarker();
-      logEvent('oauth-marker-installed', {});
+      // perfNowMs (TASK-064 follow-up): timing-only, to test the hypothesis that Clerk's own
+      // async round-trip before the OAuth redirect can outlast WebKit's ~1s transient
+      // user-activation window. Reading performance.now() is synchronous, so this doesn't
+      // change the synchronous-only contract above.
+      logEvent('oauth-marker-installed', {
+        perfNowMs:
+          typeof performance !== 'undefined' ? Math.round(performance.now()) : null,
+      });
     },
     { capture: true }
   );
