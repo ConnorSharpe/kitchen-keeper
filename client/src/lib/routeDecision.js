@@ -7,8 +7,16 @@
 // Pure function of an already-produced auth snapshot — no knowledge of timers, Clerk, or OAuth
 // internals (spec's explicit implementation requirement), so it can't drift into a second copy
 // of useSettledAuth()'s state machine.
-export function resolveRouteDecision({ status, isSignedIn }, { hasPublicHome, pathname }) {
-  if (status !== 'settled') return 'render-nothing';
+//
+// TASK-064 (spec Section 3.4): `recovering` gains a third input, `recovering` — true only while
+// useAuthRecovery()'s Rule 2 repair signOut() is actively in flight. The signed-in application
+// must not render mid-repair (acceptance criterion 7), so it's checked alongside `status`, not
+// layered on top of it.
+export function resolveRouteDecision(
+  { status, isSignedIn, recovering },
+  { hasPublicHome, pathname }
+) {
+  if (status !== 'settled' || recovering) return 'render-nothing';
   if (isSignedIn) return 'render-children';
   if (hasPublicHome && pathname === '/') return 'render-public-home';
   return 'redirect-to-sign-in';

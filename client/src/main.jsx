@@ -8,11 +8,16 @@ import {
   installUrlChangeLogging,
   installClickLogging,
 } from './lib/lifecycleLog.js';
+import { installOauthMarkerListener } from './lib/authTransition.js';
 import './index.css';
 
 installLifecycleLogging();
 installUrlChangeLogging();
 installClickLogging();
+// TASK-064: production auth-recovery behavior, not diagnostics — writes kk_pending_oauth so a
+// sign-in interrupted by the uncommanded reload (see ai/tasks/TASK-064-spec.md Section 2) can be
+// recovered. Deliberately separate from installClickLogging() above.
+installOauthMarkerListener();
 
 // TASK-063: earliest possible capture point, before Clerk or React mount — if the double
 // sign-in is caused by something that resets state before the app even renders, this is the

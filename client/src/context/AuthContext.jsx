@@ -6,10 +6,11 @@ import {
   useEffect,
   useCallback,
 } from 'react';
-import { useUser, useClerk } from '@clerk/clerk-react';
+import { useUser, useClerk, useAuth as useClerkAuth } from '@clerk/clerk-react';
 import { api } from '../api/index.js';
 import { SettledAuthProvider } from '../hooks/useSettledAuth.js';
 import { logEvent } from '../lib/debugLog.js';
+import { writeSignoutMarker } from '../lib/authTransition.js';
 
 const AuthContext = createContext(null);
 const ONBOARDING_RETRY_DELAY_MS = 2000;
@@ -17,6 +18,7 @@ const ONBOARDING_RETRY_DELAY_MS = 2000;
 export function AuthProvider({ children }) {
   const { user: clerkUser, isLoaded } = useUser();
   const { signOut } = useClerk();
+  const { sessionId } = useClerkAuth();
   const [onboarding, setOnboarding] = useState(null); // { complete, flow } | null while loading
 
   useEffect(() => {
@@ -66,6 +68,11 @@ export function AuthProvider({ children }) {
     : null;
 
   async function logout() {
+    // TASK-064: written before the call, retained through resolve/throw — a resolved signOut()
+    // promise doesn't prove the transition survived the uncommanded reload documented in
+    // TASK-064-spec.md Section 2. useAuthRecovery() (Rules 1/2) owns clearing it, not logout()
+    // itself, so it survives the exact interruption window that caused this bug.
+    writeSignoutMarker(sessionId ?? null);
     logEvent('signout-start', {});
     try {
       await signOut();

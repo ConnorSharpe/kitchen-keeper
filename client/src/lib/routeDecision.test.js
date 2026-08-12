@@ -103,3 +103,32 @@ test('PublicRoute-shaped call: settled + signed out yields redirect-to-sign-in, 
     'redirect-to-sign-in'
   );
 });
+
+// TASK-064 acceptance criterion 7: the signed-in application must not render while a repair is
+// in flight, even once settled and signed in.
+test('settled + signed in + recovering:true is still render-nothing, not render-children', () => {
+  assert.equal(
+    resolveRouteDecision(
+      { status: 'settled', isSignedIn: true, recovering: true },
+      { hasPublicHome: true, pathname: '/' }
+    ),
+    'render-nothing'
+  );
+});
+
+test('settled + recovering:false (or omitted) behaves exactly as before TASK-064', () => {
+  assert.equal(
+    resolveRouteDecision(
+      { status: 'settled', isSignedIn: true, recovering: false },
+      { hasPublicHome: true, pathname: '/' }
+    ),
+    'render-children'
+  );
+  assert.equal(
+    resolveRouteDecision(
+      { status: 'settled', isSignedIn: false },
+      { hasPublicHome: true, pathname: '/pantry' }
+    ),
+    'redirect-to-sign-in'
+  );
+});
