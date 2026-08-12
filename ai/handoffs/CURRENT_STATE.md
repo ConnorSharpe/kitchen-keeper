@@ -1,9 +1,17 @@
 # Task
 
-TASK-063 implementation + follow-up investigation — iOS PWA double sign-in/sign-out: `loading -> settling
--> settled` auth state machine shipped, confirmed NOT to fix the user-facing symptom on its own. Two rounds
-of on-device diagnostics have now separated this into two distinct, differently-evidenced bugs (see Current
-Status). Per [TASK-063-spec.md](../tasks/TASK-063-spec.md) DRAFT-3.
+TASK-064 spec-drafting session — iOS PWA double sign-in/sign-out: **approved for implementation**, per
+[TASK-064-spec.md](../tasks/TASK-064-spec.md) DRAFT-6 (four review rounds, two independent P0 correctness
+bugs found and fixed). Builds on TASK-063 (`loading -> settling -> settled` auth state machine, shipped,
+confirmed working as designed but not sufficient on its own) and this session's on-device diagnostics, which
+separated the symptom into one unified mechanism (see prior Current Status below, retained for context).
+
+**Next agent's job: implement TASK-064.** Read `TASK-064-spec.md` in full before starting — Section 3 is the
+authoritative design (marker schema, Rule 1/Rule 2 for sign-out, explicit re-prompt for sign-in), Section 4
+lists allowed/forbidden files (`useSettledAuth.js` must NOT be modified), Section 6/7 are the acceptance
+criteria and named regression tests to implement against. Do not re-litigate settled architectural decisions
+(session-ID mechanism, Option B for sign-in, single-owner `useAuthRecovery()`) without new evidence — four
+review rounds already converged on them.
 
 # Current Status
 
