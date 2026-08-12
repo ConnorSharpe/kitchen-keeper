@@ -28,6 +28,10 @@ logEvent('app-boot', {
   standalone: isStandalonePwa(),
   visibilityState: document.visibilityState,
   swController: !!navigator.serviceWorker?.controller,
+  // TASK-066 §0 item 4 / §2.3: confirms (not assumes) which browser and device config a capture
+  // actually came from — devicePixelRatio is generic repro context, not a refresh-rate signal.
+  userAgent: navigator.userAgent,
+  devicePixelRatio: window.devicePixelRatio,
 });
 
 if ('serviceWorker' in navigator) {

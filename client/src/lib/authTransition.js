@@ -19,7 +19,9 @@ export const PENDING_ACTION_MAX_AGE_MS = 5000;
 // `__google` provider suffix (spec Section 3.5) — matched via closest() because the captured
 // click target was a child <span>, not the button itself. Class-based, not prefix-only, so
 // Apple/GitHub/etc. buttons never match.
-const GOOGLE_BUTTON_SELECTOR =
+// Exported (TASK-066) so lifecycleLog.js's diagnostic-only rAF heartbeat can match the same
+// button without a second, driftable copy of this string. No behavior change here.
+export const GOOGLE_BUTTON_SELECTOR =
   '[class*="cl-socialButtonsBlockButton"][class*="__google"]';
 
 function safeGetItem(key) {

@@ -1,107 +1,132 @@
 # Task
 
-TASK-065 — iOS PWA sign-in: preconnect to Google's OAuth endpoint. Code shipped to `staging`/`main`
-(commit `7492198`) — see [archive/TASK-065-implementation.md](archive/TASK-065-implementation.md) for the
-full implementation write-up. **This session's finding: early post-deploy data suggests the fix may not be
-working.** Connor wants to pause the on-device grind and have the next agent find a more concrete diagnostic
-path before continuing.
+TASK-066 — Main-thread rAF heartbeat diagnostic (instrumentation implemented; on-device capture not yet run).
 
 # Current Status
 
-Connor did a quick manual check (sign out → sign in, a few cycles) rather than the full ~20-cycle protocol,
-specifically to see if the interruption still happens at all post-deploy. **It still happened** — one failed
-attempt (bounced to `/`, required a retry), one succeeded, captured via the existing debug-mode instrumentation
-(shipped in the TASK-064-followup session, unchanged by this task).
+Implemented per DRAFT-4 spec ([TASK-066-spec.md](../tasks/TASK-066-spec.md)), §2.1-2.3 in full. All
+code-side acceptance criteria (1-4, 7, 9) verified. On-device paired-capture criteria (5, 6, 8) require
+Connor's physical device and were **not attempted this session** — see Remaining Work.
 
-**The numbers, compared directly against the pre-fix baseline from spec §0** (same breakdown: tap →
-`sign_ins` response → `pagehide`/redirect):
+# Files Modified
 
-| | Tap→`sign_ins` response | `sign_ins` response→`pagehide` (the gap preconnect targets) | Tap→`pagehide` | Outcome |
-|---|---|---|---|---|
-| Post-fix attempt 1 (2026-08-12 ~21:44) | 365ms | **1172ms** | 1537ms | failed |
-| Post-fix attempt 2 (2026-08-12 ~21:44) | 207ms | **283ms** | 490ms | succeeded |
-| Pre-fix baseline (spec §0, captured 2026-08-12 ~20:18) | 473ms | **1235ms** | 1708ms | failed |
-| Pre-fix baseline (spec §0, captured 2026-08-12 ~20:18) | 269ms | **285ms** | 554ms | succeeded |
+- `client/src/lib/authTransition.js` — exported the existing `GOOGLE_BUTTON_SELECTOR` const (no behavior
+  change).
+- `client/src/main.jsx` — added `userAgent`, `devicePixelRatio` to the existing `app-boot` `logEvent()` call.
+- `client/src/lib/lifecycleLog.js` — added the rAF main-thread heartbeat: capture-phase click listener on
+  `GOOGLE_BUTTON_SELECTOR` starts a heartbeat; checkpoint-zero first-gap definition; 50ms-threshold gap
+  recording (`{startMs, gapMs}`); 3-frame observed-initial-cadence array; 5000ms safety-ceiling timeout;
+  `completed`/`superseded`/`timed-out` terminal states (mutually exclusive, torn down via
+  `cancelAnimationFrame`/`clearTimeout`); failure-isolated (try/catch around click handler and each rAF
+  callback, never blocks the real Google-button click or `pagehide` handling); no-duplicate-registration
+  guard if `installLifecycleLogging()` ever runs twice; a `completed` heartbeat is folded into the existing
+  `lifecycle-pagehide` log entry, `superseded`/`timed-out` are logged separately as
+  `heartbeat-superseded`/`heartbeat-timed-out`.
 
-**The middle column — the unexplained gap between Clerk's `sign_ins` response and the actual
-`pagehide`/redirect — is the specific thing a working preconnect hint to `accounts.google.com` should shrink,
-since that's the leg where a cold connection would show up. It's essentially unchanged: 1172ms vs. 1235ms on
-the failed side, 283ms vs. 285ms on the succeeded side.** Both post-fix captures do carry the new diagnostic
-fields (so this isn't the stale-bundle problem found earlier in the investigation — Connor was running the
-current, fixed code).
+# Files Required Next
 
-**Caveat, stated plainly**: this is n=1 additional pair, not the ~10-per-condition target in spec §5
-criterion 4. It is not a statistically rigorous result. But it's also not nothing — landing within ~5% of the
-pre-fix baseline on both sides, right after shipping a change specifically meant to move the failed-side
-number, is a real early signal, not noise in a random direction.
+None for continuing code work. The next step is on-device capture (needs Connor's iPhone, the Chrome-for-iOS
+home-screen PWA, and the existing DebugPanel debug-mode toggle), not further file changes.
 
-# Interpretation
+# Files Already Reviewed
 
-This is consistent with two of the possibilities spec §7 already named for a negative result:
-1. Connection-setup time to `accounts.google.com` was never the dominant contributor to the gap (the
-   original root-causing in §0 item 7 flagged this as genuinely possible — main-thread contention or WebKit
-   navigation negotiation were the two alternative explanations, and neither was ruled out at spec-writing
-   time).
-2. WebKit declined to meaningfully honor the preconnect hint (spec §6-B: preconnect is a hint, not a
-   guarantee; the HTML spec explicitly permits a partial handshake or a full skip under resource
-   constraints).
+`client/src/lib/lifecycleLog.js`, `authTransition.js`, `main.jsx`, `debugLog.js` — all read in full before
+editing.
 
-Spec §6-B's own suggested check — a Mac + Safari Web Inspector session against the connected iPhone,
-watching the Network panel for connection activity to `accounts.google.com` prior to the OAuth tap — was
-never performed (no Mac/Safari Web Inspector setup available this session) and would be the fastest way to
-tell these two apart: if WebKit visibly isn't even attempting the connection, the hint itself needs
-troubleshooting (placement, timing, whether React is actually committing it before the tap); if it's
-attempting the connection and the gap still doesn't shrink, the gap almost certainly isn't connection-setup
-time at all, and root-causing needs to go back to main-thread-contention/navigation-negotiation territory
-that spec §0 item 7 identified but couldn't diagnose (WebKit has no Long Tasks API, confirmed via MDN
-browser-compat-data during spec-drafting).
+# Dependency Chain
+
+Editing:
+- `client/src/lib/lifecycleLog.js`
+- `client/src/lib/authTransition.js`
+- `client/src/main.jsx`
+
+Requires:
+- `client/src/lib/debugLog.js` (`logEvent`/`isDebugEnabled` contract, unchanged)
+
+Irrelevant:
+- `client/src/hooks/useAuthRecovery.js`
+- `client/src/lib/routeDecision.js`
+- `client/src/context/AuthContext.jsx`
+- `server/*`
+
+# Architecture Notes
+
+Heartbeat state is module-scoped (`activeHeartbeat`, a single instance) in `lifecycleLog.js`, not React
+state — mirrors the existing pattern in that file, where every diagnostic is a plain module-level listener
+installed once from `main.jsx`. Reuses the already-running tap-triggered loop for both the thresholded gap
+array and the observed-initial-cadence fields (spec §2.3), rather than adding a second, always-on loop.
+
+# Decisions Made
+
+- Severity bands and overlap-flag classification (spec §2.2) are analysis-time calculations for the handoff
+  document, not runtime code — the spec explicitly says not to compute bands in the recording hot path. The
+  instrument itself only records raw `{startMs, gapMs}` pairs and the three cadence intervals.
+- `heartbeat-timed-out` is logged (mirroring `heartbeat-superseded`) even though acceptance criterion 4 only
+  explicitly requires a log entry for the superseded case — free to add given the existing `logEvent()` call,
+  and keeps the timed-out path from being invisible if it ever fires during a real capture.
+- The new click listener lives inside `installLifecycleLogging()` itself (not a new function called
+  separately from `main.jsx`), since the spec's Allowed Files list for `main.jsx` only permits the app-boot
+  line addition, not a new install call.
 
 # Remaining Work
 
-1. **Reconsider the diagnostic approach before collecting more raw cycles.** Grinding through the full
-   ~20-cycle protocol (spec §5 criterion 4) without first knowing *why* the gap didn't move risks spending a
-   lot of Connor's manual effort confirming a negative result whose cause is still unknown. Candidates worth
-   evaluating: (a) the Web Inspector connection-activity check above (§6-B) — cheap, direct evidence, but
-   needs a Mac; (b) a `PerformanceObserver`/other JS-visible signal for whether the browser actually opened a
-   connection to `accounts.google.com` before the tap (i.e. a code-level equivalent of §6-B — hasn't been
-   scoped or evaluated for feasibility); (c) re-examine whether the hint is even reaching `document.head` at
-   the right time in production — the §6-A live-DOM check was skipped in the implementation session (Chrome
-   extension blocked `localhost`) and has still never been directly observed, so a working hint is an
-   assumption based on code review, not confirmed fact.
-2. **`/sign-up` gate and implementation details**: already resolved/shipped, see the archived write-up. Not
-   open questions.
-3. Full ~20-cycle on-device comparison (spec §5 criterion 4): not started; hold per Connor's request to step
-   back first.
+1. On-device paired captures (spec §5.5-5.8, acceptance criteria 5/6/8) — 3-5 failed/succeeded pairs on
+   Connor's real device (Chrome-for-iOS home-screen icon, not Safari), using the existing DebugPanel toggle.
+   Not started this session; requires Connor's manual involvement, cannot be done by an agent.
+2. Per-attempt analysis (spec §2.2's required correlation: `signInsElapsedMs`, overlap flags, the
+   qualifying-evidence rule) — done at handoff-writing time from the captured raw log data, once step 1
+   produces captures.
+3. Explicit yes/no/mixed conclusion (acceptance criterion 8) — depends on steps 1-2.
 
 # Known Risks / Open Questions
 
-- **The core premise of this task may be wrong** — see Interpretation above. Not confirmed either way at n=1,
-  but worth treating as a live possibility rather than assuming the fix works and only the measurement is
-  incomplete.
-- The §6-A live-DOM check has never been performed at any point in this task (implementation session or
-  since) — it remains genuinely unconfirmed that the `<link>` tag is landing in the DOM at all in production,
-  which would be a much simpler explanation for a null result than either of the Interpretation section's
-  theories.
-- No regression risk either way — TASK-064's two-tap recovery mechanism is untouched and remains the
-  fallback regardless of whether this fix helps (spec §2.3, §7).
+- Carried forward from TASK-065's negative-signal finding (archived —
+  [archive/TASK-065-negative-signal.md](archive/TASK-065-negative-signal.md)): the core premise that the
+  delay is main-thread-attributable is still unconfirmed either way; this instrument is what will actually
+  test it.
+- §6-A (whether TASK-065's preconnect `<link>` actually lands in the DOM in production) remains unconfirmed —
+  separate from this task's scope, not blocking.
+- No regression risk: TASK-064's recovery mechanism is untouched; this is diagnostic-only, gated behind
+  `isDebugEnabled()`, and failure-isolated from all real click/pagehide handling.
+
+# Verification Results
+
+- `npm run lint` (repo root, `eslint .`): PASS, 0 errors.
+- `npm run build` (client, `vite build`): PASS, no new dependency, bundle size unchanged in kind (pre-existing
+  >500kB chunk-size warning, not introduced by this change).
+- `node --test src/lib/authTransition.test.js` (client): PASS, 18/18.
+- No new automated test added — matches spec acceptance criterion 9 (same category as `lifecycleLog.js`'s
+  other untested browser-timing diagnostics, precedent TASK-064 §1).
+- On-device smoke test: **not performed this session** — requires Connor's physical device; this
+  instrumentation only activates on the real Clerk Google-OAuth button, with no equivalent surface to
+  exercise in a desktop browser.
 
 # Recommended Next Action
 
-Start a fresh session scoped specifically to diagnosis, not more data collection: first confirm the
-preconnect `<link>` is actually present and connected in production (closes the §6-A gap — e.g. resolve the
-Chrome extension's `localhost` permission issue, or check directly against the live production DOM instead of
-localhost), then decide between the Web Inspector check and/or a code-level connection-detection signal
-before asking Connor for more manual cycles. This matches Rule 5 (aggressive session restart) — the
-prior session's implementation/verification work is done and pushed; this is a distinct diagnosis phase.
+Hand this to Connor for the on-device paired-capture phase (spec §5.5-5.8): enable debug mode via
+DebugPanel, run 3-5 alternating failed/succeeded sign-in attempts on the actual Chrome-for-iOS home-screen
+PWA, export the debug log, and bring the raw log back for analysis (§2.2's correlation calculations) in a
+fresh session per Rule 5 — that's a distinct phase from this implementation session.
+
+# Forbidden Exploration
+
+- `client/src/hooks/useAuthRecovery.js`
+- `client/src/lib/routeDecision.js`
+- `client/src/context/AuthContext.jsx`
+- `authTransition.js`'s marker read/write/expiry logic
+- TASK-065's preconnect wrapper
+- `server/*`
 
 # Context Notes
 
-- branch: `staging` and `main` both at commit `7492198` (plus follow-up doc commit `afa35bc` on `staging`
-  only — handoff-only, not yet fast-forwarded to `main`; low urgency, docs-only).
+- branch: `staging`, this session's edits are uncommitted (not yet staged/committed/pushed — pending
+  Connor's go-ahead).
 - No migration/schema work — `MIGRATION_LEDGER.md` doesn't apply to this task.
-- Pre-existing, unrelated to this task (carried forward, still true): `.claude/settings.local.json`,
+- Pre-existing, unrelated to this task (carried forward, untouched): `.claude/settings.local.json`,
   `ai/tasks/TASK-059-smoke-tests.md` (both modified), `ai/handoffs/archive/TASK-061-implementation.md`
-  (untracked) — not staged or committed.
+  (untracked) — not staged or committed by this session.
+- context pressure: low
+- token usage concerns: none
 
 ---
 
@@ -129,3 +154,5 @@ prior session's implementation/verification work is done and pushed; this is a d
   [archive/TASK-064-followup-timing-diagnostics.md](archive/TASK-064-followup-timing-diagnostics.md)
 - TASK-065 implementation/deploy (preconnect hint shipped to `/sign-in` and `/sign-up`): see
   [archive/TASK-065-implementation.md](archive/TASK-065-implementation.md)
+- TASK-065 post-deploy negative signal + TASK-066 diagnosis handoff: see
+  [archive/TASK-065-negative-signal.md](archive/TASK-065-negative-signal.md)
