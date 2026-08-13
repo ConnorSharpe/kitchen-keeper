@@ -57,6 +57,12 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/uploads/'))
     return;
 
+  // Never cache cross-origin responses (e.g. Clerk's session/auth API) — this
+  // service worker doesn't own that origin's cache-invalidation semantics, and
+  // a stale cached response for an auth-state endpoint silently masks a real
+  // state change (TASK-067).
+  if (url.origin !== self.location.origin) return;
+
   // Navigations always prefer the network so a returning visitor gets the
   // current deployment's index.html (and therefore its real asset hashes),
   // not a cached shell pointing at JS/CSS files a later deploy deleted.
@@ -78,8 +84,6 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(
     caches.match(request).then((cached) => {
-      // TEMPORARY DIAGNOSTIC — TASK-067 Step 0, remove before shipping.
-      console.log('[sw-debug]', url.href, 'cacheHit:', !!cached);
       const networkFetch = fetch(request).then((response) => {
         if (response.ok) {
           const toCache = response.clone();
