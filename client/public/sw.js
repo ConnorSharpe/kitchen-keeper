@@ -78,6 +78,8 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(
     caches.match(request).then((cached) => {
+      // TEMPORARY DIAGNOSTIC — TASK-067 Step 0, remove before shipping.
+      console.log('[sw-debug]', url.href, 'cacheHit:', !!cached);
       const networkFetch = fetch(request).then((response) => {
         if (response.ok) {
           const toCache = response.clone();
