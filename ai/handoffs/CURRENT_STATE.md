@@ -1,54 +1,57 @@
 # Task
 
-TASK-066 — Main-thread rAF heartbeat diagnostic: **complete, conclusive result.** See
-[archive/TASK-066-implementation.md](archive/TASK-066-implementation.md) for the full implementation and
-on-device capture write-up.
+TASK-067 — Service Worker: exclude cross-origin requests from cache-first strategy. **Complete, shipped to
+production.** Root cause of the long-running Google sign-in "double click" investigation (TASK-063 through
+TASK-066). See [TASK-067-spec.md](../tasks/TASK-067-spec.md) for the full investigation, both architect
+review rounds, and the evidence trail.
 
 # Current Status
 
-Code shipped to `staging`/`main` (commit `f11678e`), diagnostic-only and debug-gated (no behavior change for
-real users). Connor ran the on-device paired captures the same day and got a clean, unanimous result on the
-first export — the spec's early-stop rule was satisfied immediately, no further cycles needed.
+Code shipped to `staging` and `main` (both at commit `3a6777a`). Fix: `client/public/sw.js`'s cache-first
+fetch branch now excludes any request where `url.origin !== self.location.origin`, so cross-origin GETs
+(Clerk's API) always go to network instead of risking a stale Cache Storage hit. Same-origin behavior
+(navigations, `/api/*`, `/uploads/*`, static assets) unchanged.
 
-**Conclusion**: across 3 failed + 3 succeeded sign-in attempts, the rAF heartbeat recorded **zero** scheduling
-gaps over 50ms in any attempt — including inside the three failed attempts' 878-998ms unexplained
-`sign_ins`→`pagehide` windows. Per spec's required wording: *"no sustained main-thread execution stall was
-observed by this instrument; the evidence therefore shifts the investigation downstream of JS execution."*
-Our own code, a re-render storm, and a blocking JS task are now evidenced against, not just unproven.
+**Root cause, in one line**: TASK-064's iOS-PWA "uncommanded WebKit reload" theory was a correct mitigation
+for a real symptom, but not the actual cause — this session reproduced the identical symptom on desktop
+Chrome, ruling out every WebKit-specific theory and pointing at the service worker instead. The fetch
+handler's cache-first branch had no origin check, so Clerk's cross-origin `/v1/client` session-check response
+(the request that determines `isSignedIn`) could be served a stale, pre-sign-in cached copy immediately after
+a real OAuth completion — explaining why the first attempt consistently read as signed-out while a same-tap
+retry, which picked up the background-refreshed cache entry, succeeded.
+
+**Evidence** (spec §0, Step 0): three convergent findings, not one perfectly-isolated capture — (1) a live
+SW-internal diagnostic (`console.log` inside the fetch handler, viewed via the worker's own DevTools console)
+showed `cacheHit: true` on the exact `/v1/client` request; (2) Application → Cache Storage inspection on
+production showed a `/v1/client` entry transitioning from a signed-out to a signed-in body ~74 seconds apart,
+matching the stale-then-background-refreshed mechanism; (3) `kk_debug_log` captures showed both the failed
+and successful attempts settling *fast* (~400-560ms), ruling out a timing race against `useSettledAuth`'s
+2-second ceiling as an alternative explanation.
 
 # Remaining Work
 
-The diagnostic instrument's job is done. What's left is a decision, not code:
-
-1. **Splitting WebKit-proper from Chrome's own iOS shell code** (spec §0/§7's stated residual limit — this
-   instrument can't tell the two apart, both are downstream of JS). The suggested next diagnostic — Chrome's
-   Web Inspector via a Mac's Safari Develop menu — is **blocked**: Connor confirmed he does not have Mac
-   access (Windows only), and Apple restricts iOS Safari/Chrome remote debugging to a Mac; there's no
-   Windows-native substitute.
-2. Given that block, the practical options are: (a) borrow/access a Mac somewhere (friend, coworker, Apple
-   Store) for a one-off Web Inspector session, or (b) treat this task's finding as the practical stopping
-   point — TASK-064's two-tap recovery mechanism already mitigates the user-facing symptom regardless of root
-   cause, and further root-causing a downstream WebKit/Chrome-shell behavior we can't fix in our own code has
-   diminishing return. **Not decided yet — Connor's call, not made this session.**
-3. §6-A (whether TASK-065's preconnect `<link>` lands in the DOM in production) remains unconfirmed, separate
-   from this task, not blocking.
+None for this task. On-device verification (fresh incognito, staging): signed in with Google on the first
+attempt, no "tap to try again" message — matches the expected outcome. TASK-064's recovery mechanism,
+TASK-065's preconnect hint, and TASK-066's rAF heartbeat diagnostic are all untouched and remain in the
+codebase.
 
 # Known Risks / Open Questions
 
-- No regression risk: TASK-064's recovery mechanism is untouched; this diagnostic is debug-gated and
-  failure-isolated from all real click/pagehide handling, and stays in the codebase as a diagnostic-only
-  extension (no follow-up code work required to consider TASK-066 itself closed).
-- If TASK-066 is picked back up later purely to close the WebKit-vs-Chrome-shell gap, that requires Mac
-  access first — don't re-scope code work before that's resolved.
+- Minor loss of offline resilience for cross-origin resources (spec §7) — no known cross-origin dependency
+  actually needs SW-level caching today, but flagged rather than assumed away.
+- TASK-066's residual open question (splitting WebKit-proper from Chrome's iOS shell code, blocked on Mac
+  access) is unrelated to this fix and remains open separately, if ever revisited.
+- If the "tap to try again" message reappears for anyone in production, that would mean either a second,
+  distinct interruption cause exists (TASK-064's recovery mechanism still catches it, by design) or this
+  fix's reasoning has a gap — treat as a new finding, not an assumed recurrence of the same bug.
 
 # Recommended Next Action
 
-Await Connor's decision on Mac access vs. accepting the current finding. No code or further on-device
-capture work is queued until that's decided.
+None queued. This closes out the TASK-063→067 double-sign-in investigation chain.
 
 # Context Notes
 
-- branch: `staging` and `main` both at commit `f11678e`.
+- branch: `staging` and `main` both at commit `3a6777a`.
 - No migration/schema work — `MIGRATION_LEDGER.md` doesn't apply to this task.
 - Pre-existing, unrelated to this task (carried forward, untouched): `.claude/settings.local.json`,
   `ai/tasks/TASK-059-smoke-tests.md` (both modified), `ai/handoffs/archive/TASK-061-implementation.md`
