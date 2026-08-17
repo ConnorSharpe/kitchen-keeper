@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { clerkAuth } from '../middleware/clerkAuth.js';
 import { validate } from '../middleware/validate.js';
 import { generateRequestId } from '../utils/requestId.js';
+import { captureExceptionSafely } from '../instrument.js';
 
 const router = express.Router();
 router.use(clerkAuth);
@@ -30,6 +31,16 @@ router.post('/', validate(reportSchema), async (req, res) => {
       `message=${req.body.message}\n` +
       `componentStack=${req.body.componentStack ?? 'n/a'}\nstack=${req.body.stack ?? 'n/a'}`
   );
+  // Sentry needs an Error object to group/fingerprint against — the original client-reported
+  // stack/componentStack travel through clientContext instead, kept distinguishable from
+  // server-side stack data by the wrapper's own field naming (spec §2.4a).
+  captureExceptionSafely(new Error(req.body.message), {
+    clientContext: { originalStack: req.body.stack, componentStack: req.body.componentStack },
+    requestId,
+    deploy,
+    householdId: req.user.householdId,
+    userId: req.user.id,
+  });
   res.status(204).end();
 });
 

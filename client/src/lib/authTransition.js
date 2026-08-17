@@ -1,10 +1,10 @@
 // TASK-064 — see ai/tasks/TASK-064-spec.md Section 3.1. Persistence for auth transitions that can
 // be interrupted by the uncommanded WebKit-level reload documented in Section 2 (a resolved
 // signOut() promise, or a tapped OAuth button, is not proof the transition survived). Pure
-// read/write/clear/expiry functions + the click listener that writes the OAuth marker — kept
-// separate from lifecycleLog.js's diagnostic-only logging so a future "strip debug logging"
-// cleanup can't delete load-bearing recovery behavior by mistake. Decision logic for what to DO
-// with a marker (Rules 1/2) lives in useAuthRecovery.js, not here.
+// read/write/clear/expiry functions + the click listener that writes the OAuth marker — this is
+// load-bearing production recovery behavior, not diagnostics (TASK-068 removed the
+// diagnostic-only logging this file used to be deliberately kept separate from). Decision logic
+// for what to DO with a marker (Rules 1/2) lives in useAuthRecovery.js, not here.
 import { logEvent } from './debugLog.js';
 
 export const SIGNOUT_KEY = 'kk_pending_signout';
@@ -19,9 +19,7 @@ export const PENDING_ACTION_MAX_AGE_MS = 5000;
 // `__google` provider suffix (spec Section 3.5) — matched via closest() because the captured
 // click target was a child <span>, not the button itself. Class-based, not prefix-only, so
 // Apple/GitHub/etc. buttons never match.
-// Exported (TASK-066) so lifecycleLog.js's diagnostic-only rAF heartbeat can match the same
-// button without a second, driftable copy of this string. No behavior change here.
-export const GOOGLE_BUTTON_SELECTOR =
+const GOOGLE_BUTTON_SELECTOR =
   '[class*="cl-socialButtonsBlockButton"][class*="__google"]';
 
 function safeGetItem(key) {
@@ -170,8 +168,7 @@ export function isOauthMarkerExpired(marker, now = Date.now()) {
 
 // --- Production click listener (spec Section 3.5) -----------------------------------------
 
-// Separate from lifecycleLog.js's diagnostic installClickLogging() — this one performs real
-// production auth-recovery behavior (writes the marker Rule 2/sign-in recovery reads), not just
+// Real production auth-recovery behavior (writes the marker Rule 2/sign-in recovery reads), not
 // observation. Synchronous only: event -> cheap selector match -> best-effort synchronous write
 // -> return. Never awaits anything before the user's own click finishes propagating, so it can
 // never delay or interfere with Clerk's own handler for the same click.
@@ -191,14 +188,10 @@ export function installOauthMarkerListener() {
       const match = e.target?.closest?.(GOOGLE_BUTTON_SELECTOR);
       if (!match) return;
       writeOauthMarker();
-      // perfNowMs (TASK-064 follow-up): timing-only, to test the hypothesis that Clerk's own
-      // async round-trip before the OAuth redirect can outlast WebKit's ~1s transient
-      // user-activation window. Reading performance.now() is synchronous, so this doesn't
-      // change the synchronous-only contract above.
-      logEvent('oauth-marker-installed', {
-        perfNowMs:
-          typeof performance !== 'undefined' ? Math.round(performance.now()) : null,
-      });
+      // Still useful to confirm the recovery-marker listener is firing (spec §2.5) — the
+      // perfNowMs field TASK-064's follow-up added was superseded by TASK-067's actual root
+      // cause and is removed.
+      logEvent('oauth-marker-installed', {});
     },
     { capture: true }
   );

@@ -149,6 +149,7 @@ confirm what it actually sends (needed for §2.3a's shape allowlist, not just as
 | [useAuthRecovery.js:130](../../client/src/hooks/useAuthRecovery.js) `signout-repair-attempt` | `{ sessionId: currentSessionId }` — a Clerk session identifier | rare |
 | `App.jsx` `AuthStateLogger`/`SignFlowStateLogger` (deleted, §2.5) | `pathname`, `isLoaded`/`isSignedIn`, sign-in/up `status` enums | every navigation |
 | [authTransition.js:194-201](../../client/src/lib/authTransition.js) `oauth-marker-installed` | `perfNowMs` (removed, §2.5) | every Google-button click |
+| [main.jsx:25-35](../../client/src/main.jsx) `app-boot` — **added at implementation time, criterion 2's repo-wide `logEvent(` reconciliation caught this missing from the original audit** | `href`, `referrer` (strings), `standalone`, `swController` (booleans), `visibilityState`, `userAgent` (strings), `devicePixelRatio` (number) — all top-level string/boolean/number, fits §2.3a's shape allowlist unchanged | once per app boot |
 
 Every value in every row above is a string, boolean, number, or `null`/`undefined` — none is a nested
 object or array. This matters directly for §2.3a's design: **the shape allowlist those call sites need to
@@ -260,12 +261,14 @@ through:
 
 | Verification item | Finding | Decision | Evidence/date |
 |---|---|---|---|
-| Client initialization mechanism | *(to fill in)* | *(to fill in)* | *(to fill in)* |
-| Logs API surface + `enableLogs` flag | *(to fill in)* | *(to fill in)* | *(to fill in)* |
-| Serverless/Vercel flush ownership | *(to fill in)* | *(to fill in)* | *(to fill in)* |
-| Release/source-map plugin configuration | *(to fill in)* | *(to fill in)* | *(to fill in)* |
-| Build-time credentials (`SENTRY_ORG`/`SENTRY_PROJECT`/`SENTRY_AUTH_TOKEN`) | *(to fill in)* | *(to fill in)* | *(to fill in)* |
-| Package versions + `@sentry/react`/`@sentry/node` compatibility | *(to fill in)* | *(to fill in)* | *(to fill in)* |
+| Client initialization mechanism | Current Sentry docs recommend a separate `instrument.js` imported as the *first import statement* in the entry file, not a `<script>` tag. ES module static imports evaluate their full subgraph in declaration order (spec-guaranteed, not engine-specific), so `import './instrument.js'` as literally line 1 of `main.jsx` guarantees `Sentry.init()` completes before `App.jsx`'s import graph begins evaluating — this satisfies §2.2's requirement without resting on same-file statement ordering, since the guarantee comes from cross-module import evaluation order, not textual statement placement. | **Deviate from spec's proposed default**: use `import './instrument.js'` as `main.jsx`'s first import, remove the separate `<script type="module">` tag from `index.html`. Simpler, matches current official guidance. | docs.sentry.io/platforms/javascript/guides/react/, docs.sentry.io/platforms/javascript/guides/node/ — fetched 2026-08-17 |
+| Logs API surface + `enableLogs` flag | Confirmed: `enableLogs: true` is a top-level `Sentry.init()` option in the current SDK (10.x line, well past Logs' Sept-2025 GA). Structured log calls via `Sentry.logger.info(...)` (and `.warn`/`.error`/etc.), matching the spec's assumed API shape. | Use `enableLogs: true` in both `Sentry.init()` calls; `Sentry.logger.info()` inside `safeSentryLog()`. | docs.sentry.io/platforms/javascript/guides/react/ and /node/ — fetched 2026-08-17 |
+| Serverless/Vercel flush ownership | Confirmed via Sentry/Vercel community sources: Vercel's Node runtime sets AWS Lambda's `callbackWaitsForEmptyEventLoop: false`, so a function can suspend before queued Sentry events finish sending. Explicit `await Sentry.flush(timeoutMs)` is required; the Vercel integration does not provide automatic flushing. | Error middleware (`server/app.js`) calls `await Sentry.flush(2000)` after `captureExceptionSafely()`, before sending the response — not inside the wrapper itself, per §2.4's flush-ownership design. | community.vercel.com/t/cannot-sentry-in-serverless-function, dev.to/michelfaure/why-your-sentry-events-never-reach-your-serverless-functions — fetched 2026-08-17 |
+| Release/source-map plugin configuration | `@sentry/vite-plugin` (current: 5.4.0) config confirmed: `org`, `project`, `authToken` (reads `process.env.SENTRY_AUTH_TOKEN` automatically if omitted), `release.name` to force an explicit release string, `sourcemaps.filesToDeleteAfterUpload` (glob patterns) to remove `.map` files post-upload so they never ship to browsers. No separate Vercel-integration source-map pipeline needs disabling — the integration doesn't perform its own upload by default for a Vite project. | `release.name: process.env.VERCEL_GIT_COMMIT_SHA` forced explicitly (not plugin auto-detection, to guarantee byte-for-byte equality per §2.4); `build.sourcemap: 'hidden'` in Vite's own build config (generates maps without a public `//# sourceMappingURL` reference); `sourcemaps.filesToDeleteAfterUpload: ['./dist/**/*.map']` scoped to the client build's actual output directory. | docs.sentry.io/platforms/javascript/guides/node/sourcemaps/uploading/vite/ — fetched 2026-08-17 |
+| Build-time credentials (`SENTRY_ORG`/`SENTRY_PROJECT`/`SENTRY_AUTH_TOKEN`) | Exact names confirmed as expected (no plugin-version-specific renaming found). Plugin reads `SENTRY_AUTH_TOKEN` from `process.env` automatically when not passed explicitly as the `authToken` option; `org`/`project` must be passed explicitly in `vite.config.js` (no auto-read from env by the plugin itself). | Pass `org: process.env.SENTRY_ORG`, `project: process.env.SENTRY_PROJECT` explicitly in `vite.config.js` (both read via `loadEnv`/`process.env` at build time, Node-side only, no `VITE_` prefix); `authToken` left to the plugin's own automatic `SENTRY_AUTH_TOKEN` env read. All three already live in `client/.env.local` for local builds (Connor confirmed placed there — matches this build's actual working directory since `npm run build` runs `--prefix client`). Missing token → plugin degrades gracefully, skips upload, does not fail the build (matches spec's required behavior, §2.1a). | docs.sentry.io/platforms/javascript/guides/node/sourcemaps/uploading/vite/ — fetched 2026-08-17 |
+| Package versions + `@sentry/react`/`@sentry/node` compatibility | `npm view` (registry query, 2026-08-17): latest stable for both `@sentry/react` and `@sentry/node` is `10.70.0` — identical version number, since both are published from the same `getsentry/sentry-javascript` monorepo in lockstep. `11.0.0-alpha.x` exists but is pre-release (excluded — spec requires a stable pinned version, not a bleeding-edge alpha). `@sentry/vite-plugin` latest stable: `5.4.0` (independent cadence, per §2.1a). Peer/engine check: `@sentry/node@10.70.0` requires Node >=18 (local: v24, OK); `@sentry/react@10.70.0` peer-supports React `16.14/17.x/18.x/19.x` (project: 18.3.1, OK). | Pin `@sentry/react@10.70.0`, `@sentry/node@10.70.0` — compatible by construction (same monorepo, same version, both support `enableLogs`). Pin `@sentry/vite-plugin@5.4.0` independently. | `npm view @sentry/react versions`, `npm view @sentry/node versions`, `npm view @sentry/vite-plugin versions`, `npm view @sentry/node@10.70.0 engines`, `npm view @sentry/react@10.70.0 peerDependencies` — run 2026-08-17 |
+
+**Additional finding, not one of the six gate items but affecting criterion 16**: `sendDefaultPii` is deprecated in the current SDK line, replaced by a structured `dataCollection` option. To preserve the spec's intended minimal-PII posture (§2.3b), both `Sentry.init()` calls use `dataCollection: { userInfo: false, httpBodies: [] }` instead of the spec's literal `sendDefaultPii: false` — same behavioral outcome (no IP/user-info or request/response body collection), current option name. Source: docs.sentry.io/platforms/javascript/configuration/options/, docs.sentry.io/platforms/javascript/data-management/data-collected/ — fetched 2026-08-17.
 
 This is a gate, not a formality to skip past — implementation does not begin until every row above is
 filled in.
@@ -419,17 +422,41 @@ returns a rejected Promise, while leaving the *real* `safeSentryLog()` implement
 confirms the real wrapper absorbs both failure modes without propagating them. See §5 criterion 10 and §6
 step F for the corrected test.
 
-**Duplicate error reporting.** No change proposed to `ErrorBoundary.jsx`'s existing
-`POST /api/client-errors` call, and no wrapping of it in Sentry's own `<Sentry.ErrorBoundary>` component
-or React-specific error-boundary integration. Reasoning: React error boundaries are specifically designed
-to swallow the render error inside `componentDidCatch` so it never reaches
-`window.onerror`/`unhandledrejection` — so Sentry's default global auto-capture (which listens for exactly
-those two things) should not independently see the same render error a second time. That means this
-task's plan — Sentry's automatic global capture for non-render errors (event handlers, async code outside
-React's render), plus the existing `ErrorBoundary` → `/api/client-errors` → server-side
-`Sentry.captureException` path for render errors (§2.4a) — covers two different error classes, not the
-same error twice. This reasoning is the basis for the design, not a substitute for verifying it: §6 adds
-an explicit check that a deliberately-thrown render error produces exactly one Sentry event, not two.
+**Duplicate error reporting (rewritten, round-9 — the original rationale below this paragraph did not
+survive live verification; see §8 for the full evidence trail).** No change proposed to `ErrorBoundary.jsx`'s
+existing `POST /api/client-errors` call, and no wrapping of it in Sentry's own `<Sentry.ErrorBoundary>`
+component or React-specific error-boundary integration — **and, per round-9, `browserApiErrorsIntegration`
+is not disabled either.** Duplicate-error verification turned out to be environment-sensitive: React
+development builds can route a render error caught by `ErrorBoundary` through `invokeGuardedCallback`, an
+internal mechanism whose fake-event-dispatch trick happens to be observable by Sentry's
+`browserApiErrors` integration via its `addEventListener` instrumentation — live verification reproduced
+this in the development build (§8, round-8 finding: two events, not one). A production-built client was
+then tested and produced **no** automatic Sentry event for the same render error, indicating the observed
+duplicate path is specific to React's development implementation, not something real users (who only ever
+run the production bundle) would encounter. This task therefore does **not** disable `browserApiErrors`
+globally — doing so would also remove automatic capture for every other `addEventListener`-registered
+listener in the app (ten real call sites found via grep, including the load-bearing
+`installOauthMarkerListener()`, §2.6), which would be trading away real production error coverage to fix an
+artifact that may only exist in development. **Criterion 11 is satisfied only once an authenticated
+production-build test confirms the `ErrorBoundary` → `/api/client-errors` → `captureExceptionSafely()` path
+produces exactly one Sentry event for a deliberate render error, with the intended `originalStack`/
+`componentStack` context fields present** — not by counting events against a `beforeSend` filter or an
+integration toggle. See §8 for the full round-8/round-9 review history and the specific test still needed.
+
+<details>
+<summary>Original DRAFT-1 rationale (superseded, kept for the historical record — do not treat as current)</summary>
+
+Reasoning: React error boundaries are specifically designed to swallow the render error inside
+`componentDidCatch` so it never reaches `window.onerror`/`unhandledrejection` — so Sentry's default global
+auto-capture (which listens for exactly those two things) should not independently see the same render
+error a second time. That means this task's plan — Sentry's automatic global capture for non-render errors
+(event handlers, async code outside React's render), plus the existing `ErrorBoundary` →
+`/api/client-errors` → server-side `Sentry.captureException` path for render errors (§2.4a) — covers two
+different error classes, not the same error twice. **This reasoning was empirically disproven by round-8's
+live verification (§8) — Sentry's automatic capture surface is broader than `window.onerror`/
+`unhandledrejection`, and does independently see React render errors in development builds.**
+
+</details>
 
 ### 2.3 Migrate `debugLog.js`
 
@@ -1050,9 +1077,197 @@ doesn't say which deployment configuration produced that result.
 
 ---
 
+## 8. Live-Verification Finding — Pending Round-8 Architect Review (post-implementation)
+
+**Status: implementation complete (§2.1-2.6), local smoke testing underway. This finding blocks marking
+criterion 11 satisfied and needs an architect decision before the fix is chosen.**
+
+### What was observed
+
+Local smoke test (spec §6 step A/G), signed-out user, desktop Chrome, dev server (`localhost:5173`):
+deliberately threw inside `LandingPage` (rendered under `ErrorBoundary`, the app's public/signed-out home).
+**Two events landed in Sentry, not one:**
+
+1. **`kitchen-keeper-client` project**: the render error, `mechanism: auto.browser.browserapierrors.
+   addEventListener`, `handled: false` — Sentry's own automatic instrumentation, firing through React's
+   internal `invokeGuardedCallback` (visible in the event's `Additional Data`: `arguments: [{ type:
+   'react-invokeguardedcallback', ... }]`). This is **not** `window.onerror` or `unhandledrejection` — it's
+   a third capture surface `@sentry/react`'s default integrations install, that this spec's §2.2 reasoning
+   didn't account for.
+2. **`kitchen-keeper-server` project**: a *separate* "Authentication required" error — confirms
+   `ErrorBoundary.componentDidCatch` **did** also fire and **did** attempt its intended `POST
+   /api/client-errors` call, but `clientErrors.js`'s pre-existing `router.use(clerkAuth)` (predates this
+   task) rejected it with 401 before `captureExceptionSafely()` ever ran, because the test user was signed
+   out. This is a second, independent finding — not itself evidence about duplicate *successful* reports.
+
+### Why this contradicts §2.2's stated design
+
+§2.2's "Duplicate error reporting" reasoning: *"React error boundaries are specifically designed to swallow
+the render error inside `componentDidCatch` so it never reaches `window.onerror`/`unhandledrejection` — so
+Sentry's default global auto-capture (which listens for exactly those two things) should not independently
+see the same render error a second time."* Round-1 flagged this as a rationale needing verification, not
+blind trust; §5 criterion 11 / §6 step G exist specifically because of that. **The verification now says the
+premise was incomplete**: it's true React boundaries prevent the error reaching `window.onerror`/
+`unhandledrejection` specifically, but `@sentry/react`'s default `browserApiErrors` integration listens
+*more broadly* than those two surfaces — it wraps `addEventListener`-registered callbacks generally, and
+React's own internal error-propagation mechanism (`invokeGuardedCallback`) happens to route back through a
+wrapped listener. The two-different-error-classes argument (render errors via the app's own path,
+non-render errors via Sentry's globals) does not actually hold for render errors specifically, once
+`ErrorBoundary` is present and Sentry's default integrations are active together.
+
+**For a signed-in user** (the realistic case — `LandingPage` only renders for signed-out visitors), the
+401-triggered second issue wouldn't occur, but the underlying duplicate almost certainly still would: both
+capture surfaces are independent of auth state. This wasn't isolated to the signed-out edge case that
+produced the auth noise — the `auto.browser.browserapierrors` capture fired regardless of whether the
+server-side report succeeded.
+
+### Options, not yet chosen between
+
+1. **`beforeSend` filter**: suppress events matching this specific mechanism
+   (`auto.browser.browserapierrors.addEventListener` combined with a `react-invokeguardedcallback` marker in
+   the event's extra data) client-side, keeping the app's own `ErrorBoundary` → `/api/client-errors` path as
+   the sole reporter for render errors. Risk: filtering on an internal React/Sentry implementation-detail
+   signature is fragile across version upgrades of either library.
+2. **Adopt Sentry's own `<Sentry.ErrorBoundary>`** (or `Sentry.withErrorBoundary`) instead of the app's
+   hand-rolled `ErrorBoundary` + manual `POST /api/client-errors`, removing the second path entirely rather
+   than filtering one side of a race between two paths. Bigger diff, but removes the duplicate at its root
+   and was the option §2.2 originally considered and declined — on a premise now shown incomplete.
+3. **Accept the duplication** as a known, documented residual gap (two Sentry events per signed-in-user
+   render error is a minor UX-in-the-dashboard cost, not a data-safety or correctness issue) and relax
+   criterion 11 accordingly, rather than adding more mechanism to prevent it.
+
+**Claude's lean, not a decision**: option 2 addresses the actual root cause rather than pattern-matching on
+an internal mechanism string that could silently stop matching after a future `@sentry/react` upgrade
+(option 1's fragility). But it's a bigger, architecturally different diff than what DRAFT-7 approved, which
+is exactly why this needs the architect's review rather than being implemented unilaterally.
+
+### Separately, also surfaced (not blocking, but worth recording)
+
+The signed-out-user 401 on `/api/client-errors` means **render errors from any signed-out page currently
+never reach `captureExceptionSafely()` at all** — `clerkAuth` requiring authentication on that route predates
+this task and wasn't introduced by it, but this task is the first to make that route's *success* meaningful
+(previously it only reached `console.error`, itself unaffected by the 401 body since the client-side fetch
+just silently fails either way). Worth a decision on whether signed-out error reporting matters enough to
+special-case, out of scope for this specific finding's resolution.
+
+### Round-8 architect review (verdict: 🟡 REQUEST CHANGES, 9.7/10 for finding quality)
+
+Confirmed the finding split (Finding A: confirmed duplicate client-side capture; Finding B: the signed-out
+401 is a separate, non-conflated issue) as correct and gave the live-verification methodology full credit —
+"exactly the kind of finding the previous architect rounds demanded." **Required**: (1) do not mark
+criterion 11 satisfied; (2) rewrite §2.2's duplicate-error rationale, since its factual premise (React
+boundaries prevent all automatic capture) is disproven; (3) choose one authoritative render-error Sentry
+path rather than leaving both active; (4) **preferred resolution**: keep `ErrorBoundary → /api/client-errors
+→ captureExceptionSafely()` as authoritative and disable the specific automatic integration responsible for
+the duplicate, preserving automatic capture for other error classes — explicitly rejected fully replacing
+`ErrorBoundary` with `<Sentry.ErrorBoundary>` (my option 2) as "a much larger architectural change than this
+finding justifies," and rejected silently accepting the duplication (my option 3) as "redefining duplicate
+as acceptable"; (5) re-run the duplicate test **authenticated**, so the server path actually reaches
+`captureExceptionSafely()` (the signed-out test never exercised it); (6) resolve/document the signed-out 401
+as its own decision, not folded into duplicate-error work; (7) confirm disabling the integration doesn't
+break *ordinary* automatic capture for non-React errors — explicitly named this as the point that matters:
+"the fix should be surgical, not turn off automatic Sentry capture."
+
+**Claude's assessment, and new evidence gathered in response**: point 7 turned out to be load-bearing in a
+way the architect's own preferred mechanism doesn't satisfy. Sentry's `browserApiErrorsIntegration` doesn't
+expose a way to disable *only* React's internal `invokeGuardedCallback` artifact — its granular option
+(`eventTarget: false`) disables *all* `addEventListener`-based automatic capture, and a repo-wide grep found
+**10 real `addEventListener` call sites** across the app that would silently lose Sentry coverage as a
+result, including `authTransition.js`'s `installOauthMarkerListener()` — load-bearing production recovery
+behavior (§2.6, explicitly untouched). Disabling `eventTarget` wholesale would itself fail the architect's
+own required check 7. This wasn't visible from the architect's review alone; it required inspecting this
+specific codebase.
+
+Before choosing between a fragile `beforeSend` filter (my original option 1, which the architect didn't
+select) and the coverage-losing `eventTarget: false` (the architect's literal suggested lever), I re-ran the
+duplicate test against a **production build** (`npm run build` + `vite preview`, not `vite dev`) — motivated
+by external research: `getsentry/sentry-javascript#1432` and related issues describe this exact
+render-error-duplicate pattern, and several reports mention it specifically "in development mode." React's
+`invokeGuardedCallback` fake-event-dispatch trick (the actual mechanism producing the duplicate) is
+documented React-internal behavior gated to development builds — production React uses a plain try/catch
+instead, which never touches `addEventListener` at all.
+
+**Result, worded precisely per round-9's requested correction (the original phrasing here read as if it
+might implicate the `ErrorBoundary` path, which it does not): zero Sentry events were observed in the
+production-build test. The automatic client-capture path was therefore not observed; the server-side
+`ErrorBoundary` path was not exercised, because `vite preview` had no `/api` backend for it to reach.** The
+`ErrorBoundary` fallback UI rendered correctly (confirmed by the person testing it — "error page 'something
+went wrong'"), so the throw and React's catch both fired as expected; only the *automatic* client-side
+capture was absent, and that absence is the only conclusion this specific test supports. The server-side
+half is inconclusive, not negative — `vite preview` has no `/api` proxy configured (only `vite dev`'s
+`server.proxy` does; verified by grep against `vite.config.js`), so `ErrorBoundary`'s fetch to
+`/api/client-errors` had no real backend to reach under that specific setup. This is a test-methodology gap,
+not a production-behavior finding — separately, the very first (dev-server) smoke test already proved that
+fetch *does* reach the real
+Express route and gets processed by the full middleware chain (that's exactly how the "Authentication
+required" event was generated).
+
+**Net**: strong evidence the automatic-capture side of the duplicate is a development-build-only artifact
+that real users (who only ever run the production bundle) would never encounter. Not yet directly confirmed:
+an authenticated production-build test showing the `ErrorBoundary` path alone produces exactly one event
+with correct context fields (architect's required step 1-5) — the production test above didn't reach a
+signed-in state, and testing that properly needs either a `preview.proxy` config addition (a further temp
+change) or a real deployed environment, neither done yet.
+
+**Question for round 9, not decided unilaterally**: does this evidence change the required fix? If the
+duplicate is genuinely development-only, disabling `browserApiErrorsIntegration`'s `eventTarget` wrapping in
+production would trade a real capability (auto-capture for `installOauthMarkerListener()` and nine other
+real listeners) for fixing a problem that may not occur where it would apply. Options as they now stand:
+(a) treat this as sufficient and only guard against the duplicate in development (e.g., environment-gated,
+so production keeps full `eventTarget` coverage and dev accepts the noise or gets the narrower fix there
+instead); (b) still want the integration disabled in all environments regardless, accepting the coverage
+loss as the architect's original preferred call; (c) require the authenticated-production test to actually
+run (via a temporary `preview.proxy` or a real deploy) before deciding anything, since "zero events" from
+this round's test is suggestive but not the same evidence as "confirmed one event, correct fields."
+
+### Round-9 architect review (verdict: 🟡 REQUEST CHANGES — narrowly, 9.5/10)
+
+Agreed the production-build evidence is strong and materially changes the picture from round-8, but does
+**not** yet close criterion 11 — the spec's own text already named the missing piece (an authenticated
+production test of the `ErrorBoundary` → server path) and that gap is the actual remaining blocker, not a
+new one. **Explicitly reversed round-8's own preferred fix**: no longer recommends disabling
+`browserApiErrorsIntegration` in any environment — production's real coverage across ten `addEventListener`
+call sites is worth more than removing a development-only artifact, and rejected that trade explicitly
+("I would reject that architecture"). **Required**: (1) rewrite §2.2's rationale (done above, this round);
+(2) fix the "zero events landed from either path" wording so it can't be misread as implicating the
+`ErrorBoundary` path itself (done above, this round); (3) **do not** add a `preview.proxy` config, even
+temporarily — run the one remaining test against a **real deployed Vercel Preview** instead, since that
+exercises actual production React, actual routing, actual auth, actual `/api` deployment, and actual
+Sentry/release configuration all at once, which a patched local `vite preview` would only approximate; (4)
+that test must be authenticated, trigger a deliberate render error, and confirm both the event count
+(exactly one) and that the event carries the intended `originalStack`/`componentStack` context fields, not
+just a bare count; (5) keep the signed-out-401 finding filed separately, as already done — explicitly
+agreed with keeping it split from criterion 11's resolution. Round-9 named its own two required changes as
+already done by this update (§2.2's rewrite, the wording fix) — item 3/4 (the deployed-Preview test) is the
+one substantive remaining step. Stated expectation: if that test passes, approval should follow without a
+further broad review round.
+
+**What this needs to actually run**: a Vercel Preview deployment with Sentry's env vars actually
+configured — none of the seven vars exist in the Vercel project yet (confirmed directly with Connor this
+session). Blocked on: (a) adding the runtime vars (`SENTRY_DSN`/`VITE_SENTRY_DSN`,
+`SENTRY_ENVIRONMENT`/`VITE_SENTRY_ENVIRONMENT`, `staging` values) and the three build-time vars
+(`SENTRY_ORG`/`SENTRY_PROJECT`/`SENTRY_AUTH_TOKEN`) to Vercel's Preview environment scope, then (b) pushing
+to get a Preview deployment built with them, then (c) running the authenticated deliberate-render-error test
+against that Preview URL. Not done yet — pending Connor's go-ahead, since it involves pushing code and
+touching the Vercel project's configuration.
+
+---
+
 ## Status
 
-**DRAFT-7 — APPROVED (round-7, 9.8–10/10, APPROVE / READY FOR IMPLEMENTATION). Not yet implemented.**
+**DRAFT-7 — APPROVED (round-7, 9.8–10/10, APPROVE / READY FOR IMPLEMENTATION). Implementation complete
+(§2.1-2.6). Rounds 8-9 (§8) resolved the architectural question — no integration gets disabled, §2.2's
+rationale is rewritten, both round-9-required doc fixes are done.** One test remains before criterion 11
+closes: an authenticated deliberate-render-error check against a real deployed Vercel Preview (not a local
+`vite preview` hack, per round-9's explicit instruction), confirming the `ErrorBoundary` → `/api/client-
+errors` → `captureExceptionSafely()` path produces exactly one event with correct `originalStack`/
+`componentStack` context. Blocked on Vercel env var setup (none of the seven Sentry vars exist there yet)
+and a push to trigger the Preview build — both pending Connor's go-ahead. Round-9's stated expectation: if
+that test passes, this should reach approval without a further broad review round. Everything else round-7
+approved held up under live testing: server-side capture confirmed end-to-end (correct `environment` tag,
+real source resolution, clean breadcrumbs with no request/response bodies), build-time credentials
+confirmed working against the real Sentry account (source maps actually uploaded, `.map` files absent from
+shipped output).
 Seven review rounds closed every architectural gap raised: telemetry data classification, client/server
 initialization ordering, the shape-allowlist design, both safe wrappers' failure contracts, the production
 server-entry-point fix, byte-for-byte release identity, multi-invocation delivery, the dependency-policy
