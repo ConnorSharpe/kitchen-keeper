@@ -27,6 +27,16 @@ logEvent('app-boot', {
   devicePixelRatio: window.devicePixelRatio,
 });
 
+// TEMPORARY — TASK-068 spec §6 step H (client-side source-map resolution check). Deliberately
+// outside React's render tree — setTimeout, so this is caught by Sentry's own automatic
+// instrumentation, not the ErrorBoundary/server path already confirmed by the round-9 test.
+// Reverted immediately after use.
+if (window.location.search.includes('__task068_sourcemap_throw')) {
+  setTimeout(() => {
+    throw new Error('TASK-068 smoke test: source-map resolution check (production build)');
+  }, 0);
+}
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () =>
     navigator.serviceWorker.register('/sw.js')
