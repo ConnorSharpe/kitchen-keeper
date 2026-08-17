@@ -6,8 +6,11 @@ the closed investigation's diagnostic scaffolding. Spec: [TASK-068-spec.md](../t
 
 # Current Status
 
-**DONE. Implementation complete, all acceptance criteria and verification steps closed, pushed to
-`staging` (`d09f514`).** Full history: [TASK-068-spec.md Section
+**DONE AND SHIPPED TO PRODUCTION.** Implementation complete, all acceptance criteria and verification
+steps closed, `staging` and `main` both at `d41a6ad` (fast-forward merge, pushed). All seven Sentry env
+vars added to Vercel's Production scope (mirroring Preview's values, `SENTRY_ENVIRONMENT`/
+`VITE_SENTRY_ENVIRONMENT` = `production` instead of `staging`, only `SENTRY_AUTH_TOKEN` sensitive). Full
+history: [TASK-068-spec.md Section
 8](../tasks/TASK-068-spec.md#8-live-verification-finding--pending-round-8-architect-review-post-implementation)
 and the spec's own criteria annotations (§5) for the evidence behind each.
 
@@ -67,11 +70,9 @@ immediately-following commit — `git diff` confirmed clean after each one.
 
 # Remaining Work
 
-Nothing blocking. Two deliberately-deferred items, neither urgent:
-
-1. **Vercel Production scope**: only Preview has the seven Sentry env vars so far — add to Production when
-   actually ready to ship this there (`staging` stays the working branch; no rush).
-2. Registering `getsentry/sentry-mcp` for Claude Code — explicitly out of scope for this diff (spec §4).
+Nothing blocking, nothing left in the task's own scope. One optional item, out of scope for this diff:
+registering `getsentry/sentry-mcp` for Claude Code (spec §4) — a one-time local config step, whenever
+wanted.
 
 # Known Risks / Open Questions
 
@@ -87,14 +88,15 @@ Nothing blocking. Two deliberately-deferred items, neither urgent:
 
 # Recommended Next Action
 
-None required. When ready to actually ship this to production: add the seven Sentry env vars to Vercel's
-Production scope, then merge `staging` → `main` per the normal release workflow (CONVENTIONS.md).
+None. Task closed. Next real trigger for touching Sentry again would be a future task, not follow-up on
+this one.
 
 # Context Notes
 
-- branch: `staging`, pushed through `d09f514`. Two commits carry permanent code (`dfa8d5a` implementation,
-  `9ec380e` the F11 try/catch fix); the rest of this session's ~10 commits are temporary-test-trigger/revert
-  pairs used to produce live evidence for §5's criteria — code from those is gone from HEAD, kept in history.
+- branch: `staging` and `main` both at `d41a6ad` (fast-forward merge, no divergence). Two commits carry
+  permanent code (`dfa8d5a` implementation, `9ec380e` the F11 try/catch fix); the rest of this session's
+  commits on `staging` before the merge were temporary-test-trigger/revert pairs used to produce live
+  evidence for §5's criteria — code from those is gone from HEAD, kept in history.
 - No migration/schema work — `MIGRATION_LEDGER.md` doesn't apply to this task.
 - Pre-existing, unrelated to this task (carried forward, untouched): `.claude/settings.local.json`,
   `ai/tasks/TASK-059-smoke-tests.md` (both modified), `ai/handoffs/archive/TASK-061-implementation.md`
