@@ -6,14 +6,22 @@ the closed investigation's diagnostic scaffolding. Spec: [TASK-068-spec.md](../t
 
 # Current Status
 
-**Implementation complete, locally verified, one architectural finding sent back for round-8 architect
-review before it can be closed out (see Known Risks below — not a blocker on anything except criterion
-11/marking this task fully done).** §2.0's verification gate ran first
-(decision table filled in the spec, §2.0) — key finding: current Sentry docs recommend a separate
-`instrument.js` imported as literally the first import in the entry file, not the spec's originally-proposed
-`<script>` tag; used that instead since it satisfies the same ordering requirement via standard ES module
-evaluation semantics. `sendDefaultPii` is deprecated in the current SDK line — used `dataCollection: {
-userInfo: false, httpBodies: [] }` instead for the same minimal-PII behavior.
+**Implementation complete, committed and pushed to `staging` (`dfa8d5a`), round-8/9 architect review closed
+the one architectural question this task raised, and round-9's required live test PASSED against a real
+deployed Preview.** Full history: [TASK-068-spec.md Section
+8](../tasks/TASK-068-spec.md#8-live-verification-finding--pending-round-8-architect-review-post-implementation).
+Short version: live testing found Sentry's own automatic instrumentation independently captured a React
+render error in the dev server (contradicting the spec's original §2.2 rationale) — but a production-build
+retest showed zero automatic captures, and round-9 confirmed (against a real Preview, authenticated, commit
+`cbc7b6a`) that the intended `ErrorBoundary` → `/api/client-errors` → `captureExceptionSafely()` path alone
+produces exactly one correctly-tagged event. No Sentry integration was disabled; §2.2's rationale is
+rewritten in the spec to match reality. Criterion 11 is satisfied.
+
+§2.0's verification gate ran first (decision table filled in the spec, §2.0) — key finding: current Sentry
+docs recommend a separate `instrument.js` imported as literally the first import in the entry file, not the
+spec's originally-proposed `<script>` tag; used that instead since it satisfies the same ordering
+requirement via standard ES module evaluation semantics. `sendDefaultPii` is deprecated in the current SDK
+line — used `dataCollection: { userInfo: false, httpBodies: [] }` instead for the same minimal-PII behavior.
 
 **Installed & pinned**: `@sentry/react@10.70.0`, `@sentry/vite-plugin@5.4.0` (client), `@sentry/node@10.70.0`
 (server) — exactly the three direct dependencies the spec's dependency-policy exception (§2.1a) allows,
@@ -85,69 +93,57 @@ this task; worked around by running `node index.js` directly instead of through 
   `client/package.json`'s test script gained `--experimental-test-module-mocks`
 - `.env.example` — documented all seven new env vars
 - `ai/tasks/TASK-068-spec.md` — §2.0 decision table filled in; §1 table's `app-boot` gap added
+- `client/src/instrument.js`, `server/instrument.js` — `Sentry.init()` wrapped in try/catch (F11 fix, found
+  while preparing that check — wasn't guarded before, would have aborted module evaluation on either side)
 - **Deleted**: `client/src/components/DebugPanel.jsx`, `client/src/components/PreconnectGoogleOAuth.jsx`,
   `client/src/lib/lifecycleLog.js`
 
 # Remaining Work
 
-Everything below genuinely needs a live browser and/or a real deployment — not further local iteration:
+Criteria 1, 11, and 13 are now done (duplicate-error, init-failure/init-ordering, N=10 burst delivery — all
+confirmed against the real `staging` Preview or by local test, see spec §6 steps F11/F12/G/I). Still open,
+both needing you to drive a real browser against the Preview (I'm blocked from navigating that domain,
+same as `localhost`):
 
-1. **Local dev smoke test** (spec §6 steps A/B/D): run both dev servers, deliberately throw a client error
-   and a server error, confirm both land in the Sentry dashboard tagged `environment: local`; sign in and
-   confirm `auth-settled` appears in Sentry Logs; run the real sign-in flow to confirm no regression from
-   removing `PreconnectGoogleOAuth`/`AuthStateLogger`/`SignFlowStateLogger` (Rule 9: desktop Chrome first).
-2. **F11**: temporarily break `Sentry.init()` on each side, confirm the app still boots/server still starts.
-3. **F12**: mechanical init-ordering proof against the served production build (not dev server) — I have
-   high confidence via documented ES module evaluation semantics + Sentry's own current guidance (recorded
-   in §2.0's decision table), but this criterion specifically asks for a runtime check, not an argument.
-4. **G (duplicate-error check)**: confirm a thrown React render error produces exactly one Sentry event, not
-   two.
-5. **H (source-map resolution)**: confirm a triggered production-build exception resolves to original
-   source in the Sentry dashboard UI itself (upload succeeded — confirmed this session — but resolution in
-   the UI is a separate check).
-6. **I (N=10 serverless burst test)**: needs a deployed Preview, not local — trigger 10 separate server
-   errors across separate invocations, confirm all 10 arrive, record the delivery window.
-7. **Vercel setup** (deferred from account setup, not blocking so far): mirror
-   `SENTRY_DSN`/`SENTRY_ENVIRONMENT`/`VITE_SENTRY_DSN`/`VITE_SENTRY_ENVIRONMENT` into Preview/Production
-   scopes with `staging`/`production` values; add `SENTRY_ORG`/`SENTRY_PROJECT`/`SENTRY_AUTH_TOKEN` to
-   Production/Preview **build** environment only (never client-exposed).
-8. Registering `getsentry/sentry-mcp` for Claude Code — explicitly out of scope for this diff (spec §4), a
-   local config step to do once this ships.
+1. **H (source-map resolution)**: confirm a *client-side* production exception (one Sentry's own SDK
+   captures directly, not via the server path) resolves to original source/line in the dashboard UI, not
+   minified output — upload itself already confirmed working (§2.1a's build output), this checks the
+   *resolution*, a separate thing.
+2. **B (Sentry Logs)**: sign in and confirm `auth-settled` actually appears in Sentry's *Logs* view
+   (distinct from Errors) — `useSettledAuth.js`'s `logEvent()` call.
+3. **Vercel Production scope**: only Preview has the seven Sentry env vars so far — add to Production when
+   actually ready to ship this there (not urgent; `staging` stays the working branch).
+4. Registering `getsentry/sentry-mcp` for Claude Code — explicitly out of scope for this diff (spec §4).
 
 # Known Risks / Open Questions
 
-- **Architectural question resolved (rounds 8-9), one test remains before criterion 11 closes.** Round-9
-  verdict: do **not** disable `browserApiErrorsIntegration` in any environment — production's real coverage
-  across 10 real `addEventListener` call sites (including the load-bearing
-  `installOauthMarkerListener()`) is worth more than removing what live testing showed is very likely a
-  React development-build-only artifact. §2.2's rationale rewritten in the spec; a wording fix round-9
-  flagged also applied. **Explicitly rejected** doing the one remaining verification via a temporary
-  `preview.proxy` hack — round-9 wants it run against a real deployed Vercel Preview instead (exercises
-  actual production React, routing, auth, `/api` deployment, and Sentry config together). Full history in
-  [TASK-068-spec.md Section 8](../tasks/TASK-068-spec.md#8-live-verification-finding--pending-round-8-architect-review-post-implementation).
-- Separately (non-blocking, recorded in spec §8): signed-out-user render errors never reach
-  `captureExceptionSafely()` at all — `/api/client-errors` requires auth (pre-existing, not introduced by
-  this task), so the report 401s before the route handler runs.
-- The release value in this session's test builds read `unknown` (no `VERCEL_GIT_COMMIT_SHA` locally) — the
-  byte-for-byte release-equality criteria (12/17/20) need a real Vercel-built deploy to actually check
-  against.
+- **Resolved this session, not a risk going forward**: the duplicate-error architectural question (rounds
+  8-9, §8) — `browserApiErrorsIntegration` stays enabled everywhere, no integration disabled, confirmed via
+  a real Preview test. Kept here only as a pointer: [TASK-068-spec.md Section
+  8](../tasks/TASK-068-spec.md#8-live-verification-finding--pending-round-8-architect-review-post-implementation).
+- Signed-out-user render errors never reach `captureExceptionSafely()` — `/api/client-errors` requires auth
+  (pre-existing, not introduced by this task), so the report 401s before the route handler runs. Recorded,
+  not yet decided whether to special-case (spec §8).
+- One Sentry-side observation (not this task's own scrubbing): `client.originalStack`'s value showed
+  `[Filtered]` in the dashboard during round-9's test — Sentry's own default Data Scrubber, not
+  `validateTelemetryShape()` (which doesn't govern `captureExceptionSafely()`'s `clientContext`). Worth
+  knowing if `originalStack` content is ever needed for real debugging.
 - Everything else the spec itself flags in its own §7 (log-volume/free-tier quota, `err.message` content
   bounded-not-scrubbed, the shape allowlist's scope) still applies unchanged.
 
 # Recommended Next Action
 
-Round-9 architect review closed the design question (§8) — remaining path to done is now concrete:
-1. Add all seven Sentry env vars to Vercel's Preview scope (Connor hasn't touched the Vercel project yet).
-2. Push to get a Preview deployment built with them.
-3. Signed in, on that Preview: deliberately throw a render error, confirm exactly one Sentry event with
-   `originalStack`/`componentStack` present (criterion 11 / round-9's required test).
-4. Same Preview covers item 6 above (N=10 serverless burst test) and items 3/5 (F12 init-ordering, H
-   source-map resolution) — all need a real deployment anyway, worth doing in one pass rather than four.
-Waiting on Connor's go-ahead before touching Vercel config or pushing.
+Criteria 1/11/13 done this session (F11/F12 fixed+verified, N=10 burst test 10/10). Only H and B remain,
+and both need Connor driving a real browser against the Preview — I can check the Sentry dashboard side of
+each once he triggers them, same pattern as the round-9 test.
 
 # Context Notes
 
-- branch: `staging` (working tree, not yet committed).
+- branch: `staging`, pushed through `1555f43`. Commit sequence this session: `dfa8d5a` (implementation),
+  `cbc7b6a`/`467b0f9` (round-9 duplicate-error test trigger + revert), `9ec380e` (F11 try/catch fix,
+  permanent), `70f741d`/`1555f43` (N=10 burst-test route trigger + revert). Only `dfa8d5a` and `9ec380e`
+  carry permanent code; the other four are temporary-test-then-revert pairs, code gone from HEAD, kept in
+  history.
 - No migration/schema work — `MIGRATION_LEDGER.md` doesn't apply to this task.
 - Pre-existing, unrelated to this task (carried forward, untouched): `.claude/settings.local.json`,
   `ai/tasks/TASK-059-smoke-tests.md` (both modified), `ai/handoffs/archive/TASK-061-implementation.md`
