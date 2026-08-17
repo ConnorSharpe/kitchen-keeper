@@ -5,19 +5,26 @@
 // originally-proposed separate <script> tag.
 import * as Sentry from '@sentry/react';
 
-Sentry.init({
-  // Optional chaining: import.meta.env only exists under Vite's own transform (dev/build) — a
-  // plain Node context (e.g. this project's node:test suite, which has no Vite transform) would
-  // otherwise throw here at module-evaluation time reading .env off undefined.
-  dsn: import.meta.env?.VITE_SENTRY_DSN,
-  environment: import.meta.env?.VITE_SENTRY_ENVIRONMENT,
-  release: import.meta.env?.VITE_SENTRY_RELEASE,
-  enableLogs: true,
-  // sendDefaultPii is deprecated in the current SDK line; dataCollection is its replacement.
-  // This preserves the same minimal-PII posture (§2.3b): no IP/user info, no request/response
-  // bodies collected automatically.
-  dataCollection: { userInfo: false, httpBodies: [] },
-});
+// Sentry.init() itself failing (malformed DSN, an internal SDK error) must not prevent the app
+// from booting — this file is the first import in main.jsx, so an uncaught throw here would
+// abort main.jsx's entire module evaluation before React ever mounts (spec §2.2, criterion 1).
+try {
+  Sentry.init({
+    // Optional chaining: import.meta.env only exists under Vite's own transform (dev/build) — a
+    // plain Node context (e.g. this project's node:test suite, which has no Vite transform)
+    // would otherwise throw here at module-evaluation time reading .env off undefined.
+    dsn: import.meta.env?.VITE_SENTRY_DSN,
+    environment: import.meta.env?.VITE_SENTRY_ENVIRONMENT,
+    release: import.meta.env?.VITE_SENTRY_RELEASE,
+    enableLogs: true,
+    // sendDefaultPii is deprecated in the current SDK line; dataCollection is its replacement.
+    // This preserves the same minimal-PII posture (§2.3b): no IP/user info, no request/response
+    // bodies collected automatically.
+    dataCollection: { userInfo: false, httpBodies: [] },
+  });
+} catch {
+  // Telemetry setup failing must never block the application from booting.
+}
 
 // All application-triggered log calls go through this — fire-and-forget, must never throw or
 // reject to its caller under any failure mode (uninitialized SDK, missing DSN, SDK throwing).

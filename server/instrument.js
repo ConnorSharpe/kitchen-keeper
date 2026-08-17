@@ -5,15 +5,22 @@
 // (staging/production) — see ai/tasks/TASK-068-spec.md Section 1's "Two server entry points".
 import * as Sentry from '@sentry/node';
 
-Sentry.init({
-  dsn: process.env.SENTRY_DSN,
-  environment: process.env.SENTRY_ENVIRONMENT,
-  release: process.env.VERCEL_GIT_COMMIT_SHA ?? 'unknown',
-  enableLogs: true,
-  // sendDefaultPii is deprecated in the current SDK line; dataCollection is its replacement —
-  // same minimal-PII posture (§2.3b): no IP/user info, no request/response bodies collected.
-  dataCollection: { userInfo: false, httpBodies: [] },
-});
+// Sentry.init() itself failing must not prevent the server from starting — this file is imported
+// second in app.js, so an uncaught throw here would abort app.js's module evaluation before the
+// Express app is ever created/exported (spec §2.4, criterion 1).
+try {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.SENTRY_ENVIRONMENT,
+    release: process.env.VERCEL_GIT_COMMIT_SHA ?? 'unknown',
+    enableLogs: true,
+    // sendDefaultPii is deprecated in the current SDK line; dataCollection is its replacement —
+    // same minimal-PII posture (§2.3b): no IP/user info, no request/response bodies collected.
+    dataCollection: { userInfo: false, httpBodies: [] },
+  });
+} catch {
+  // Telemetry setup failing must never block the server from starting.
+}
 
 // Closed, application-specific parameter shape (spec §2.3b) — not a generic Sentry
 // extra/contexts passthrough a caller could stuff arbitrary data into. Every application-
