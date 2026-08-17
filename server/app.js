@@ -70,6 +70,12 @@ app.use('/api/suggestions', suggestionsRouter);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
+// TEMPORARY — TASK-068 spec §6 step I (N=10 serverless burst delivery test). Reverted immediately
+// after use. Accepts an index so each of the 10 requests produces a distinguishable event.
+app.get('/api/__task068_burst_test/:n', (req) => {
+  throw new Error(`TASK-068 burst test event ${req.params.n}/10`);
+});
+
 app.use(async (err, req, res, _next) => {
   console.error(err.stack);
   captureExceptionSafely(err);
