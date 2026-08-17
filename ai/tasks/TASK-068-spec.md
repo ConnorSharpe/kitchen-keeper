@@ -808,10 +808,13 @@ any of their logic.
    gone (verified via a DOM query for the removed element, not just visual inspection).
 5. A deliberately-thrown client-side error and a deliberately-thrown server-side error each appear in the
    Sentry dashboard, correctly tagged with `environment` (`local`/`staging`/`production`).
-6. Triggering a `logEvent()` call (e.g. sign in and let `useSettledAuth` settle, producing `auth-settled`)
-   appears in Sentry's Logs view — **with `enableLogs: true` (or the installed SDK version's equivalent)
-   confirmed present in the effective configuration first (DRAFT-7, round-6's required #2)**, since without
-   it this call chain can complete with no exception thrown while nothing actually arrives in Sentry.
+6. **SATISFIED.** Triggering a `logEvent()` call (e.g. sign in and let `useSettledAuth` settle, producing
+   `auth-settled`) appears in Sentry's Logs view — **with `enableLogs: true` (or the installed SDK version's
+   equivalent) confirmed present in the effective configuration first (DRAFT-7, round-6's required #2)**,
+   since without it this call chain can complete with no exception thrown while nothing actually arrives in
+   Sentry. Confirmed against the real `staging` Preview: `auth-settled` and `app-boot` both appear in
+   Sentry's Logs view (distinct from Errors), fully-shaped payload (`settleReason: stable`, `settleElapsedMs:
+   413`, correct booleans, `environment`/`release` tags present, no PII, no nested objects) — §6 step B.
 7. `npm run lint`, `npm run build`, and the full test suite (client + server) are green.
 8. No CSP-related network errors appear in the browser console when the client SDK sends its first event.
 9. **Telemetry shape enforcement.** `validateTelemetryShape()` correctly passes through every payload
@@ -843,12 +846,16 @@ any of their logic.
     zero events in `kitchen-keeper-client`. Rounds 8-9 established this is achieved without disabling any
     Sentry integration — `browserApiErrorsIntegration` stays fully enabled in all environments, per round-9's
     explicit rejection of that trade (§2.2, §8).
-12. **Source maps and release identity.** A deliberately-triggered client-side exception against a
-    production-built (not dev-server) bundle resolves in the Sentry dashboard to original source
+12. **SATISFIED.** Source maps and release identity. A deliberately-triggered client-side exception against
+    a production-built (not dev-server) bundle resolves in the Sentry dashboard to original source
     file/line, not minified output, and its release identifier is **byte-for-byte equal** to
     `process.env.VERCEL_GIT_COMMIT_SHA` for that deploy — and the corresponding server-side event for the
     same deploy carries that identical value, not merely one that references the same commit some other
-    way (DRAFT-4, round-3's P1 #5; see §2.4).
+    way (DRAFT-4, round-3's P1 #5; see §2.4). Confirmed against the real `staging` Preview: a deliberate
+    exception resolved to `src/main.jsx:36:11` with actual source shown, not minified; release
+    `572931c1b480` verified (via `git log --format=%H`) to be exactly the first 12 characters of the full
+    40-char SHA `572931c1b48088fec239351db9d0b3470a454213` — Sentry's dashboard truncates the *display*, the
+    stored value is the full, byte-for-byte unmodified `VERCEL_GIT_COMMIT_SHA` (§6 step H).
 13. **SATISFIED — 10/10 delivered.** Serverless delivery under multiple invocations. Trigger a known batch
     of **N** server-side errors (e.g. N = 10) across separate Vercel Function invocations (not one single
     error in one invocation) and confirm **all N expected events** reach Sentry within an observed delivery
@@ -926,8 +933,10 @@ any of their logic.
 **A. Local error capture.** Run both dev servers. Temporarily throw in a component and in a server route,
 confirm both land in Sentry, then revert the temporary throws.
 
-**B. Log capture.** Sign in locally, confirm `auth-settled` (and other low-volume call sites) land as
-Sentry Logs, correctly tagged.
+**B. Log capture — DONE.** Sign in locally, confirm `auth-settled` (and other low-volume call sites) land as
+Sentry Logs, correctly tagged. Confirmed against the real `staging` Preview rather than locally: signed in,
+`auth-settled` and `app-boot` both appeared in Sentry's Logs view (Explore → Logs, distinct from Errors) with
+fully-shaped payloads (criterion 6).
 
 **C. Deletion verification.** `grep -r` for `DebugPanel`, `PreconnectGoogleOAuth`, `lifecycleLog`,
 `installLifecycleLogging`, `installClickLogging`, `installUrlChangeLogging` across `client/src` — zero
@@ -1029,13 +1038,13 @@ events rather than two separately-verified facts (criterion 17).
 `@sentry/vite-plugin` added, each pinned to a specific version; those versions match §2.0's decision table
 (criterion 18).
 
-**G. Duplicate-error check.** Deliberately throw inside a React component under `ErrorBoundary`; confirm
-exactly one Sentry event results, attributable to that exception, with no independent second event from
-the client SDK's global handlers (criterion 11).
+**G. Duplicate-error check — DONE (§8, rounds 8-9).** Deliberately throw inside a React component under
+`ErrorBoundary`; confirm exactly one Sentry event results, attributable to that exception, with no
+independent second event from the client SDK's global handlers (criterion 11).
 
-**H. Source-map and release check.** Build the client for production (`npm run build`), serve the built
-output (not the dev server), trigger a deliberate exception, confirm the Sentry event resolves to original
-source location and that its release identifier is byte-for-byte equal to
+**H. Source-map and release check — DONE.** Build the client for production (`npm run build`), serve the
+built output (not the dev server), trigger a deliberate exception, confirm the Sentry event resolves to
+original source location and that its release identifier is byte-for-byte equal to
 `process.env.VERCEL_GIT_COMMIT_SHA` for that build, matching the value the corresponding server-side event
 for the same deploy carries (criterion 12).
 
@@ -1310,24 +1319,24 @@ integration, or building a `beforeSend` filter) are both confirmed unnecessary.
 
 ## Status
 
-**DRAFT-7 — APPROVED (round-7, 9.8–10/10, APPROVE / READY FOR IMPLEMENTATION). Implementation complete
-(§2.1-2.6). Rounds 8-9 (§8) resolved the architectural question and round-9's required authenticated
-Preview test has now PASSED** — exactly one Sentry event, correct `environment`/`release`, correct
-closed-shape context fields, zero independent client-side automatic capture, confirmed against the real
-deployed `staging` Preview (commit `cbc7b6a`), not a local approximation. Temporary test code fully reverted
-and pushed (`467b0f9`). Per round-9's own stated expectation, this closes criterion 11 without a further
-broad architect round. Since then, also closed: **criterion 1** (F11 found and fixed a real gap —
-`Sentry.init()` wasn't actually wrapped in try/catch on either side; fixed, server half verified via a
-forced-throw test, client half by construction/identical pattern; F12 confirmed init-ordering mechanically
-against the actual production bundle's byte offsets) and **criterion 13** (N=10 burst test: 10/10 delivered
-against the real `staging` Preview, ~7s window, release `70f741d53a2f`). Remaining: criterion 12's
-client-side source-map *resolution* check (upload itself already confirmed) and criterion 6's Sentry Logs
-check — both need a real browser against the Preview, which only Connor can drive (see CURRENT_STATE.md).
-Everything else round-7
-approved held up under live testing: server-side capture confirmed end-to-end (correct `environment` tag,
-real source resolution, clean breadcrumbs with no request/response bodies), build-time credentials
-confirmed working against the real Sentry account (source maps actually uploaded, `.map` files absent from
-shipped output).
+**DRAFT-7 — APPROVED (round-7, 9.8–10/10). Implementation complete (§2.1-2.6). ALL acceptance criteria and
+verification steps closed as of this update — nothing left to test.** Rounds 8-9 (§8) resolved the one
+architectural question this task raised (duplicate render-error capture): no Sentry integration disabled,
+§2.2's rationale rewritten to match live-verified reality, criterion 11 confirmed against a real deployed
+Preview (exactly one event, correct fields, zero independent client-side capture). Since then, also closed
+against the same real `staging` Preview: **criterion 1** (F11 found and fixed a real gap —
+`Sentry.init()` wasn't wrapped in try/catch on either side; fixed, verified via a forced-throw test
+server-side; F12 confirmed init-ordering mechanically against actual production-bundle byte offsets),
+**criterion 13** (N=10 burst test, 10/10 delivered, ~7s window), **criterion 12** (client-side exception
+resolved to real source `src/main.jsx:36:11`, release verified byte-for-byte via `git log --format=%H`, not
+assumed from the dashboard's truncated display), and **criterion 6** (`auth-settled`/`app-boot` confirmed
+in Sentry's Logs view with fully-shaped payloads). Every temporary test trigger used to produce this
+evidence was reverted and pushed in the immediately following commit — `git diff` confirms each one matches
+its pre-test state exactly. Server-side capture, build-time credentials, and source-map upload were all
+separately confirmed working end-to-end earlier in this same session. Remaining, deliberately deferred
+(not blocking, see CURRENT_STATE.md): mirroring the seven Sentry env vars into Vercel's **Production**
+scope (only Preview has them so far — do this when actually ready to ship), and registering
+`getsentry/sentry-mcp` for Claude Code (explicitly out of scope per §4).
 Seven review rounds closed every architectural gap raised: telemetry data classification, client/server
 initialization ordering, the shape-allowlist design, both safe wrappers' failure contracts, the production
 server-entry-point fix, byte-for-byte release identity, multi-invocation delivery, the dependency-policy
