@@ -201,12 +201,6 @@ export default function ChatPage() {
 
   const isEmpty = historyLoaded && messages.length === 0 && !loading;
 
-  // TEMPORARY — TASK-068 round-9 architect-required test: deliberate authenticated render error
-  // against a real deployed Preview. Reverted in the very next commit after use.
-  if (typeof window !== 'undefined' && window.location.search.includes('__task068_throw')) {
-    throw new Error('TASK-068 smoke test: deliberate authenticated render error (Preview)');
-  }
-
   return (
     // h-screen so the input bar stays at the bottom of the viewport.
     // The sidebar is sticky h-screen, so this fills the remaining column.
