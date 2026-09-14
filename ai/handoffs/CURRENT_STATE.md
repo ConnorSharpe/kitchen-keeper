@@ -4,6 +4,15 @@ TASK-068 — Wire up Sentry (errors + logs), migrate `debugLog.js`'s `logEvent()
 the closed investigation's diagnostic scaffolding. Spec: [TASK-068-spec.md](../tasks/TASK-068-spec.md)
 (DRAFT-7, approved 9.8-10/10). Previous task (TASK-067, service worker fix) archived below.
 
+**Post-ship hotfix (2026-09-14, no TASK number — small enough not to warrant one)**: Sentry's first
+real-world catch. `navigator.serviceWorker.register('/sw.js')` had no `.catch()` — a pre-existing,
+TASK-068-unrelated gap (that line predates TASK-068; TASK-068 never touched it) that had zero visibility
+until Sentry's global unhandled-rejection handler surfaced it. Low severity (registration failing doesn't
+break the app, just skips offline-caching setup for that session). Fixed in `client/src/main.jsx`: now
+`.catch()`es and logs `sw-register-failed` via `logEvent()` for visibility without counting as a full
+error. Shipped `staging`/`main` both at `cd6f1fa`, tests/lint/build all green, Preview gate bypassed per
+Connor's standing preference for small, well-tested app-code fixes (verify live on prod instead).
+
 # Current Status
 
 **DONE AND SHIPPED TO PRODUCTION.** Implementation complete, all acceptance criteria and verification
