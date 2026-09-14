@@ -29,7 +29,13 @@ logEvent('app-boot', {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () =>
-    navigator.serviceWorker.register('/sw.js')
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // Non-fatal — offline caching/push setup just won't be available this
+      // session (e.g. tab navigated away mid-registration, an extension or
+      // privacy setting blocked it). Logged for visibility, not surfaced as
+      // an app error.
+      logEvent('sw-register-failed', {});
+    })
   );
 }
 
