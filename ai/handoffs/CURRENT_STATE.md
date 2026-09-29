@@ -1,122 +1,111 @@
 # Task
 
-TASK-068 — Wire up Sentry (errors + logs), migrate `debugLog.js`'s `logEvent()` call sites to it, delete
-the closed investigation's diagnostic scaffolding. Spec: [TASK-068-spec.md](../tasks/TASK-068-spec.md)
-(DRAFT-7, approved 9.8-10/10). Previous task (TASK-067, service worker fix) archived below.
-
-**Post-ship hotfix (2026-09-14, no TASK number — small enough not to warrant one)**: Sentry's first
-real-world catch. `navigator.serviceWorker.register('/sw.js')` had no `.catch()` — a pre-existing,
-TASK-068-unrelated gap (that line predates TASK-068; TASK-068 never touched it) that had zero visibility
-until Sentry's global unhandled-rejection handler surfaced it. Low severity (registration failing doesn't
-break the app, just skips offline-caching setup for that session). Fixed in `client/src/main.jsx`: now
-`.catch()`es and logs `sw-register-failed` via `logEvent()` for visibility without counting as a full
-error. Shipped `staging`/`main` both at `cd6f1fa`, tests/lint/build all green, Preview gate bypassed per
-Connor's standing preference for small, well-tested app-code fixes (verify live on prod instead).
+TASK-069: Semantic retrieval for the chat agent (pgvector + hybrid lexical/vector search + eval harness).
+This is Phase A of 3 in the agent-knowledge roadmap: B = food knowledge graph + allergen guard, C = graph-backed
+household memory. Spec: [TASK-069-spec.md](../tasks/TASK-069-spec.md)
 
 # Current Status
 
-**DONE AND SHIPPED TO PRODUCTION.** Implementation complete, all acceptance criteria and verification
-steps closed, `staging` and `main` both at `d41a6ad` (fast-forward merge, pushed). All seven Sentry env
-vars added to Vercel's Production scope (mirroring Preview's values, `SENTRY_ENVIRONMENT`/
-`VITE_SENTRY_ENVIRONMENT` = `production` instead of `staging`, only `SENTRY_AUTH_TOKEN` sensitive). Full
-history: [TASK-068-spec.md Section
-8](../tasks/TASK-068-spec.md#8-live-verification-finding--pending-round-8-architect-review-post-implementation)
-and the spec's own criteria annotations (§5) for the evidence behind each.
+**Spec APPROVED (DRAFT-6, architect round 6, 2026-09-29). No code written yet.** The next phase is the
+pre-implementation gate G1–G9 (§2.0), with results recorded in spec §8. G9 must be recorded verbatim, and before
+any test authoring. The motivation is Connor's job-search portfolio (spec §0.1), so the eval harness and ADRs are
+first-class deliverables.
 
-**The one architectural question this task raised** (rounds 8-9): live testing found Sentry's own automatic
-instrumentation independently captured a React render error in the dev server, contradicting §2.2's
-original duplicate-error rationale. A production-build retest showed zero automatic captures; round-9
-confirmed against a real authenticated Preview that the intended `ErrorBoundary` → `/api/client-errors` →
-`captureExceptionSafely()` path alone produces exactly one event. No Sentry integration was disabled —
-`browserApiErrorsIntegration` stays fully enabled everywhere (disabling it would have cost real coverage
-across ten `addEventListener` call sites app-wide). §2.2's rationale is rewritten to match this.
-
-**Two real bugs caught and fixed by actually running things, not just writing code:**
-1. `safeSentryLog()`/`captureExceptionSafely()` only absorbed *synchronous* SDK throws, missed rejected
-   Promises — caught by `debugLog.test.js`'s failure-isolation test actually failing.
-2. `Sentry.init()` wasn't wrapped in try/catch on either side — would have aborted the whole module
-   evaluation on a real init failure (client: before React ever mounts; server: before `app.js` exports).
-   Found while preparing F11's check, fixed, verified server-side via a forced-throw test.
-
-Also fixed: `vite.config.js` originally read bare `process.env.SENTRY_ORG` etc., which doesn't reflect
-`.env.local` — switched to `loadEnv()`. And `main.jsx`'s `app-boot` `logEvent()` call was missing from §1's
-original audit table — found via the required repo-wide grep reconciliation, added, no code change needed
-(payload already fits the shape allowlist).
-
-**Every criterion in §5 confirmed with live evidence against the real Sentry account and, where the spec
-required it, a real deployed `staging` Preview** — not simulated: server/client error capture, Sentry Logs
-(`auth-settled`/`app-boot`), source-map resolution (byte-for-byte release verified via `git log`, not
-assumed from Sentry's truncated UI display), N=10 serverless burst delivery (10/10), init-ordering against
-the actual production bundle's byte offsets, init-failure-doesn't-block-boot. Full test suite (192 tests
-across shared/server/client), lint, and build all green throughout.
-
-Every temporary test trigger used to produce this evidence was committed, tested, then reverted in the
-immediately-following commit — `git diff` confirmed clean after each one.
+Also created this session: `ai/architecture/SYSTEM_OVERVIEW.md` and `ai/maps/FILE_MAP.md`. Both were missing.
 
 # Files Modified
 
-- `client/src/instrument.js` (new) — `Sentry.init()`, `safeSentryLog()`
-- `server/instrument.js` (new) — `Sentry.init()`, `captureExceptionSafely()`, `flush()`
-- `client/src/main.jsx` — `instrument.js` as first import; removed `lifecycleLog.js` imports/calls
-- `client/vite.config.js` — `@sentry/vite-plugin` wiring, `loadEnv()`, release injection
-- `client/src/lib/debugLog.js` — rewritten: `validateTelemetryShape()` + Sentry-backed `logEvent()`,
-  `isDebugEnabled`/`setDebugEnabled`/`getLog`/`clearLog` removed
-- `client/src/lib/debugLog.test.js` — rewritten against the new contract
-- `client/src/App.jsx` — removed `DebugPanel`, `PreconnectGoogleOAuth`, `AuthStateLogger`,
-  `SignFlowStateLogger`
-- `client/src/lib/authTransition.js` — removed `perfNowMs`, un-exported `GOOGLE_BUTTON_SELECTOR`, reworded
-  two comments referencing the now-deleted `lifecycleLog.js`
-- `server/app.js` — `instrument.js` import, error middleware calls `captureExceptionSafely()` + `flush()`
-- `server/routes/clientErrors.js` — routes through `captureExceptionSafely()`
-- `client/package.json`, `server/package.json` (+lockfiles) — three pinned dependencies;
-  `client/package.json`'s test script gained `--experimental-test-module-mocks`
-- `.env.example` — documented all seven new env vars
-- `ai/tasks/TASK-068-spec.md` — §2.0 decision table filled in; §1 table's `app-boot` gap added
-- `client/src/instrument.js`, `server/instrument.js` — `Sentry.init()` wrapped in try/catch (F11 fix, found
-  while preparing that check — wasn't guarded before, would have aborted module evaluation on either side)
-- **Deleted**: `client/src/components/DebugPanel.jsx`, `client/src/components/PreconnectGoogleOAuth.jsx`,
-  `client/src/lib/lifecycleLog.js`
+- `ai/tasks/TASK-069-spec.md` (new; 6 drafts, review history and dispositions in §9–§13)
+- `ai/architecture/SYSTEM_OVERVIEW.md` (new), `ai/maps/FILE_MAP.md` (new)
+- `ai/handoffs/CURRENT_STATE.md` (this file); TASK-068's handoff moved to `archive/TASK-068.md`
+
+# Files Required Next
+
+- `ai/tasks/TASK-069-spec.md`: §2.0 (G1–G9), §2.4 step 1b (the FOR SHARE mechanism G9 proves), §8
+- `server/db/migrations/meta/_journal.json`, `server/db/migrate.js` (G5)
+- `ai/migrations/MIGRATION_LEDGER.md` (before applying 0022 anywhere)
+
+# Files Already Reviewed (don't re-read unless changed)
+
+server/db/schema.js, server/routes/ai.js (chat route), server/services/aiService.js (chat(), PANTRY_TOOLS,
+context caps), server/services/ai/providerInterface.js, chatService.js, createToolHandlers.js,
+mealLogService.js (exports), recipeService.js (write paths), server/instrument.js (exports),
+client/src/lib/debugLog.js, drizzle-orm pg-core/dialect.js (migrator rule), ai/handoffs/CONVENTIONS.md.
+
+# Dependency Chain
+
+Editing (implementation phase): see spec §3 Allowed.
+Requires: recipes/meal_logs (read-only), households FK, server/instrument.js (adds logServerEvent), the OpenAI SDK.
+Irrelevant: client/**, auth, push, shopping, onboarding, recipeSearchService.
+
+# Architecture Notes
+
+- Facts verified in code during spec review. Each one corrected an earlier assumption:
+  - `logEvent()` is **client-only**; the server has only `captureExceptionSafely` and `flush`. Hence spec §2.11
+    `logServerEvent`.
+  - **Migrations never auto-run on Vercel.** `migrate.js` is imported only by local `server/index.js`.
+  - Drizzle's migrator applies a journal entry only if its `when` is greater than the latest applied
+    `created_at`; otherwise it is silently skipped (`dialect.js:45`).
+  - `recipes.id` and `meal_logs.id` are global SERIALs, so `UNIQUE(source_type, source_id)` is the stronger
+    constraint. G6 re-confirms this.
+  - Recipe context to the agent is `{id,name,tags}` only. Chat is trimmed to 50 messages.
+- There are no real-DB tests in the repo yet. TASK-069 adds opt-in `*.dbtest.js` (`RUN_DB_TESTS=1`, local only).
+
+# Decisions Made
+
+All are in the spec's decision table (§2.1) and disposition tables. Key ones:
+- pgvector in Neon; one `search_documents` table.
+- Hybrid FTS + vector with RRF; no ANN index.
+- Lazy reconcile with an interactive embed budget of 25.
+- Content-fingerprint staleness with a same-statement `FOR SHARE` guard.
+- Chat is excluded from the corpus.
+- Tool name: `search_recipes_and_meals`.
 
 # Remaining Work
 
-Nothing blocking, nothing left in the task's own scope. One optional item, out of scope for this diff:
-registering `getsentry/sentry-mcp` for Claude Code (spec §4) — a one-time local config step, whenever
-wanted.
+1. Gate G1–G9 against local/staging/production (read-only on staging and production, except the local
+   `CREATE EXTENSION`). **G9 fails → apply the pre-agreed fallback. Do not invent a third mechanism.**
+2. Red tests via the `test-writer` for criteria 1–11e.
+3. Implementation.
+4. Migration 0022 local → staging → production, logged in the ledger.
+5. Backfill.
+6. Evals and results doc.
+7. ADRs 0001–0005 and the README section.
+8. Separate small task, not yet filed: the README stack table says Gemini, but the app uses OpenAI.
 
 # Known Risks / Open Questions
 
-- Signed-out-user render errors never reach `captureExceptionSafely()` — `/api/client-errors` requires auth
-  (pre-existing, not introduced by this task), so the report 401s before the route handler runs. Recorded
-  in spec §8, not yet decided whether to special-case — a product/policy call, not an architecture one.
-- One Sentry-side observation (not this task's own scrubbing): `client.originalStack`'s value showed
-  `[Filtered]` in the dashboard during testing — Sentry's own default Data Scrubber, not
-  `validateTelemetryShape()` (which doesn't govern `captureExceptionSafely()`'s `clientContext`). Worth
-  knowing if `originalStack` content is ever needed for real debugging.
-- Everything else the spec itself flags in its own §7 (log-volume/free-tier quota, `err.message` content
-  bounded-not-scrubbed, the shape allowlist's scope) still applies unchanged — accepted trade-offs, not bugs.
+- G1 case (c) on any environment means STOP and no partial roll-forward (spec G1).
+- G9 is the empirical proof of the concurrency mechanism.
+- A new outbound data flow (full recipe and meal-log text to OpenAI embeddings) is accepted and must be
+  documented (spec R3).
+
+# Verification Results
+
+- None. This was spec-only; no code or tests changed.
 
 # Recommended Next Action
 
-None. Task closed. Next real trigger for touching Sentry again would be a future task, not follow-up on
-this one.
+In a fresh session, run gate G1–G9 exactly as written in spec §2.0 and record the results in §8. Stop at any
+failed gate per its stated rule.
+
+# Forbidden Exploration
+
+- client/**, and unrelated services (push, shopping, onboarding, household, suggestions, recipeSearchService)
 
 # Context Notes
 
-- branch: `staging` and `main` both at `d41a6ad` (fast-forward merge, no divergence). Two commits carry
-  permanent code (`dfa8d5a` implementation, `9ec380e` the F11 try/catch fix); the rest of this session's
-  commits on `staging` before the merge were temporary-test-trigger/revert pairs used to produce live
-  evidence for §5's criteria — code from those is gone from HEAD, kept in history.
-- No migration/schema work — `MIGRATION_LEDGER.md` doesn't apply to this task.
-- Pre-existing, unrelated to this task (carried forward, untouched): `.claude/settings.local.json`,
-  `ai/tasks/TASK-059-smoke-tests.md` (both modified), `ai/handoffs/archive/TASK-061-implementation.md`
-  (untracked) — not staged or committed by this task's sessions.
-- context pressure: medium
-- token usage concerns: none
+- branch: `staging` (spec work only, uncommitted).
+- Pre-existing uncommitted, unrelated to this work: `.claude/settings.local.json`,
+  `ai/tasks/TASK-059-smoke-tests.md`, and `ai/handoffs/archive/TASK-061-implementation.md` (untracked). Leave as is.
+- Enforcement kit: not checked this session (no code changes).
+- context pressure: high (long 6-round spec review); fresh session recommended.
 
 ---
 
 ## Archived History
 
+- TASK-068 (Sentry errors+logs, debugLog migration, shipped to production; SW-registration hotfix): see [archive/TASK-068.md](archive/TASK-068.md)
 - TASK-067 (service worker cross-origin cache-first fix, shipped to production, closed the TASK-063→067
   double-sign-in investigation): see [archive/TASK-067.md](archive/TASK-067.md)
 
