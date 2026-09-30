@@ -9,7 +9,6 @@ No task in progress. `staging` and `main` both at `f296436` (pushed). MIGRATION_
 # Open Items Carried Over (for Connor, not blocking)
 
 - Reset the Neon `neondb_owner` password (staging + prod DB URLs were pasted into chat during TASK-069).
-- Local DB residue from the TASK-069 smoke test: `chat_messages` id > 144 and `search_documents` for household 1.
 - Pre-existing Sentry issue KITCHEN-KEEPER-SERVER-2 (Authentication required, GET /api/pantry), last seen 2026-09-29.
 - Follow-up chips offered: log agent search-tool args; investigate agent ignoring correct hits (chickpeas) + synonym misses.
   Also the lint chip for the 30 pre-existing `no-undef` errors in `.claude/hooks/tdd/*.mjs`.
