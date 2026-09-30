@@ -111,7 +111,12 @@ Irrelevant: client/**, auth, push, shopping, onboarding, recipeSearchService.
 
 # Recommended Next Action
 
-Smoke-test the staging Preview (§6 step 4 checks), check Sentry for retrieval errors. Then production (§6 step 7).
+Staging Preview smoke 2026-09-30 (household 1, via Chrome): ingredient query PASS (coconut sugar → Curry Cod);
+control PASS; no console errors; Sentry not checked (connector unauthenticated). **Meal-log query FAIL:** "When did I last
+eat Spam Musubi?" → "no records … for this month". Direct `searchRecipesAndMeals(1)` on staging returns it first with no
+date filter and nothing with a Sept filter, so the agent likely added an unrequested date filter (args aren't logged).
+Connor to decide: accept for Phase A or fix the tool description/prompt (out of §3 scope as written) before production.
+Test chat rows 99–104 deleted (max id back to 98).
 
 # Forbidden Exploration
 
