@@ -5,7 +5,7 @@ Phase A of the agent-knowledge roadmap. Spec: [TASK-069-spec.md](../tasks/TASK-0
 
 # Current Status
 
-**Green COMPLETE for criteria 1–11e, UNCOMMITTED on `staging`. Migration 0022 applied on local only.**
+**Green COMPLETE for criteria 1–11e, committed on `staging` (`7e34395`), not pushed. Migration 0022 applied on local only.**
 Unit tests 223/223, dbtests 44/44 (local), eslint clean. Three locked tests were fixed with Connor's
 permission (see Decisions Made).
 
@@ -65,10 +65,9 @@ Irrelevant: client/**, auth, push, shopping, onboarding, recipeSearchService.
 
 # Remaining Work
 
-1. Commit Green (not committed yet; nothing pushed).
-2. Local smoke test (§6 step 4), then evals + results doc, ADRs 0001–0005, README section.
-3. 0022 on staging → push staging → backfill; then production (ledger row each, per the migrations skill).
-4. Separate, unfiled task: the README stack table says Gemini.
+1. Local smoke test (§6 step 4), then evals + results doc, ADRs 0001–0005, README section.
+2. 0022 on staging → push staging → backfill; then production (ledger row each, per the migrations skill).
+3. Separate, unfiled task: the README stack table says Gemini.
 
 # Known Risks / Open Questions
 
@@ -84,7 +83,7 @@ Irrelevant: client/**, auth, push, shopping, onboarding, recipeSearchService.
 
 # Recommended Next Action
 
-Fresh session: commit Green, then run the local smoke test (spec §6 step 4) via the `smoke-testing` skill.
+Fresh session: run the local smoke test (spec §6 step 4) via the `smoke-testing` skill.
 
 # Forbidden Exploration
 
@@ -92,13 +91,12 @@ Fresh session: commit Green, then run the local smoke test (spec §6 step 4) via
 
 # Context Notes
 
-- branch: `staging`. TASK-069 Green is uncommitted. Nothing pushed.
+- branch: `staging`. TASK-069 Green committed (`7e34395`). Nothing pushed.
 - TDD enforcement kit INSTALLED 2026-09-30, copied from the Ahab-phisherman project (Node port). Files:
   `.claude/{settings.json,tdd-config.json,flaky-quarantine.json,hooks/tdd/*,tdd-state/.gitignore}`,
   `githooks/pre-commit`. The only script change: `tdd_record_result.mjs` also recognizes `node … --test`.
   All 9 simulated hook checks behave correctly. Hooks take effect from the next session.
-  **`git config core.hooksPath githooks` is NOT set yet.** The 3 test fixes above (approved in chat before the kit
-  existed) would be blocked, having no consumed-approval record. Plan: commit TASK-069 Green first, then set it.
+  `git config core.hooksPath githooks` is SET (2026-09-30), after committing TASK-069 Green (`7e34395`) and the kit (`1af7501`).
 - Kit gaps: flaky-quarantine.json is not wired into node:test (no file-exclude config). No STABLE_CONTEXT.md
   exists to sync `alwaysExemptPatterns` with. CI (`.github/workflows/ci.yml`) runs on main only, on Node 20
   (`--experimental-test-module-mocks` needs Node ≥22.3), and doesn't run client tests.
