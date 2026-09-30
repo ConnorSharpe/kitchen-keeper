@@ -111,13 +111,16 @@ Irrelevant: client/**, auth, push, shopping, onboarding, recipeSearchService.
 
 # Recommended Next Action
 
-Staging Preview smoke 2026-09-30 (household 1, via Chrome): ingredient query PASS (coconut sugar → Curry Cod);
+Staging Preview smoke #1 2026-09-30 (household 1, via Chrome): ingredient query PASS (coconut sugar → Curry Cod);
 control PASS; no console errors; Sentry not checked (connector unauthenticated). **Meal-log query FAIL:** "When did I last
 eat Spam Musubi?" → "no records … for this month". Direct `searchRecipesAndMeals(1)` on staging returns it first with no
 date filter and nothing with a Sept filter, so the agent likely added an unrequested date filter (args aren't logged).
 Connor chose "fix it first": `date_from`/`date_to` param descriptions now say omit unless the user names a date/period
 (`aiService.js` PANTRY_TOOLS search entry, within §3; top-level description unchanged, it's pinned by a locked test).
 Red-first via test-writer: new `server/services/aiService.searchDateGuidance.test.js`. Server 225/225, root 118/118.
+Pushed `ea2901b`; re-smoke on the Preview 2026-09-30 03:44Z: Spam Musubi → June 24 PASS, "what did I eat on June 22" → eggs, milk
+PASS (dates still used when named), coconut sugar → Curry Cod PASS, no console errors. Test chat rows 105–110 deleted (max id 98).
+**Staging §6 step 6 done except the Sentry check.** Next: production (§6 step 7).
 Test chat rows 99–104 deleted (max id back to 98).
 
 # Forbidden Exploration
