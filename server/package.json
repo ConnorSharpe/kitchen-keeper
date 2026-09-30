@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "nodemon index.js",
     "start": "node index.js",
-    "test": "node --experimental-test-module-mocks --test"
+    "test": "node --experimental-test-module-mocks --test",
+    "test:db": "node --experimental-test-module-mocks --test --test-concurrency=1 \"test/db/*.dbtest.js\""
   },
   "dependencies": {
     "@clerk/express": "^1.7.81",

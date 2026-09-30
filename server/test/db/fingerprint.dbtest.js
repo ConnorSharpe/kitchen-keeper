@@ -35,9 +35,11 @@ suite('recipe fingerprint encoding on the local database', () => {
     return rows[0].fp;
   }
 
-  async function fingerprintsOf(hh, a, b) {
-    const idA = await insertRecipe(hh, { ...a, savedAt: '2026-09-01T10:00:00.000Z' });
-    const idB = await insertRecipe(hh, { ...b, savedAt: '2026-09-01T10:00:00.000Z' });
+  // A and B go in separate households: recipes are unique on (household_id, name), and several
+  // pairs share a name. household_id is not a fingerprint input, so this changes nothing compared.
+  async function fingerprintsOf([hhA, hhB], a, b) {
+    const idA = await insertRecipe(hhA, { ...a, savedAt: '2026-09-01T10:00:00.000Z' });
+    const idB = await insertRecipe(hhB, { ...b, savedAt: '2026-09-01T10:00:00.000Z' });
     return [await fingerprint(idA), await fingerprint(idB)];
   }
 
@@ -63,8 +65,8 @@ suite('recipe fingerprint encoding on the local database', () => {
 
   for (const [label, a, b] of pairs) {
     test(`fingerprints differ: ${label}`, async () => {
-      await withHouseholds(1, async ([hh]) => {
-        const [fa, fb] = await fingerprintsOf(hh, a, b);
+      await withHouseholds(2, async (hhs) => {
+        const [fa, fb] = await fingerprintsOf(hhs, a, b);
         assert.equal(typeof fa, 'string');
         assert.equal(typeof fb, 'string');
         assert.notEqual(fa, fb);
@@ -73,9 +75,9 @@ suite('recipe fingerprint encoding on the local database', () => {
   }
 
   test('identical rows produce identical fingerprints across two separate queries', async () => {
-    await withHouseholds(1, async ([hh]) => {
+    await withHouseholds(2, async (hhs) => {
       const same = { name: 'Same Recipe', description: 'Same description' };
-      const [fa, fb] = await fingerprintsOf(hh, same, same);
+      const [fa, fb] = await fingerprintsOf(hhs, same, same);
       assert.equal(fa, fb);
     });
   });

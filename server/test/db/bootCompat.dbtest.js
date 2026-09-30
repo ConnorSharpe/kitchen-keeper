@@ -49,7 +49,9 @@ suite('schema boot compatibility on the local database', () => {
     for (let i = 0; i < 2; i++) {
       const r = spawnSync(
         process.execPath,
-        ['--input-type=module', '-e', "import './loadEnv.js'; await import('./db/migrate.js'); process.exit(0);"],
+        // No process.exit(): on Windows (Node 24) forcing exit while the migrator's HTTP handles
+        // are still closing trips a libuv assertion (exit 127). The process exits on its own.
+        ['--input-type=module', '-e', "import './loadEnv.js'; await import('./db/migrate.js');"],
         { cwd: SERVER_DIR, encoding: 'utf8', timeout: 90000, env: { ...process.env } }
       );
       assert.equal(r.status, 0, `boot ${i + 1} failed: ${r.stderr}`);

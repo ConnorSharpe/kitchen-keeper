@@ -2,7 +2,7 @@ import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import path from 'node:path';
-import { spawnSync, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { enabled, boot, q, createHousehold, deleteHouseholds, bulkRecipes, bulkMealLogs, SERVER_DIR } from './dbHarness.js';
 
 // TASK-069 criterion 9, first bullet: without --execute the backfill performs no writes and

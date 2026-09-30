@@ -4,6 +4,7 @@ import { removePantryItem } from './handlers/removePantryItem.js';
 import { consumePantryItem } from './handlers/consumePantryItem.js';
 import { suggestRecipes } from './handlers/suggestRecipes.js';
 import { saveRecipe } from './handlers/saveRecipe.js';
+import { searchRecipesAndMeals } from './handlers/searchRecipesAndMeals.js';
 
 // ctx = { householdId, history, allItems, expiringItems, allRecipes, requestId, result }
 // `result` is a mutable holder ({ recipeSuggestions: [] }) written by the suggest_recipes
@@ -19,5 +20,6 @@ export function createToolHandlers(ctx) {
     consume_pantry_item: (args) => consumePantryItem(args, ctx),
     suggest_recipes: (args) => suggestRecipes(args, ctx),
     save_recipe: (args) => saveRecipe(args, ctx),
+    search_recipes_and_meals: (args) => searchRecipesAndMeals(args, ctx),
   };
 }

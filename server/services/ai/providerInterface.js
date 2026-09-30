@@ -51,4 +51,10 @@ export class AIProvider {
   isResponseValid(response) {
     throw new Error('Not implemented');
   }
+
+  // Embeds texts for retrieval (TASK-069). Returns one vector per input, in input order.
+  // texts: string[] → Promise<number[][]>
+  async embed(texts) {
+    throw new Error('Not implemented');
+  }
 }

@@ -1,100 +1,90 @@
 # Task
 
 TASK-069: Semantic retrieval for the chat agent (pgvector + hybrid lexical/vector search + eval harness).
-This is Phase A of the agent-knowledge roadmap. Spec: [TASK-069-spec.md](../tasks/TASK-069-spec.md)
+Phase A of the agent-knowledge roadmap. Spec: [TASK-069-spec.md](../tasks/TASK-069-spec.md)
 
 # Current Status
 
-**Gate G1–G9 CLOSED (2026-09-29), all passing; recorded in spec §8. Red tests written and committed. NO
-implementation code exists.**
-- G9 passed exactly, so the strong `FOR SHARE` invariant stands and the fallback was not applied.
-- G1 is case (b) on staging and production: the extension is not installed, but `neondb_owner` can create it.
-  The `vector` extension 0.8.0 is now installed on local only (by the gate).
-- All three environments share the same migration history: 7 rows, max `created_at` 1785171529668 (0020).
+**Green COMPLETE for criteria 1–11e, UNCOMMITTED on `staging`. Migration 0022 applied on local only.**
+Unit tests 223/223, dbtests 44/44 (local), eslint clean. Three locked tests were fixed with Connor's
+permission (see Decisions Made).
 
 # Files Modified
 
-- `ai/tasks/TASK-069-spec.md` §8 (gate results, G9 verbatim)
-- New Red tests, all untracked until this commit. Every file is locked, and editing any of them needs
-  Connor's per-file permission:
-  - `server/services/retrieval/{constants,documents,fusion,indexer,searchService}.test.js`
-  - `server/services/ai/openaiProvider.test.js`
-  - `server/instrument.test.js`
-  - `server/services/chat/handlers/searchRecipesAndMeals{,.unavailable}.test.js`
-  - `server/services/aiService.pantryTools.test.js`
-  - `server/services/chat/createToolHandlers.test.js`
-  - `server/scripts/backfillSearchDocuments.test.js`
-  - `server/test/db/{backfill,bootCompat,fingerprint,reconcile,tenancy}.dbtest.js`
-  - `server/test/db/dbHarness.js` (helper)
+- New: `server/services/retrieval/{constants,documents,fusion,indexer,searchService}.js`,
+  `server/services/chat/handlers/searchRecipesAndMeals.js`, `server/scripts/backfillSearchDocuments.js`,
+  `server/db/migrations/0022_search_documents.sql`, `server/test/db/snapshotGuard.dbtest.js` (test-writer,
+  Red first: it failed on the missing migration/export; now locked)
+- Edited: `server/db/schema.js` (`searchDocuments` + `vector`/`tsvector` customType),
+  `db/migrations/meta/_journal.json` (idx 20, `when` 1790728028520), `server/instrument.js` (`logServerEvent`),
+  `services/ai/{providerInterface,openaiProvider}.js` (`embed`, `EMBEDDING_MODEL`), `services/aiService.js`
+  (tool entry, one prompt rule, `export PANTRY_TOOLS`), `services/chat/createToolHandlers.js`,
+  `server/package.json` (`test:db` script), `ai/migrations/MIGRATION_LEDGER.md` (row 6)
 
 # Files Required Next
 
-- Spec §2.2–§2.11, §3 (Allowed), §5 (criteria), §8 (G9 statement and fingerprint expression to reuse verbatim)
-- The test files above. They define the seams the implementation must meet (see Decisions Made).
-- `ai/migrations/MIGRATION_LEDGER.md` before applying 0022 anywhere
+- The 3 locked test files named in Known Risks, only once Connor grants permission
+- Spec §2.8 (eval), §2.10 (ADRs/README), §6 steps 4–7 for the rollout
 
 # Files Already Reviewed (don't re-read unless changed)
 
-server/db/schema.js (recipes/meal_logs/households), server/db/migrate.js, drizzle migrator.js and
-pg-core/dialect.js, meta/_journal.json, plus everything listed in the spec's review history.
+Spec §2–§8 and every TASK-069 test file. Also `dbHarness.js`, `aiService.js` (tool list and prompt rules),
+`resolveProvider.js`, `loadEnv.js`, `db/client.js`, `db/migrate.js`.
 
 # Dependency Chain
 
-Editing (implementation): spec §3 Allowed only.
-Requires: recipes/meal_logs (read-only), households FK, the OpenAI SDK, and `@neondatabase/serverless` 0.10.4
-(HTTP for production, websocket `Pool` in tests only).
+Editing: spec §3 Allowed only (all edits so far are inside it).
+Requires: recipes/meal_logs (read-only), households FK, `resolveProvider()` → OpenAI SDK, drizzle `db.execute`.
 Irrelevant: client/**, auth, push, shopping, onboarding, recipeSearchService.
 
 # Architecture Notes
 
-- The G9-proven fingerprint expression is `md5(json_build_array(r.name, r.description, r.tags, r.ingredients,
-  r.steps, r.saved_at)::text)`. `RECIPE_FINGERPRINT_SQL` must use it verbatim (indexer.test.js asserts it).
-- On Node 24 the websocket `Pool` needs no `neonConfig.webSocketConstructor` (G8).
-- `node --test`'s default discovery includes `**/test/**/*.js`, so the dbtests run inside `npm test`. Without
-  `RUN_DB_TESTS=1` they skip, and they refuse any host other than `ep-icy-rice-` (local).
+- `upsertRecipeDocuments` is ONE statement for the batch: a `jsonb_to_recordset` payload CTE, then
+  `src` (`JOIN recipes r` … `ORDER BY r.id FOR SHARE OF r`), then a top-level INSERT … ON CONFLICT … WHERE
+  household matches. The G9 shape is otherwise unchanged. 11d(v) proves the batched/joined form still
+  blocks and rechecks (commit → `written=[]`, rollback → `[rid]`).
+- Household-mismatch integrity check: a separate query in `reconcileHousehold`, run only when some
+  snapshots went unwritten. It emits `retrieval-integrity` plus `captureExceptionSafely`.
+- `reconcileHousehold` also returns `docCount`, `reconcileEmbed`, `embedTokens` (extra fields beyond C9).
+  `searchService` logs them, so it issues no extra queries (the C2 statement classification stays clean).
+- The search `mode` override: `lexical` skips the query embed and vector query; `vector` skips lexical.
+  The returned `mode` is the override's name. The eval uses this.
+- `planReconcile(hh)` (read-only) powers the backfill dry run and shares the detect queries with reconcile.
+- Backfill loads `.env.local` only for `--env local`. Staging and production need `DATABASE_URL` set explicitly.
 
 # Decisions Made
 
-- **Interface contract = spec §2.12 (C1–C11). It applies to TASK-069 ONLY.** These are the test-writer's
-  Red-phase seam assumptions, which Connor accepted as-is on 2026-09-29. The locked tests enforce them, so the
-  implementation must match them exactly. They are **not** repo conventions: don't cite them in future specs,
-  and don't refactor other code toward them. Future specs state their own contracts, per the new
-  `ai-context-files` rule "pin the interface contract for every seam a test will touch".
-- §2.4 addendum: the guarded upsert is `upsertRecipeDocuments(householdId, snapshots) → { written: number[] }`.
-- §3 Allowed was widened to match: `constants.js`, the `PANTRY_TOOLS` export, `dbHarness.js`, and tests for the
-  backfill script and `aiService`.
+- `test:db` runs the dbtest files serially (`--test-concurrency=1`). backfill.dbtest's "writes nothing"
+  counts ALL `search_documents` rows, so it fails when other files write concurrently.
+- 2026-09-30 Connor: "You have permission to fix all three test files". The enforcement kit isn't installed,
+  so `approve_test_rewrite.sh` doesn't exist and was not run. Edits:
+  - `fingerprint.dbtest.js`: each pair is seeded in 2 households, because recipes are unique on
+    (household_id, name) and household_id is not a fingerprint input.
+  - `bootCompat.dbtest.js`: the child no longer calls `process.exit(0)` (Windows/Node 24 libuv crash).
+  - `backfill.dbtest.js`: removed the unused `spawnSync` import.
 
 # Remaining Work
 
-1. **Before implementing:** have the test-writer author `server/test/db/snapshotGuard.dbtest.js` for 11d(i),
-   11d(ii), 11d(iii) and 11d(v), against the §2.4 addendum. These are NOT written yet. The spec work is done:
-   §2.4 names the function, and §2.12 records the contract.
-2. Implementation (Green) via the `implementer`.
-3. Migration 0022: local, then staging, then production. Each application goes in the ledger with an honest
-   status. G1 case (b) means 0022 creates the extension itself. The journal `when` must be > 1785171529668.
-4. Backfill, evals and results doc, ADRs 0001–0005, README section.
-5. Separate task, not yet filed: the README stack table says Gemini, but the app uses OpenAI.
+1. Commit Green (not committed yet; nothing pushed).
+2. Local smoke test (§6 step 4), then evals + results doc, ADRs 0001–0005, README section.
+3. 0022 on staging → push staging → backfill; then production (ledger row each, per the migrations skill).
+4. Separate, unfiled task: the README stack table says Gemini.
 
 # Known Risks / Open Questions
 
-- **The suite is RED on `staging` (34 failing unit tests).** Do not push until Green, or CI goes red.
-- The seam assumptions were guesses. If the implementer finds one unworkable, escalate to Connor. Never
-  edit a locked test.
-- A new outbound data flow (recipe and meal-log text to OpenAI embeddings) must be documented (spec R3).
+- Don't push until the rollout is sequenced: staging needs 0022 applied first (ledger), per the migrations skill.
+- R3: the new outbound data flow to OpenAI embeddings must be documented in ADR-0001 and the README.
 
 # Verification Results
 
-- New unit tests: 35, of which 34 FAIL (missing modules/exports, the correct Red reason) and 1 passes
-  (an intentional regression guard).
-- Full `npm test` in server: 134 tests, 100 pass, 34 fail (exactly the new ones; existing suite unaffected).
-- dbtests with `RUN_DB_TESTS=1` on local: all FAIL with "migration 0022 not applied" (expected).
+- `server` npm test: 223 pass / 0 fail.
+- `RUN_DB_TESTS=1 npm run test:db` (local): 44/44 pass.
+- eslint on changed source + server/test/db: clean.
+- 0022 on local: `vector` 0.8.0, table + 4 indexes, `__drizzle_migrations` 8 rows, max 1790728028520.
 
 # Recommended Next Action
 
-In a fresh session:
-1. Read spec §2.12 first. It is TASK-069 only.
-2. Have the test-writer write `snapshotGuard.dbtest.js` (11d(i–iii,v)) and confirm it is Red.
-3. Then start Green with the implementer, applying migration 0022 locally first (log it in the ledger).
+Fresh session: commit Green, then run the local smoke test (spec §6 step 4) via the `smoke-testing` skill.
 
 # Forbidden Exploration
 
@@ -102,13 +92,19 @@ In a fresh session:
 
 # Context Notes
 
-- branch: `staging`. Committed locally, not pushed (the suite is red).
-- Enforcement kit NOT installed (no `.claude/tdd-config.json`). Test locking is by rule only.
+- branch: `staging`. TASK-069 Green is uncommitted. Nothing pushed.
+- TDD enforcement kit INSTALLED 2026-09-30, copied from the Ahab-phisherman project (Node port). Files:
+  `.claude/{settings.json,tdd-config.json,flaky-quarantine.json,hooks/tdd/*,tdd-state/.gitignore}`,
+  `githooks/pre-commit`. The only script change: `tdd_record_result.mjs` also recognizes `node … --test`.
+  All 9 simulated hook checks behave correctly. Hooks take effect from the next session.
+  **`git config core.hooksPath githooks` is NOT set yet.** The 3 test fixes above (approved in chat before the kit
+  existed) would be blocked, having no consumed-approval record. Plan: commit TASK-069 Green first, then set it.
+- Kit gaps: flaky-quarantine.json is not wired into node:test (no file-exclude config). No STABLE_CONTEXT.md
+  exists to sync `alwaysExemptPatterns` with. CI (`.github/workflows/ci.yml`) runs on main only, on Node 20
+  (`--experimental-test-module-mocks` needs Node ≥22.3), and doesn't run client tests.
 - Pre-existing uncommitted changes, unrelated and left as is: `.claude/settings.local.json`,
   `ai/tasks/TASK-059-smoke-tests.md`, `ai/handoffs/archive/TASK-061-implementation.md`.
-- Staging and production credentials are not available to Claude (pulling them was blocked). Connor runs the
-  read-only SQL for those environments in the Neon SQL Editor.
-- context pressure: high; fresh session required.
+- context pressure: medium; fresh session recommended (phase boundary: Green verified).
 
 ---
 

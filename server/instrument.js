@@ -37,6 +37,31 @@ export function flush(timeoutMs) {
   return Sentry.flush(timeoutMs);
 }
 
+// TASK-069 §2.11: server counterpart of the client's logEvent(). Same flat-primitive shape rule
+// as the client's validateTelemetryShape (strings truncated; nested objects/arrays dropped), and
+// the same never-throw contract as captureExceptionSafely(). Kept separate from the client
+// module on purpose: client and server bundles stay independent.
+const MAX_EVENT_TAG_LENGTH = 100;
+const MAX_EVENT_STRING_LENGTH = 500;
+
+export function logServerEvent(tag, data = {}) {
+  try {
+    const attributes = {};
+    for (const [key, value] of Object.entries(data ?? {})) {
+      if (typeof value === 'string') attributes[key] = value.slice(0, MAX_EVENT_STRING_LENGTH);
+      else if (value === null || typeof value === 'number' || typeof value === 'boolean') {
+        attributes[key] = value;
+      }
+    }
+    const result = Sentry.logger.info(String(tag).slice(0, MAX_EVENT_TAG_LENGTH), attributes);
+    if (result && typeof result.then === 'function') {
+      result.catch(() => {});
+    }
+  } catch {
+    // Telemetry failure must never be fatal or alter application control flow.
+  }
+}
+
 export function captureExceptionSafely(
   error,
   { clientContext, requestId, deploy, householdId, userId } = {}

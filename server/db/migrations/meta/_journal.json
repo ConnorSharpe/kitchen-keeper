@@ -141,6 +141,13 @@
       "when": 1785171529668,
       "tag": "0020_suggestions",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1790728028520,
+      "tag": "0022_search_documents",
+      "breakpoints": true
     }
   ]
 }

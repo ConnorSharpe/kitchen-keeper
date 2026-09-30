@@ -7,6 +7,8 @@ import {
   serial,
   jsonb,
   pgEnum,
+  timestamp,
+  customType,
 } from 'drizzle-orm/pg-core';
 
 export const households = pgTable('households', {
@@ -216,4 +218,32 @@ export const suggestions = pgTable('suggestions', {
   createdAt: text('created_at')
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
+});
+
+// TASK-069: derived retrieval index (migration 0022). drizzle 0.29 has no native pgvector or
+// tsvector types, so both are customType; vector and FTS queries use raw sql templates
+// (services/retrieval/*). content_tsv is a GENERATED column: never write it.
+const vector = customType({
+  dataType: () => 'vector(1536)',
+  toDriver: (value) => `[${value.join(',')}]`,
+  fromDriver: (value) => JSON.parse(value),
+});
+const tsvector = customType({ dataType: () => 'tsvector' });
+
+export const searchDocuments = pgTable('search_documents', {
+  id: serial('id').primaryKey(),
+  householdId: integer('household_id')
+    .notNull()
+    .references(() => households.id, { onDelete: 'cascade' }),
+  sourceType: text('source_type').notNull(), // 'recipe' | 'meal_log'
+  sourceId: integer('source_id').notNull(), // no FK: orphans are GC'd per household (spec §2.4)
+  content: text('content').notNull(),
+  contentHash: text('content_hash').notNull(),
+  contentTsv: tsvector('content_tsv'),
+  occurredAt: timestamp('occurred_at', { withTimezone: true, mode: 'string' }).notNull(),
+  sourceFingerprint: text('source_fingerprint'), // recipes only
+  embedding: vector('embedding'),
+  embeddingModel: text('embedding_model'),
+  embeddedHash: text('embedded_hash'),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 });

@@ -1,6 +1,11 @@
 import OpenAI from 'openai';
 import { AIProvider, AIProviderError } from './providerInterface.js';
 
+// TASK-069 D6: the model name is stored per search_documents row, so changing it makes every
+// existing embedding detectably stale.
+export const EMBEDDING_MODEL = 'text-embedding-3-small';
+export const EMBEDDING_DIMENSIONS = 1536;
+
 export class OpenAIProvider extends AIProvider {
   constructor(apiKey) {
     super();
@@ -107,5 +112,29 @@ export class OpenAIProvider extends AIProvider {
 
   isResponseValid(response) {
     return response.choices[0].finish_reason !== 'content_filter';
+  }
+
+  // One API call for the whole batch. Vectors come back in input order (the API's `index`
+  // field is authoritative, not array position). onUsage receives usage.prompt_tokens so
+  // callers can log billed tokens without changing the return shape.
+  async embed(texts, { onUsage } = {}) {
+    let response;
+    try {
+      response = await this.client.embeddings.create({ model: EMBEDDING_MODEL, input: texts });
+    } catch (err) {
+      throw new AIProviderError(err.message, err);
+    }
+
+    const vectors = new Array(texts.length);
+    for (const item of response.data ?? []) vectors[item.index] = item.embedding;
+    for (let i = 0; i < texts.length; i++) {
+      if (!Array.isArray(vectors[i]) || vectors[i].length !== EMBEDDING_DIMENSIONS) {
+        throw new AIProviderError(
+          `Embedding ${i} has ${vectors[i]?.length ?? 0} dimensions, expected ${EMBEDDING_DIMENSIONS}`
+        );
+      }
+    }
+    onUsage?.(response.usage?.prompt_tokens ?? null);
+    return vectors;
   }
 }
