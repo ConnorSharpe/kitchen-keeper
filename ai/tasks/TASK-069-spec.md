@@ -19,6 +19,8 @@ beyond what §2 states.
 | 4 | DRAFT-4 | 🟡 REQUEST CHANGES (one blocker from approval) | 1 blocker: the authoritative-snapshot guard is not serialized against concurrent source mutation. The review's stated sequence was already safe; the genuine window is a source commit during the statement. Plus should-fixes on fingerprint encoding, `pending`, the failure table, extension provisioning, eval wording, and telemetry. See §12. |
 | 5 | DRAFT-5 | 🟡 REQUEST CHANGES (one residual blocker) | B1: the CTE + `FOR SHARE` re-evaluation claim is unproven for this composition; the test must prove the exact production shape and distinguish lock-wait from queueing. 10 should-fixes, several already covered. See §13. |
 | 6 | DRAFT-6 | 🟢 APPROVE | B1 resolved (G9 empirical gate + observed lock-wait + pre-agreed fallback). All S1–S10 closed, including the evidence-backed declines of S1, S4, S7 and the partial S8. §2.11 correction endorsed. No further review cycle unless G9 forces the fallback. |
+| — | DRAFT-6 + addendum | (no review round) | 2026-09-29, authorized by Connor: §2.4 now names the guarded-upsert export `upsertRecipeDocuments(householdId, snapshots) → {written}`, and 11d references it. This is an interface clarification only; the mechanism is unchanged and G9-proven. It was needed because the test-writer could not author 11d(i–iii,v) against an unnamed function. |
+| — | DRAFT-6 + addendum 2 | (no review round) | 2026-09-29, authorized by Connor: §2.12 records the 11 test-writer seam assumptions (C1–C11) as the interface contract **for TASK-069 only**, and §3 Allowed gains `constants.js`, the `PANTRY_TOOLS` export, `dbHarness.js`, and tests for the backfill script and `aiService`. Behavior is unchanged. |
 
 ---
 
@@ -430,6 +432,34 @@ with that `household_id`. This includes orphan deletion. No statement in the ind
      and no embed (criterion 4).
    - `content_tsv` is generated, so **changed rows are lexically searchable immediately**, before
      embedding.
+
+   **Named export for the guarded upsert (post-approval addendum, 2026-09-29, authorized by Connor).** Criterion 11d
+   must call the guarded upsert directly with a deliberately stale snapshot, so the upsert is a named export
+   of `indexer.js`. `reconcileHousehold` calls it too, which makes the tested path the production path
+   (neon-http, a single statement, the same SQL text).
+
+   ```js
+   /**
+    * @param {number} householdId
+    * @param {Array<{ sourceId: number, fingerprint: string, content: string,
+    *                 contentHash: string, occurredAt: string }>} snapshots
+    *   fingerprint = RECIPE_FINGERPRINT_SQL of the row as it was read;
+    *   content/contentHash/occurredAt = buildRecipeDocument() output for that same read.
+    * @returns {Promise<{ written: number[] }>}
+    *   source ids actually inserted or updated, ascending (from `RETURNING search_documents.source_id`).
+    *   "Rows affected" in criterion 11d = `written.length`.
+    */
+   export async function upsertRecipeDocuments(householdId, snapshots)
+   ```
+   - It issues **one** statement for the whole batch, in the §8 G9-proven shape: `FOR SHARE` in the `src` CTE,
+     the fingerprint check in its `WHERE`, rows locked in `ORDER BY id`, and the target the real
+     `search_documents` table.
+   - An empty `snapshots` array issues no statement and resolves `{ written: [] }`.
+   - A snapshot left out of `written` is not an error. Its fingerprint no longer matched, the recipe was
+     deleted, or there was a household mismatch on conflict; the mismatch is also logged as an integrity
+     error per the list above.
+   - A database error **rejects**. Isolating failures is `reconcileHousehold`'s job, not this function's.
+   - Meal-log inserts are not part of this function.
 2. **Garbage-collect orphans, per source type, household-scoped:**
    - `DELETE FROM search_documents d WHERE d.household_id = $1 AND d.source_type = 'recipe' AND NOT
      EXISTS (SELECT 1 FROM recipes r WHERE r.id = d.source_id AND r.household_id = $1)`.
@@ -719,6 +749,44 @@ DRAFT-6 adds a minimal server equivalent to `server/instrument.js`:
 
 ---
 
+### 2.12 Interface contract: accepted test-writer assumptions (TASK-069 ONLY)
+
+**Scope: this task only (post-approval addendum, 2026-09-29, authorized by Connor).** The spec described
+behavior but not these seams. The test-writer had to assume them during Red, and Connor accepted all of them
+as-is so the locked tests stand. They are binding **for TASK-069's implementation**, because the tests
+enforce them. They are **not** project conventions or precedent:
+- A future task must not cite them as "how this repo does it".
+- A future spec must state its own interface contract up front.
+
+Where one of them differs from existing code patterns, that is deliberate and limited to this task, not a
+signal to refactor other code toward it.
+
+| # | Seam | Contract |
+|---|---|---|
+| C1 | DB access | All retrieval SQL goes through `db.execute(sql\`…\`)` from `server/db/client.js`; result rows are read from `.rows`. |
+| C2 | Query-text markers | The vector candidate query is the **only** statement containing `<=>`. The lexical candidate query is the **only** one containing `websearch_to_tsquery`. Any other search statement is the source join. Unit tests classify captured SQL this way. |
+| C3 | Embedding mock boundary | Embeddings reach OpenAI through the `openai` npm package, which is what tests mock. `OpenAIProvider.embed(texts: string[]) → Promise<number[][]>`. It honors `OPENAI_BASE_URL` (the SDK default), which the backfill dbtest uses for a counting fake server. |
+| C4 | Search service | `searchService.js` exports `searchRecipesAndMeals(householdId, { query, sourceTypes, dateFrom, dateTo, limit }, deps?)`. It resolves `{ mode: 'hybrid' \| 'lexical_only', results }`, with each result carrying `source_type` and `source_id`. `dateFrom` and `dateTo` are `Date` objects or ISO strings, and `dateTo` is **exclusive**. `limit` defaults to 5. The optional third argument is accepted and may be ignored. It imports only `reconcileHousehold` from `./indexer.js`. A lexical-query or source-join failure **rejects with an `Error`**; the typed class name is left to the implementer, and the handler maps it to `search_unavailable`. |
+| C5 | Tool handler | `server/services/chat/handlers/searchRecipesAndMeals.js` has the named export `searchRecipesAndMeals(args, ctx)`, like its sibling handlers. `args.source_types` is an array. It returns `{ ok: false, error }` on validation or service failure, and `error: 'search_unavailable'` for the C4 rejection. |
+| C6 | Document builders | `documents.js` exports `buildRecipeDocument(row)`, `buildMealLogDocument(row)` and `RECIPE_BUILDER_FIELDS`. The input is the **raw stored row**: `ingredients`, `steps` and `tags` are JSON **text**, and scalar columns are accepted under snake_case **or** camelCase. |
+| C7 | Fusion | `fusion.js` exports `reciprocalRankFusion(lists: string[][], { rankConstant })` and `RRF_RANK_CONSTANT`. It returns entries in fused order, each exposing `.score` and `.id` or `.key`. |
+| C8 | Constants | New module `server/services/retrieval/constants.js` exports `CANDIDATE_LIMIT` (20), `INTERACTIVE_EMBED_BUDGET` (25), `BACKFILL_EMBED_BATCH` (100) and `RRF_RANK_CONSTANT` (60). |
+| C9 | Reconcile result | `reconcileHousehold(householdId, { embedBudget })` resolves an object containing `upserted`, `deleted`, `embedded` and `pending`, including when the DB fails (it never throws). |
+| C10 | Tool list export | `aiService.js` **exports** `PANTRY_TOOLS`. This one-word change is beyond §3's original "entry + one rule only". |
+| C11 | Backfill script output | `server/scripts/backfillSearchDocuments.js`: the guard's failure output mentions `BACKFILL_CONFIRM_ENV` and `i-understand-production`. The dry run prints `estimated_tokens_chars_div4` and the Neon host of `DATABASE_URL`. |
+
+Test-only notes (these do not constrain production code):
+- 11a keeps docs unembedded because the fake OpenAI fails multi-text (document batch) calls while
+  single-text query embeds succeed. Search does **not** need an `embedBudget` option.
+- The shared helper `server/test/db/dbHarness.js` is not a `*.dbtest.js` file. `node --test` discovers it
+  under `test/`, which is harmless because it has no side effects on import.
+
+The other items in the test-writer's gap list were not assumptions:
+- The unnamed guarded upsert is resolved in §2.4 (`upsertRecipeDocuments`).
+- There are no existing `captureExceptionSafely` tests, so the last bullet of criterion 6a holds vacuously.
+- `createToolHandlers.test.js` "keeps the six existing handlers" passes before implementation on purpose, as
+  a regression guard.
+
 ## 3. Files
 
 ### Allowed
@@ -726,14 +794,16 @@ DRAFT-6 adds a minimal server equivalent to `server/instrument.js`:
 - `server/db/migrations/0022_search_documents.sql` (new), `server/db/migrations/meta/_journal.json`
 - `server/db/schema.js` (add `searchDocuments` + custom types only)
 - `server/services/retrieval/documents.js`, `fusion.js`, `indexer.js`, `searchService.js` (new) + tests
+- `server/services/retrieval/constants.js` (new) + test (§2.12 C8, 2026-09-29 addendum)
 - `server/services/ai/providerInterface.js`, `server/services/ai/openaiProvider.js` (+ test)
 - `server/instrument.js` (**add `logServerEvent` only**, §2.11; the existing `Sentry.init`,
   `captureExceptionSafely`, and `flush` are unchanged) + a test for it
-- `server/services/aiService.js` (`PANTRY_TOOLS` entry + one static-instruction rule **only**)
+- `server/services/aiService.js` (`PANTRY_TOOLS` entry + one static-instruction rule **only**, plus exporting
+  `PANTRY_TOOLS` per §2.12 C10) + `aiService.pantryTools.test.js`
 - `server/services/chat/createToolHandlers.js`, `server/services/chat/handlers/searchRecipesAndMeals.js`
   (new) + test
-- `server/scripts/backfillSearchDocuments.js` (new)
-- `server/test/db/*.dbtest.js` (new, opt-in real-DB tests; §7 OQ2)
+- `server/scripts/backfillSearchDocuments.js` (new) + test
+- `server/test/db/*.dbtest.js` (new, opt-in real-DB tests; §7 OQ2) + `server/test/db/dbHarness.js` (test helper)
 - `eval/**` (new), `docs/eval/TASK-069-results.md`, `docs/adr/000{1-5}-*.md` (new)
 - `package.json` (eval and db-test scripts only), `.gitignore`, `.env.example` (eval/backfill guard vars)
 - `README.md` (new section only), `ai/migrations/MIGRATION_LEDGER.md`, `ai/architecture/SYSTEM_OVERVIEW.md`,
@@ -901,7 +971,10 @@ Integration (real DB, opt-in via `RUN_DB_TESTS=1`, `local` branch only):
     - After a real reconcile embeds rows, and after a conditional write skipped by a mid-flight content
       change, every household row satisfies `(embedding IS NULL) = (embedding_model IS NULL) =
       (embedded_hash IS NULL)` (round 5 S9: makes the invariant visible, not just unrepresentable).
-11d. **Authoritative-snapshot guard (round 3 B1):**
+11d. **Authoritative-snapshot guard (round 3 B1):** (i), (ii), (iii) and (v) call `upsertRecipeDocuments`
+    (§2.4, named export) directly with the stated snapshot. "Rows affected" means `written.length`, and "nothing
+    is written" means `written` is `[]` and the doc is unchanged. They live in
+    `server/test/db/snapshotGuard.dbtest.js`.
     - (i) **Stale snapshot:** read recipe R (snapshot S1), update R's name (S2), reconcile to index S2,
       then attempt the guarded upsert with S1's content and fingerprint. Nothing is written, and the doc
       still holds S2's content and hash.

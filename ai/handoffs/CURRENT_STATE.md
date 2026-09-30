@@ -55,29 +55,20 @@ Irrelevant: client/**, auth, push, shopping, onboarding, recipeSearchService.
 
 # Decisions Made
 
-- The test-writer made interface assumptions, now locked in the tests; the implementation must match them.
-  Recommended: write them into the spec (Remaining Work 1).
-  - SQL goes through `db.execute(sql)` with `.rows`.
-  - The only statement containing `<=>` is the vector query, and the only one containing
-    `websearch_to_tsquery` is the lexical query.
-  - Search takes `{sourceTypes, dateFrom, dateTo}`, with `dateTo` exclusive, and resolves to `{mode, results}`.
-  - The builders take the raw stored row (JSON text columns; snake_case or camelCase).
-  - Fusion takes lists of string keys and returns entries with `.score` and `.id`/`.key`.
-  - The handler is the named export `searchRecipesAndMeals(args, ctx)`.
-  - `aiService.js` exports `PANTRY_TOOLS`.
-  - The backfill guard messages mention `BACKFILL_CONFIRM_ENV` and `i-understand-production`. The dry run
-    prints `estimated_tokens_chars_div4` and the Neon host.
-  - 11a keeps docs unembedded because the fake OpenAI fails multi-text calls.
-  - `search_unavailable` is tested end to end through the handler, not by error class.
+- **Interface contract = spec §2.12 (C1–C11). It applies to TASK-069 ONLY.** These are the test-writer's
+  Red-phase seam assumptions, which Connor accepted as-is on 2026-09-29. The locked tests enforce them, so the
+  implementation must match them exactly. They are **not** repo conventions: don't cite them in future specs,
+  and don't refactor other code toward them. Future specs state their own contracts, per the new
+  `ai-context-files` rule "pin the interface contract for every seam a test will touch".
+- §2.4 addendum: the guarded upsert is `upsertRecipeDocuments(householdId, snapshots) → { written: number[] }`.
+- §3 Allowed was widened to match: `constants.js`, the `PANTRY_TOOLS` export, `dbHarness.js`, and tests for the
+  backfill script and `aiService`.
 
 # Remaining Work
 
-1. **Before implementing:**
-   - Add a spec addendum that names the guarded-upsert export (signature and how rows written are reported).
-   - Record the seam assumptions above in the spec.
-   - Then have the test-writer author `server/test/db/snapshotGuard.dbtest.js` for 11d(i), 11d(ii), 11d(iii)
-     and 11d(v). 11d(v) uses G9's `pg_stat_activity` lock-wait observation plus the websocket `Pool` writer.
-     These are NOT written yet.
+1. **Before implementing:** have the test-writer author `server/test/db/snapshotGuard.dbtest.js` for 11d(i),
+   11d(ii), 11d(iii) and 11d(v), against the §2.4 addendum. These are NOT written yet. The spec work is done:
+   §2.4 names the function, and §2.12 records the contract.
 2. Implementation (Green) via the `implementer`.
 3. Migration 0022: local, then staging, then production. Each application goes in the ledger with an honest
    status. G1 case (b) means 0022 creates the extension itself. The journal `when` must be > 1785171529668.
@@ -100,8 +91,10 @@ Irrelevant: client/**, auth, push, shopping, onboarding, recipeSearchService.
 
 # Recommended Next Action
 
-Draft the §2.4 guarded-upsert interface addendum and the seam list for Connor's approval (Remaining Work 1).
-Then have the test-writer write `snapshotGuard.dbtest.js`, and only after that start Green.
+In a fresh session:
+1. Read spec §2.12 first. It is TASK-069 only.
+2. Have the test-writer write `snapshotGuard.dbtest.js` (11d(i–iii,v)) and confirm it is Red.
+3. Then start Green with the implementer, applying migration 0022 locally first (log it in the ledger).
 
 # Forbidden Exploration
 
