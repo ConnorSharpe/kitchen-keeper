@@ -120,7 +120,10 @@ Connor chose "fix it first": `date_from`/`date_to` param descriptions now say om
 Red-first via test-writer: new `server/services/aiService.searchDateGuidance.test.js`. Server 225/225, root 118/118.
 Pushed `ea2901b`; re-smoke on the Preview 2026-09-30 03:44Z: Spam Musubi → June 24 PASS, "what did I eat on June 22" → eggs, milk
 PASS (dates still used when named), coconut sugar → Curry Cod PASS, no console errors. Test chat rows 105–110 deleted (max id 98).
-**Staging §6 step 6 done except the Sentry check.** Next: production (§6 step 7).
+**Staging §6 step 6 done except the Sentry check.**
+**Production: 0022 applied by Connor (ledger 9), `main` fast-forwarded to `d9309d4` (ledger 10 ✅).** Remaining: production
+backfill (dry-run → `--execute --i-understand-production`, needs prod `DATABASE_URL` + `OPENAI_API_KEY` in env), optional
+prod verification query, Sentry check. Then close TASK-069.
 Test chat rows 99–104 deleted (max id back to 98).
 
 # Forbidden Exploration

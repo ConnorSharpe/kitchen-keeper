@@ -19,7 +19,7 @@ is a **new row**, not an edit to the old one — the old row stays as the histor
 
 ## ⚠️ Outstanding gaps (check this first)
 
-- **`0022_search_documents.sql` on production: applied, dependent code not yet on `main`** (see row 9). Closing now.
+None currently open.
 
 *(If this section is ever non-empty, that is a live, standing risk — surface it before starting unrelated
 work in the affected environment. See Rule 7 in the Efficiency Guide.)*
@@ -39,6 +39,7 @@ work in the affected environment. See Rule 7 in the Efficiency Guide.)*
 | 7 | `0022_search_documents.sql` | `CREATE EXTENSION IF NOT EXISTS vector; CREATE TABLE search_documents` + 2 indexes (additive) | staging | Migration applied + code deployed | 2026-09-30 03:25 UTC (approx.; time Connor reported it done) | `b005205` (push to `staging`, exit 0, 2026-09-30 UTC, before the migration) | Applied by Connor in the Neon SQL Editor on branch `staging` (not via `migrate.js`, so no `__drizzle_migrations` row; harmless because every statement is `IF NOT EXISTS`). Extension installed: yes, by this migration (G1 case (b), not pre-existing). Between the push and this apply the search tool returned `search_unavailable` on staging; chat unaffected. Not independently verified by Claude (no staging credentials). |
 | 8 | `0022_search_documents.sql` | (verification of row 7) | staging | Verified | 2026-09-30 UTC | `66582b3` | Connor ran `SELECT extversion, to_regclass('search_documents') FROM pg_extension WHERE extname = 'vector'` on branch `staging`: `0.8.0`, `search_documents`. |
 | 9 | `0022_search_documents.sql` | `CREATE EXTENSION IF NOT EXISTS vector; CREATE TABLE search_documents` + 2 indexes (additive) | production | **Code NOT deployed** — `main` at `cd6f1fa` | 2026-09-30 03:47 UTC (approx.; time Connor reported it done) | `ea2901b` (+ handoff commits on `staging`) | ❌ Applied by Connor in the Neon SQL Editor on branch `main` (not via `migrate.js`). Extension installed: yes, by this migration (G1 case (b)). Additive: old production code never touches `search_documents`, so no breakage while this row is open. Closing push (`staging` → `main` fast-forward) follows in the same session. Not independently verified by Claude. |
+| 10 | `0022_search_documents.sql` | (closes row 9) | production | Dependent code deployed — resolved | 2026-09-30 03:51 UTC | `d9309d4` (`staging` → `main` fast-forward, `cd6f1fa..d9309d4`, pushed by Connor, exit 0) | ✅ Gap closed in the same session as the migration. Push success only; not checked live, per the deploy rule. |
 
 ---
 
