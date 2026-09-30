@@ -68,8 +68,10 @@ export async function loadEvalEnv() {
 
 /** Commit + dirty flag for the results header; dirtyFiles shows whether the dirt is relevant. */
 export function gitInfo() {
-  const run = (args) => execFileSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8' }).trim();
-  const dirtyFiles = run(['status', '--porcelain']).split('\n').filter(Boolean).map((l) => l.slice(3));
+  const raw = (args) => execFileSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8' });
+  const run = (args) => raw(args).trim();
+  // No trim here: porcelain lines start with a status column that may be a space.
+  const dirtyFiles = raw(['status', '--porcelain']).split('\n').filter(Boolean).map((l) => l.slice(3));
   return { commit: run(['rev-parse', '--short', 'HEAD']), dirty: dirtyFiles.length > 0, dirtyFiles };
 }
 

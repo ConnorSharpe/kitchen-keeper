@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| Date | 2026-09-30 (retrieval run 02:46Z, agent run 02:57Z) |
-| Commit | `e201b73`, **dirty tree** (harness uncommitted at run time; re-run after commit for a clean reference) |
+| Date | 2026-09-30 (retrieval run 03:08Z, agent run 03:15Z) |
+| Commit | `4c4df4d` (harness as committed). Tree dirty only in files unrelated to the eval (`.claude/settings.local.json`, `ai/tasks/TASK-059-smoke-tests.md`) plus, for the agent run, the retrieval results file the previous run had just written |
 | Models | embeddings `text-embedding-3-small` (1536-d); chat `gpt-4o-mini` |
 | Database | local Neon branch (guarded: `EVAL_ALLOW_DB_WRITES=local`, `DATABASE_URL` from `server/.env.local`) |
 | Corpus | synthetic: 207 recipes (21 hand-written targets + 186 generated) and 300 meal logs over 90 days = **507 docs** |
 | Raw data | `eval/results/retrieval-2026-09-30.json`, `eval/results/agent-2026-09-30.json` |
-| Reproduce | `$env:EVAL_ALLOW_DB_WRITES='local'; npm run eval:retrieval` / `npm run eval:agent` (`npm run eval:test` for the harness's unit tests) |
+| Reproduce | `$env:EVAL_ALLOW_DB_WRITES='local'; npm run eval:retrieval` / `npm run eval:agent` (≈ $0.002 / ≈ $0.10–0.20 per run). The harness's unit tests run in the root `npm test` (no API or DB calls) |
 
 **Scope of this benchmark.** This eval measures **retrieval quality** and **small-corpus latency** on about
 500 documents. It does **not** validate exact-scan behaviour at larger household sizes. The exact-scan vs
@@ -91,13 +91,16 @@ target.
 
 | latency (ms, n) | p50 | p95 |
 |---|---|---|
-| lexical search only (40) | 38 | 96 |
-| vector search only (40) | 482 | 881 |
-| hybrid search only (40) | 489 | 903 |
-| query embedding alone (40) | 260 | 620 |
-| hybrid + interactive reconcile, steady state, 0 pending (40) | 612 | 1270 |
-| hybrid + interactive reconcile, cold, 25 pending (10) | 955 | 2870 |
-| &nbsp;&nbsp;of which reconcile (10) | 672 | 2560 |
+| lexical search only (40) | 35 | 53 |
+| vector search only (40) | 458 | 851 |
+| hybrid search only (40) | 468 | 857 |
+| query embedding alone (40) | 219 | 335 |
+| hybrid + interactive reconcile, steady state, 0 pending (40) | 675 | 1154 |
+| hybrid + interactive reconcile, cold, 25 pending (10) | 1529 | 2935 |
+| &nbsp;&nbsp;of which reconcile (10) | 1173 | 2539 |
+
+Network-bound latency varies between runs: the first (dirty-tree) run measured hybrid 489 / 903 ms
+and cold 955 / 2870 ms.
 
 The query embedding dominates vector and hybrid latency. Every cold rep's reconcile embedded all 25
 pending docs within the interactive budget and ended at `pending = 0`, with `mode: hybrid`.
@@ -118,11 +121,11 @@ The same fixture is loaded into `chat()` the way the route builds it. The recipe
 | &nbsp;&nbsp;golden → tool called | 0.00 | 1.00 |
 | &nbsp;&nbsp;control → tool not called | 1.00 | 1.00 |
 | **Retrieval correctness** (tool results include an expected id) | n/a | **1.00** (all 3 runs) |
-| Heuristic answer-match (mean; per-run min–max) | 0.178 (0.133–0.200) | 0.978 (0.933–1.000) |
-| Prompt tokens / chat (of which cached) | 10,151 (9,843) | 11,128 (10,658) |
-| Completion tokens / chat | 62 | 83 |
+| Heuristic answer-match (mean; per-run min–max) | 0.111 (0.067–0.133) | 0.978 (0.933–1.000) |
+| Prompt tokens / chat (of which cached) | 10,151 (9,764) | 11,115 (10,643) |
+| Completion tokens / chat | 61 | 88 |
 | Model calls / chat | 1.78 | 1.82 |
-| Chat latency p50 / p95 (ms) | 1,886 / 5,418 | 5,020 / 8,036 |
+| Chat latency p50 / p95 (ms) | 2,198 / 6,909 | 5,138 / 7,616 |
 | Chats scored / errors | 60 / 0 | 60 / 0 |
 
 Tool-use correctness and retrieval correctness are the rigorous metrics. The agent called the tool for
@@ -133,13 +136,15 @@ went to `suggest_recipes`).
 **Heuristic answer-match is not a semantic answer evaluator.** It checks that the reply contains the
 expected title or an alias (case- and punctuation-normalised). It can pass while the answer is otherwise
 wrong (the right recipe with wrong ingredient details), and fail on a correct answer that paraphrases the
-title. Both failure modes appeared in this run:
-- **False passes (no-tool arm):** 6 of its 8 matches are the meal-log questions (`mango`, `kimchi`),
-  where the reply repeats the food word while saying it has no record. Only `Shakshuka` and
-  `Tarte Tatin`, both visible in the recipe summary, are genuine matches.
-- **A real failure it caught (tool arm):** in run 2 of "Which of my recipes use chickpeas?" the tool
-  returned *Sunday Night Traybake*, yet the model replied that none of the saved recipes contain
-  chickpeas. Retrieval was correct and the answer ignored it. A plausible (unverified) cause: the prompt
+title. Both failure modes appeared:
+- **False passes (no-tool arm):** all 5 of its matches are the meal-log questions (`mango`, `kimchi`),
+  where the reply repeats the food word while saying it has no record. There are no genuine matches in
+  this run. (In the first, dirty-tree run, `Shakshuka` and `Tarte Tatin`, both visible in the recipe
+  summary, were genuinely named once each, for 0.178.)
+- **A real failure it caught, reproduced (tool arm):** in run 2 of "Which of my recipes use chickpeas?"
+  the tool returned *Sunday Night Traybake*, yet the model replied that none of the saved recipes use
+  chickpeas. The first harness run showed the same failure, so it has occurred in 2 of 6 attempts at
+  this query. Retrieval was correct and the answer ignored it. A plausible (unverified) cause: the prompt
   rule forbidding ingredient claims not in a "tool-result ingredients array" was written for
   `suggest_recipes`, while search results carry a snippet, not an ingredients array. Recorded here as
   an observation, outside TASK-069's scope.

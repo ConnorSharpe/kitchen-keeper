@@ -5,14 +5,16 @@ Phase A of the agent-knowledge roadmap. Spec: [TASK-069-spec.md](../tasks/TASK-0
 
 # Current Status
 
-**§6 step 5 (evals) DONE on local 2026-09-30. All eval work is UNCOMMITTED on `staging`.** The Green code (`7e34395`)
-is committed, not pushed. 0022 has been applied on local only.
+**§6 step 5 (evals) DONE on local 2026-09-30 and committed on `staging`: harness `4c4df4d`, then the re-run results
+commit.** Nothing is pushed. 0022 has been applied on local only.
 Eval harness (spec §2.8) built and run. Results in [docs/eval/TASK-069-results.md](../../docs/eval/TASK-069-results.md):
 - Retrieval: hybrid recall@5 0.906, lexical 0.719, vector 0.844.
 - Agent, with tool: tool-use 1.0, retrieval 1.0.
-- The results doc cites commit `e201b73` + dirty tree. Commit, then re-run both evals for a clean hash.
+- The results doc cites `4c4df4d`, dirty only in unrelated files. Re-run: same retrieval quality; no-tool answer-match
+  0.111 (was 0.178). The chickpeas answer failure reproduced (2 of 6 attempts).
+- The eval unit tests now run in the root `npm test` (explicit file list: CI is Node 20, which has no `--test` globs).
 
-# Files Modified (this session, all uncommitted)
+# Files Modified (this session, committed)
 
 - New `eval/`:
   - `lib/{metrics,guard,fixtureCheck,dates,embedCache}.js` + `*.test.js` (99 tests, Red-first via test-writer, locked)
@@ -70,8 +72,7 @@ Irrelevant: client/**, auth, push, shopping, onboarding, recipeSearchService.
 
 # Remaining Work
 
-1. Commit the eval work. Then re-run `eval:retrieval` and `eval:agent` so the results doc cites a clean commit,
-   and update its header and table values if they move.
+1. (Done: committed and re-run at `4c4df4d`.)
 2. ADRs 0001–0005 + README section (§2.10). ADR-0001 must cover the OpenAI embeddings data flow (R3). The README
    must state quality ≠ capacity benchmark (§2.8).
 3. 0022 on staging → push staging → backfill; then production (ledger row each, per the migrations skill).
@@ -91,11 +92,12 @@ Irrelevant: client/**, auth, push, shopping, onboarding, recipeSearchService.
 - Don't push until the rollout is sequenced: staging needs 0022 first (ledger), per the migrations skill.
 - The kit's stub allowance is a heuristic (small new file + "not implemented"). Consider upstreaming both kit fixes
   to the source project.
-- Re-running `eval:agent` costs about $0.2–0.4 in gpt-4o-mini calls. Retrieval is about $0.001 (cached).
+- Re-running `eval:agent` costs about $0.10 (up to about $0.20 without prompt-cache hits) in gpt-4o-mini calls.
+  Retrieval is about $0.002.
 
 # Verification Results
 
-- Root `npm test`: 19 pass. `server` tests: 223/223 pass. `eval:test`: 99/99 pass.
+- Root `npm test`: 118 pass (19 shared + 99 eval). `server` tests: 223/223 pass.
 - `npx eslint eval`: clean. Repo-wide lint: 30 errors, all pre-existing in the kit's `.claude/hooks/tdd/*.mjs`.
 - Guard: refuses with the flag unset and with `production` (exit 1, before any DB import).
 - `eval:retrieval` (local): 507 docs, pending 0; index hash unchanged across passes; teardown done.
@@ -103,8 +105,7 @@ Irrelevant: client/**, auth, push, shopping, onboarding, recipeSearchService.
 
 # Recommended Next Action
 
-Commit the eval work (Connor to confirm), re-run both evals for a clean commit hash, then write ADRs 0001–0005 +
-the README section (§2.10) in a fresh session.
+Fresh session: write ADRs 0001–0005 + the README section (§2.10), citing docs/eval/TASK-069-results.md.
 
 # Forbidden Exploration
 
@@ -112,7 +113,7 @@ the README section (§2.10) in a fresh session.
 
 # Context Notes
 
-- branch: `staging`. TASK-069 Green committed (`7e34395`); eval work uncommitted. Nothing pushed.
+- branch: `staging`. TASK-069 Green (`7e34395`) and eval harness (`4c4df4d`) + results committed. Nothing pushed.
 - TDD enforcement kit installed and active (node:test parsing fixed this session). Run shell commands from the repo
   root: a `cd server` drifts the session cwd and the hooks then misresolve the project (it happened this session).
 - CI (`.github/workflows/ci.yml`) runs on main only, on Node 20 (`--experimental-test-module-mocks` needs ≥22.3),

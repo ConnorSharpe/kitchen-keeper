@@ -1,10 +1,14 @@
 {
   "task": "TASK-069",
   "eval": "retrieval",
-  "date": "2026-09-30T02:46:12.864Z",
+  "date": "2026-09-30T03:08:57.208Z",
   "git": {
-    "commit": "e201b73",
-    "dirty": true
+    "commit": "4c4df4d",
+    "dirty": true,
+    "dirtyFiles": [
+      "claude/settings.local.json",
+      "ai/tasks/TASK-059-smoke-tests.md"
+    ]
   },
   "models": {
     "embedding": "text-embedding-3-small"
@@ -30,7 +34,7 @@
     "pricePerMillionUsd": 0.02
   },
   "invariants": {
-    "stateHash": "baccc48407ed2fd9d48f60190ac45c4f",
+    "stateHash": "7e6931c849b33627d602b7012d0719d5",
     "unchangedAfterQuality": true,
     "unchangedAfterSteadyLatency": true,
     "pendingBeforeMeasurement": 0
@@ -379,116 +383,116 @@
     "searchMs": {
       "lexical": {
         "n": 40,
-        "p50": 38,
-        "p95": 95.5
+        "p50": 35,
+        "p95": 53.2
       },
       "vector": {
         "n": 40,
-        "p50": 481.5,
-        "p95": 880.5
+        "p50": 457.5,
+        "p95": 850.9
       },
       "hybrid": {
         "n": 40,
-        "p50": 488.5,
-        "p95": 902.8
+        "p50": 467.5,
+        "p95": 857.4
       }
     },
     "queryEmbedMs": {
       "n": 40,
-      "p50": 260.4,
-      "p95": 620.2
+      "p50": 219.2,
+      "p95": 334.5
     },
     "withReconcile_steady_0pending": {
       "n": 40,
-      "p50": 612,
-      "p95": 1270
+      "p50": 674.5,
+      "p95": 1153.9
     },
     "withReconcile_cold_25pending": {
       "n": 10,
-      "p50": 955,
-      "p95": 2869.7,
+      "p50": 1528.5,
+      "p95": 2934.9,
       "reconcileMs": {
         "n": 10,
-        "p50": 672,
-        "p95": 2560.4
+        "p50": 1173,
+        "p95": 2538.8
       },
       "reps": [
         {
-          "reconcileMs": 3815,
-          "searchMs": 343,
-          "totalMs": 4158,
+          "reconcileMs": 3153,
+          "searchMs": 393,
+          "totalMs": 3546,
           "pendingAfter": 0,
           "reconcileEmbed": "ok",
           "mode": "hybrid"
         },
         {
-          "reconcileMs": 835,
-          "searchMs": 307,
-          "totalMs": 1142,
+          "reconcileMs": 1788,
+          "searchMs": 400,
+          "totalMs": 2188,
           "pendingAfter": 0,
           "reconcileEmbed": "ok",
           "mode": "hybrid"
         },
         {
-          "reconcileMs": 554,
-          "searchMs": 250,
-          "totalMs": 804,
+          "reconcileMs": 1102,
+          "searchMs": 420,
+          "totalMs": 1522,
           "pendingAfter": 0,
           "reconcileEmbed": "ok",
           "mode": "hybrid"
         },
         {
-          "reconcileMs": 550,
-          "searchMs": 301,
-          "totalMs": 851,
+          "reconcileMs": 796,
+          "searchMs": 364,
+          "totalMs": 1160,
           "pendingAfter": 0,
           "reconcileEmbed": "ok",
           "mode": "hybrid"
         },
         {
-          "reconcileMs": 645,
-          "searchMs": 299,
-          "totalMs": 944,
+          "reconcileMs": 1137,
+          "searchMs": 380,
+          "totalMs": 1517,
           "pendingAfter": 0,
           "reconcileEmbed": "ok",
           "mode": "hybrid"
         },
         {
-          "reconcileMs": 699,
-          "searchMs": 220,
-          "totalMs": 919,
+          "reconcileMs": 1209,
+          "searchMs": 326,
+          "totalMs": 1535,
           "pendingAfter": 0,
           "reconcileEmbed": "ok",
           "mode": "hybrid"
         },
         {
-          "reconcileMs": 639,
-          "searchMs": 316,
-          "totalMs": 955,
+          "reconcileMs": 1298,
+          "searchMs": 439,
+          "totalMs": 1737,
           "pendingAfter": 0,
           "reconcileEmbed": "ok",
           "mode": "hybrid"
         },
         {
-          "reconcileMs": 1027,
-          "searchMs": 268,
-          "totalMs": 1295,
+          "reconcileMs": 1096,
+          "searchMs": 328,
+          "totalMs": 1424,
           "pendingAfter": 0,
           "reconcileEmbed": "ok",
           "mode": "hybrid"
         },
         {
-          "reconcileMs": 632,
-          "searchMs": 323,
-          "totalMs": 955,
+          "reconcileMs": 1558,
+          "searchMs": 322,
+          "totalMs": 1880,
           "pendingAfter": 0,
           "reconcileEmbed": "ok",
           "mode": "hybrid"
         },
         {
-          "reconcileMs": 755,
-          "searchMs": 327,
-          "totalMs": 1082,
+          "reconcileMs": 910,
+          "searchMs": 284,
+          "totalMs": 1194,
           "pendingAfter": 0,
           "reconcileEmbed": "ok",
           "mode": "hybrid"
@@ -497,10 +501,10 @@
     }
   },
   "embedCache": {
-    "hits": 84,
-    "misses": 539,
-    "apiCalls": 184,
-    "apiTokens": 77030
+    "hits": 627,
+    "misses": 0,
+    "apiCalls": 140,
+    "apiTokens": 42559
   },
   "perQuery": [
     {
