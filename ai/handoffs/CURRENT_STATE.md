@@ -5,7 +5,8 @@ Phase A of the agent-knowledge roadmap. Spec: [TASK-069-spec.md](../tasks/TASK-0
 
 # Current Status
 
-**Green COMPLETE for criteria 1–11e, committed on `staging` (`7e34395`), not pushed. Migration 0022 applied on local only.**
+**Green COMPLETE for criteria 1–11e, committed on `staging` (`7e34395`), not pushed. Migration 0022 applied on local only.
+Local smoke test (§6 step 4) PASSED 2026-09-29.**
 Unit tests 223/223, dbtests 44/44 (local), eslint clean. Three locked tests were fixed with Connor's
 permission (see Decisions Made).
 
@@ -65,7 +66,10 @@ Irrelevant: client/**, auth, push, shopping, onboarding, recipeSearchService.
 
 # Remaining Work
 
-1. Local smoke test (§6 step 4), then evals + results doc, ADRs 0001–0005, README section.
+1. Evals + results doc, ADRs 0001–0005, README section. (Local smoke test §6 step 4 PASSED 2026-09-29.)
+   Local DB residue from the smoke test, for Connor to clear (Claude's DB access was blocked by the auto-mode
+   classifier): `chat_messages` with id > 144 (the smoke Q&A turns), and `search_documents` (0 rows before;
+   now lazily indexed for household 1, including an orphaned doc for the deleted recipe 823, which the next reconcile deletes).
 2. 0022 on staging → push staging → backfill; then production (ledger row each, per the migrations skill).
 3. Separate, unfiled task: the README stack table says Gemini.
 
@@ -80,10 +84,17 @@ Irrelevant: client/**, auth, push, shopping, onboarding, recipeSearchService.
 - `RUN_DB_TESTS=1 npm run test:db` (local): 44/44 pass.
 - eslint on changed source + server/test/db: clean.
 - 0022 on local: `vector` 0.8.0, table + 4 indexes, `__drizzle_migrations` 8 rows, max 1790728028520.
+- Local smoke (§6 step 4), real UI, observed via scratchpad-only OpenAI SDK preloads (no repo edits):
+  (1) chickpeas (ingredient only, temp recipe) → `search_recipes_and_meals`, `mode: hybrid`, correct recipe ranked #1;
+  (2) forced `embeddings.create` throw → `lexical_only`, correct recipe, chat 200, normal answer;
+  (3) "What did I ask you earlier?" → single model request, no tool round. PASS.
+  Local gotcha: Clerk 401s on every call were Windows clock skew (−5.5 s, over Clerk's 5 s tolerance); a resync fixed them.
 
 # Recommended Next Action
 
-Fresh session: run the local smoke test (spec §6 step 4) via the `smoke-testing` skill.
+Fresh session: spec §6 step 5. Run `eval:retrieval` and `eval:agent` (§2.8), commit the results doc,
+then write ADRs 0001–0005 and the README section (§2.10; ADR-0001 must cover the OpenAI embeddings data flow, R3).
+Before any local browser smoke: check the clock is synced (Clerk rejects tokens at >5 s skew).
 
 # Forbidden Exploration
 
@@ -102,7 +113,7 @@ Fresh session: run the local smoke test (spec §6 step 4) via the `smoke-testing
   (`--experimental-test-module-mocks` needs Node ≥22.3), and doesn't run client tests.
 - Pre-existing uncommitted changes, unrelated and left as is: `.claude/settings.local.json`,
   `ai/tasks/TASK-059-smoke-tests.md`, `ai/handoffs/archive/TASK-061-implementation.md`.
-- context pressure: medium; fresh session recommended (phase boundary: Green verified).
+- context pressure: medium; fresh session recommended (phase boundary: local smoke verified → evals/docs).
 
 ---
 
