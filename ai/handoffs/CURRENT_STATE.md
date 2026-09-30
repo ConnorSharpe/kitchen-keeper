@@ -82,7 +82,7 @@ Irrelevant: client/**, auth, push, shopping, onboarding, recipeSearchService.
 1. (Done: committed and re-run at `4c4df4d`.)
 2. (Done: ADRs + README section written; commit them: `TASK-069: add ADRs 0001-0005 and README retrieval section`.)
 3. 0022 on staging → push staging → backfill; then production (ledger row each, per the migrations skill).
-4. Separate, unfiled: the README stack table says Gemini. The lint chip "Fix eslint no-undef errors in TDD kit hooks"
+4. README Gemini refs fixed 2026-09-29 (`18d0f9e`, staging, unpushed). Search-args logging + chickpeas follow-ups offered as chips. The lint chip "Fix eslint no-undef errors in TDD kit hooks"
    is offered (30 pre-existing errors in `.claude/hooks/tdd/*.mjs`, so `npx eslint .` fails).
 5. Observations from the evals, out of scope (candidate follow-ups, not filed):
    - The agent once ignored a correct search hit (chickpeas). Possible prompt-rule mismatch: the "ingredients array"
