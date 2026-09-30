@@ -295,11 +295,15 @@ export const PANTRY_TOOLS = [
           },
           date_from: {
             type: 'string',
-            description: 'Optional inclusive start date, YYYY-MM-DD (UTC).',
+            description:
+              'Optional inclusive start date, YYYY-MM-DD (UTC). Omit unless the user names a specific date or ' +
+              'time period. Do not set it for "when did I last…" or other all-time questions.',
           },
           date_to: {
             type: 'string',
-            description: 'Optional inclusive end date, YYYY-MM-DD (UTC).',
+            description:
+              'Optional inclusive end date, YYYY-MM-DD (UTC). Omit unless the user names a specific date or ' +
+              'time period. Do not set it for "when did I last…" or other all-time questions.',
           },
           limit: {
             type: 'integer',
