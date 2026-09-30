@@ -112,7 +112,8 @@ Before any local browser smoke: check the clock is synced (Clerk rejects tokens 
   exists to sync `alwaysExemptPatterns` with. CI (`.github/workflows/ci.yml`) runs on main only, on Node 20
   (`--experimental-test-module-mocks` needs Node ≥22.3), and doesn't run client tests.
 - Pre-existing uncommitted changes, unrelated and left as is: `.claude/settings.local.json`,
-  `ai/tasks/TASK-059-smoke-tests.md`, `ai/handoffs/archive/TASK-061-implementation.md`.
+  `ai/tasks/TASK-059-smoke-tests.md`. (`archive/TASK-061-implementation.md` was committed 2026-09-29, since
+  handoff docs link to it.)
 - context pressure: medium; fresh session recommended (phase boundary: local smoke verified → evals/docs).
 
 ---
