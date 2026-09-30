@@ -1,0 +1,2562 @@
+{
+  "task": "TASK-069",
+  "eval": "retrieval",
+  "date": "2026-09-30T02:46:12.864Z",
+  "git": {
+    "commit": "e201b73",
+    "dirty": true
+  },
+  "models": {
+    "embedding": "text-embedding-3-small"
+  },
+  "host": "ep-icy-rice-akewupba-pooler.c-3.us-west-2.aws.neon.tech",
+  "config": {
+    "CANDIDATE_LIMIT": 20,
+    "RRF_RANK_CONSTANT": 60,
+    "INTERACTIVE_EMBED_BUDGET": 25,
+    "BACKFILL_EMBED_BATCH": 100,
+    "searchLimit": 10
+  },
+  "corpus": {
+    "recipes": 207,
+    "mealLogs": 300,
+    "docs": 507,
+    "queries": 40
+  },
+  "backfill": {
+    "passes": 6,
+    "tokens": 34444,
+    "costUsd": 0.000689,
+    "pricePerMillionUsd": 0.02
+  },
+  "invariants": {
+    "stateHash": "baccc48407ed2fd9d48f60190ac45c4f",
+    "unchangedAfterQuality": true,
+    "unchangedAfterSteadyLatency": true,
+    "pendingBeforeMeasurement": 0
+  },
+  "quality": {
+    "lexical": {
+      "overall": {
+        "recall5": 0.7188,
+        "mrr10": 0.7188,
+        "n": 32,
+        "negatives": {
+          "n": 8,
+          "final_returned_nonempty_rate": 0,
+          "vector_candidate_nonempty_rate": null
+        }
+      },
+      "byCategory": {
+        "ingredient_hidden": {
+          "n": 8,
+          "recall5": 0.625,
+          "mrr10": 0.625
+        },
+        "paraphrase": {
+          "n": 8,
+          "recall5": 0.375,
+          "mrr10": 0.375
+        },
+        "exact_rare_term": {
+          "n": 7,
+          "recall5": 1,
+          "mrr10": 1
+        },
+        "temporal_meal_log": {
+          "n": 9,
+          "recall5": 0.8889,
+          "mrr10": 0.8889
+        }
+      }
+    },
+    "vector": {
+      "overall": {
+        "recall5": 0.8438,
+        "mrr10": 0.7917,
+        "n": 32,
+        "negatives": {
+          "n": 8,
+          "final_returned_nonempty_rate": 1,
+          "vector_candidate_nonempty_rate": 1
+        }
+      },
+      "byCategory": {
+        "ingredient_hidden": {
+          "n": 8,
+          "recall5": 0.5,
+          "mrr10": 0.4375
+        },
+        "paraphrase": {
+          "n": 8,
+          "recall5": 1,
+          "mrr10": 0.9375
+        },
+        "exact_rare_term": {
+          "n": 7,
+          "recall5": 0.8571,
+          "mrr10": 0.7619
+        },
+        "temporal_meal_log": {
+          "n": 9,
+          "recall5": 1,
+          "mrr10": 1
+        }
+      }
+    },
+    "hybrid": {
+      "overall": {
+        "recall5": 0.9063,
+        "mrr10": 0.9063,
+        "n": 32,
+        "negatives": {
+          "n": 8,
+          "final_returned_nonempty_rate": 1,
+          "vector_candidate_nonempty_rate": 1
+        }
+      },
+      "byCategory": {
+        "ingredient_hidden": {
+          "n": 8,
+          "recall5": 0.625,
+          "mrr10": 0.625
+        },
+        "paraphrase": {
+          "n": 8,
+          "recall5": 1,
+          "mrr10": 1
+        },
+        "exact_rare_term": {
+          "n": 7,
+          "recall5": 1,
+          "mrr10": 1
+        },
+        "temporal_meal_log": {
+          "n": 9,
+          "recall5": 1,
+          "mrr10": 1
+        }
+      }
+    }
+  },
+  "distances": {
+    "negative": {
+      "n": 8,
+      "min": 0.5101,
+      "p10": 0.5222,
+      "p25": 0.5285,
+      "p50": 0.5447,
+      "p75": 0.6089,
+      "p90": 0.66,
+      "max": 0.6851,
+      "histogram": [
+        {
+          "lo": 0.5,
+          "hi": 0.55,
+          "count": 4
+        },
+        {
+          "lo": 0.55,
+          "hi": 0.6,
+          "count": 2
+        },
+        {
+          "lo": 0.6,
+          "hi": 0.65,
+          "count": 1
+        },
+        {
+          "lo": 0.65,
+          "hi": 0.7,
+          "count": 1
+        }
+      ]
+    },
+    "positive_all": {
+      "n": 32,
+      "min": 0.3374,
+      "p10": 0.3625,
+      "p25": 0.4329,
+      "p50": 0.494,
+      "p75": 0.6024,
+      "p90": 0.6798,
+      "max": 0.7374,
+      "histogram": [
+        {
+          "lo": 0.3,
+          "hi": 0.35,
+          "count": 2
+        },
+        {
+          "lo": 0.35,
+          "hi": 0.4,
+          "count": 3
+        },
+        {
+          "lo": 0.4,
+          "hi": 0.45,
+          "count": 5
+        },
+        {
+          "lo": 0.45,
+          "hi": 0.5,
+          "count": 6
+        },
+        {
+          "lo": 0.5,
+          "hi": 0.55,
+          "count": 4
+        },
+        {
+          "lo": 0.55,
+          "hi": 0.6,
+          "count": 4
+        },
+        {
+          "lo": 0.6,
+          "hi": 0.65,
+          "count": 4
+        },
+        {
+          "lo": 0.65,
+          "hi": 0.7,
+          "count": 1
+        },
+        {
+          "lo": 0.7,
+          "hi": 0.75,
+          "count": 3
+        }
+      ]
+    },
+    "positive_byCategory": {
+      "ingredient_hidden": {
+        "n": 8,
+        "min": 0.4188,
+        "p10": 0.4971,
+        "p25": 0.5506,
+        "p50": 0.5766,
+        "p75": 0.6143,
+        "p90": 0.6148,
+        "max": 0.6153,
+        "histogram": [
+          {
+            "lo": 0.4,
+            "hi": 0.45,
+            "count": 1
+          },
+          {
+            "lo": 0.45,
+            "hi": 0.5,
+            "count": 0
+          },
+          {
+            "lo": 0.5,
+            "hi": 0.55,
+            "count": 1
+          },
+          {
+            "lo": 0.55,
+            "hi": 0.6,
+            "count": 3
+          },
+          {
+            "lo": 0.6,
+            "hi": 0.65,
+            "count": 3
+          }
+        ]
+      },
+      "paraphrase": {
+        "n": 8,
+        "min": 0.3374,
+        "p10": 0.3421,
+        "p25": 0.3539,
+        "p50": 0.3729,
+        "p75": 0.4103,
+        "p90": 0.4379,
+        "max": 0.4474,
+        "histogram": [
+          {
+            "lo": 0.3,
+            "hi": 0.35,
+            "count": 2
+          },
+          {
+            "lo": 0.35,
+            "hi": 0.4,
+            "count": 3
+          },
+          {
+            "lo": 0.4,
+            "hi": 0.45,
+            "count": 3
+          }
+        ]
+      },
+      "exact_rare_term": {
+        "n": 7,
+        "min": 0.4305,
+        "p10": 0.4601,
+        "p25": 0.5052,
+        "p50": 0.6862,
+        "p75": 0.7218,
+        "p90": 0.7366,
+        "max": 0.7374,
+        "histogram": [
+          {
+            "lo": 0.4,
+            "hi": 0.45,
+            "count": 1
+          },
+          {
+            "lo": 0.45,
+            "hi": 0.5,
+            "count": 1
+          },
+          {
+            "lo": 0.5,
+            "hi": 0.55,
+            "count": 1
+          },
+          {
+            "lo": 0.55,
+            "hi": 0.6,
+            "count": 0
+          },
+          {
+            "lo": 0.6,
+            "hi": 0.65,
+            "count": 0
+          },
+          {
+            "lo": 0.65,
+            "hi": 0.7,
+            "count": 1
+          },
+          {
+            "lo": 0.7,
+            "hi": 0.75,
+            "count": 3
+          }
+        ]
+      },
+      "temporal_meal_log": {
+        "n": 9,
+        "min": 0.465,
+        "p10": 0.465,
+        "p25": 0.4669,
+        "p50": 0.4837,
+        "p75": 0.5418,
+        "p90": 0.6032,
+        "max": 0.6221,
+        "histogram": [
+          {
+            "lo": 0.45,
+            "hi": 0.5,
+            "count": 5
+          },
+          {
+            "lo": 0.5,
+            "hi": 0.55,
+            "count": 2
+          },
+          {
+            "lo": 0.55,
+            "hi": 0.6,
+            "count": 1
+          },
+          {
+            "lo": 0.6,
+            "hi": 0.65,
+            "count": 1
+          }
+        ]
+      }
+    }
+  },
+  "latency": {
+    "searchMs": {
+      "lexical": {
+        "n": 40,
+        "p50": 38,
+        "p95": 95.5
+      },
+      "vector": {
+        "n": 40,
+        "p50": 481.5,
+        "p95": 880.5
+      },
+      "hybrid": {
+        "n": 40,
+        "p50": 488.5,
+        "p95": 902.8
+      }
+    },
+    "queryEmbedMs": {
+      "n": 40,
+      "p50": 260.4,
+      "p95": 620.2
+    },
+    "withReconcile_steady_0pending": {
+      "n": 40,
+      "p50": 612,
+      "p95": 1270
+    },
+    "withReconcile_cold_25pending": {
+      "n": 10,
+      "p50": 955,
+      "p95": 2869.7,
+      "reconcileMs": {
+        "n": 10,
+        "p50": 672,
+        "p95": 2560.4
+      },
+      "reps": [
+        {
+          "reconcileMs": 3815,
+          "searchMs": 343,
+          "totalMs": 4158,
+          "pendingAfter": 0,
+          "reconcileEmbed": "ok",
+          "mode": "hybrid"
+        },
+        {
+          "reconcileMs": 835,
+          "searchMs": 307,
+          "totalMs": 1142,
+          "pendingAfter": 0,
+          "reconcileEmbed": "ok",
+          "mode": "hybrid"
+        },
+        {
+          "reconcileMs": 554,
+          "searchMs": 250,
+          "totalMs": 804,
+          "pendingAfter": 0,
+          "reconcileEmbed": "ok",
+          "mode": "hybrid"
+        },
+        {
+          "reconcileMs": 550,
+          "searchMs": 301,
+          "totalMs": 851,
+          "pendingAfter": 0,
+          "reconcileEmbed": "ok",
+          "mode": "hybrid"
+        },
+        {
+          "reconcileMs": 645,
+          "searchMs": 299,
+          "totalMs": 944,
+          "pendingAfter": 0,
+          "reconcileEmbed": "ok",
+          "mode": "hybrid"
+        },
+        {
+          "reconcileMs": 699,
+          "searchMs": 220,
+          "totalMs": 919,
+          "pendingAfter": 0,
+          "reconcileEmbed": "ok",
+          "mode": "hybrid"
+        },
+        {
+          "reconcileMs": 639,
+          "searchMs": 316,
+          "totalMs": 955,
+          "pendingAfter": 0,
+          "reconcileEmbed": "ok",
+          "mode": "hybrid"
+        },
+        {
+          "reconcileMs": 1027,
+          "searchMs": 268,
+          "totalMs": 1295,
+          "pendingAfter": 0,
+          "reconcileEmbed": "ok",
+          "mode": "hybrid"
+        },
+        {
+          "reconcileMs": 632,
+          "searchMs": 323,
+          "totalMs": 955,
+          "pendingAfter": 0,
+          "reconcileEmbed": "ok",
+          "mode": "hybrid"
+        },
+        {
+          "reconcileMs": 755,
+          "searchMs": 327,
+          "totalMs": 1082,
+          "pendingAfter": 0,
+          "reconcileEmbed": "ok",
+          "mode": "hybrid"
+        }
+      ]
+    }
+  },
+  "embedCache": {
+    "hits": 84,
+    "misses": 539,
+    "apiCalls": 184,
+    "apiTokens": 77030
+  },
+  "perQuery": [
+    {
+      "id": "ih1",
+      "category": "ingredient_hidden",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 1,
+      "vectorCandidates": null,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_traybake"
+      ]
+    },
+    {
+      "id": "ih2",
+      "category": "ingredient_hidden",
+      "mode": "lexical",
+      "recall5": 0,
+      "rr10": 0,
+      "returned": 0,
+      "vectorCandidates": null,
+      "lexicalCandidates": 0,
+      "top5": []
+    },
+    {
+      "id": "ih3",
+      "category": "ingredient_hidden",
+      "mode": "lexical",
+      "recall5": 0,
+      "rr10": 0,
+      "returned": 0,
+      "vectorCandidates": null,
+      "lexicalCandidates": 0,
+      "top5": []
+    },
+    {
+      "id": "ih4",
+      "category": "ingredient_hidden",
+      "mode": "lexical",
+      "recall5": 0,
+      "rr10": 0,
+      "returned": 0,
+      "vectorCandidates": null,
+      "lexicalCandidates": 0,
+      "top5": []
+    },
+    {
+      "id": "ih5",
+      "category": "ingredient_hidden",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 1,
+      "vectorCandidates": null,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_pasta_night"
+      ]
+    },
+    {
+      "id": "ih6",
+      "category": "ingredient_hidden",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 1,
+      "vectorCandidates": null,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_winter_soup"
+      ]
+    },
+    {
+      "id": "ih7",
+      "category": "ingredient_hidden",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 1,
+      "vectorCandidates": null,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_desk_wraps"
+      ]
+    },
+    {
+      "id": "ih8",
+      "category": "ingredient_hidden",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 1,
+      "vectorCandidates": null,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_breakfast_bake"
+      ]
+    },
+    {
+      "id": "pp1",
+      "category": "paraphrase",
+      "mode": "lexical",
+      "recall5": 0,
+      "rr10": 0,
+      "returned": 0,
+      "vectorCandidates": null,
+      "lexicalCandidates": 0,
+      "top5": []
+    },
+    {
+      "id": "pp2",
+      "category": "paraphrase",
+      "mode": "lexical",
+      "recall5": 0,
+      "rr10": 0,
+      "returned": 0,
+      "vectorCandidates": null,
+      "lexicalCandidates": 0,
+      "top5": []
+    },
+    {
+      "id": "pp3",
+      "category": "paraphrase",
+      "mode": "lexical",
+      "recall5": 0,
+      "rr10": 0,
+      "returned": 0,
+      "vectorCandidates": null,
+      "lexicalCandidates": 0,
+      "top5": []
+    },
+    {
+      "id": "pp4",
+      "category": "paraphrase",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 1,
+      "vectorCandidates": null,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_tarte_tatin"
+      ]
+    },
+    {
+      "id": "pp5",
+      "category": "paraphrase",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 1,
+      "vectorCandidates": null,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_gazpacho"
+      ]
+    },
+    {
+      "id": "pp6",
+      "category": "paraphrase",
+      "mode": "lexical",
+      "recall5": 0,
+      "rr10": 0,
+      "returned": 0,
+      "vectorCandidates": null,
+      "lexicalCandidates": 0,
+      "top5": []
+    },
+    {
+      "id": "pp7",
+      "category": "paraphrase",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 1,
+      "vectorCandidates": null,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_bubble_squeak"
+      ]
+    },
+    {
+      "id": "pp8",
+      "category": "paraphrase",
+      "mode": "lexical",
+      "recall5": 0,
+      "rr10": 0,
+      "returned": 0,
+      "vectorCandidates": null,
+      "lexicalCandidates": 0,
+      "top5": []
+    },
+    {
+      "id": "er1",
+      "category": "exact_rare_term",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 1,
+      "vectorCandidates": null,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_wings"
+      ]
+    },
+    {
+      "id": "er2",
+      "category": "exact_rare_term",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 1,
+      "vectorCandidates": null,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_flatbreads"
+      ]
+    },
+    {
+      "id": "er3",
+      "category": "exact_rare_term",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 1,
+      "vectorCandidates": null,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_salmon_bowls"
+      ]
+    },
+    {
+      "id": "er4",
+      "category": "exact_rare_term",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 1,
+      "vectorCandidates": null,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_fattoush"
+      ]
+    },
+    {
+      "id": "er5",
+      "category": "exact_rare_term",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 2,
+      "vectorCandidates": null,
+      "lexicalCandidates": 2,
+      "top5": [
+        "hero_teriyaki",
+        "hero_miso_aubergine"
+      ]
+    },
+    {
+      "id": "er6",
+      "category": "exact_rare_term",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 1,
+      "vectorCandidates": null,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_tadka_dal"
+      ]
+    },
+    {
+      "id": "er7",
+      "category": "exact_rare_term",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 1,
+      "vectorCandidates": null,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_wings"
+      ]
+    },
+    {
+      "id": "tm1",
+      "category": "temporal_meal_log",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 2,
+      "vectorCandidates": null,
+      "lexicalCandidates": 2,
+      "top5": [
+        "ml_mango_3",
+        "ml_mango_10"
+      ]
+    },
+    {
+      "id": "tm2",
+      "category": "temporal_meal_log",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 1,
+      "vectorCandidates": null,
+      "lexicalCandidates": 1,
+      "top5": [
+        "ml_sourdough_bread_5"
+      ]
+    },
+    {
+      "id": "tm3",
+      "category": "temporal_meal_log",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 2,
+      "vectorCandidates": null,
+      "lexicalCandidates": 2,
+      "top5": [
+        "ml_kimchi_21",
+        "ml_kimchi_20"
+      ]
+    },
+    {
+      "id": "tm4",
+      "category": "temporal_meal_log",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 1,
+      "vectorCandidates": null,
+      "lexicalCandidates": 1,
+      "top5": [
+        "ml_pomegranate_80"
+      ]
+    },
+    {
+      "id": "tm5",
+      "category": "temporal_meal_log",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 1,
+      "vectorCandidates": null,
+      "lexicalCandidates": 1,
+      "top5": [
+        "ml_leftover_lasagne_1"
+      ]
+    },
+    {
+      "id": "tm6",
+      "category": "temporal_meal_log",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 2,
+      "vectorCandidates": null,
+      "lexicalCandidates": 2,
+      "top5": [
+        "ml_blueberries_30",
+        "ml_blueberries_2"
+      ]
+    },
+    {
+      "id": "tm7",
+      "category": "temporal_meal_log",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 2,
+      "vectorCandidates": null,
+      "lexicalCandidates": 2,
+      "top5": [
+        "ml_kimchi_21",
+        "ml_kimchi_20"
+      ]
+    },
+    {
+      "id": "tm8",
+      "category": "temporal_meal_log",
+      "mode": "lexical",
+      "recall5": 0,
+      "rr10": 0,
+      "returned": 0,
+      "vectorCandidates": null,
+      "lexicalCandidates": 0,
+      "top5": []
+    },
+    {
+      "id": "tm9",
+      "category": "temporal_meal_log",
+      "mode": "lexical",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 3,
+      "vectorCandidates": null,
+      "lexicalCandidates": 3,
+      "top5": [
+        "ml_mango_3",
+        "ml_mango_10",
+        "ml_mango_45"
+      ]
+    },
+    {
+      "id": "ng1",
+      "category": "negative",
+      "mode": "lexical",
+      "recall5": null,
+      "rr10": null,
+      "returned": 0,
+      "vectorCandidates": null,
+      "lexicalCandidates": 0,
+      "top5": []
+    },
+    {
+      "id": "ng2",
+      "category": "negative",
+      "mode": "lexical",
+      "recall5": null,
+      "rr10": null,
+      "returned": 0,
+      "vectorCandidates": null,
+      "lexicalCandidates": 0,
+      "top5": []
+    },
+    {
+      "id": "ng3",
+      "category": "negative",
+      "mode": "lexical",
+      "recall5": null,
+      "rr10": null,
+      "returned": 0,
+      "vectorCandidates": null,
+      "lexicalCandidates": 0,
+      "top5": []
+    },
+    {
+      "id": "ng4",
+      "category": "negative",
+      "mode": "lexical",
+      "recall5": null,
+      "rr10": null,
+      "returned": 0,
+      "vectorCandidates": null,
+      "lexicalCandidates": 0,
+      "top5": []
+    },
+    {
+      "id": "ng5",
+      "category": "negative",
+      "mode": "lexical",
+      "recall5": null,
+      "rr10": null,
+      "returned": 0,
+      "vectorCandidates": null,
+      "lexicalCandidates": 0,
+      "top5": []
+    },
+    {
+      "id": "ng6",
+      "category": "negative",
+      "mode": "lexical",
+      "recall5": null,
+      "rr10": null,
+      "returned": 0,
+      "vectorCandidates": null,
+      "lexicalCandidates": 0,
+      "top5": []
+    },
+    {
+      "id": "ng7",
+      "category": "negative",
+      "mode": "lexical",
+      "recall5": null,
+      "rr10": null,
+      "returned": 0,
+      "vectorCandidates": null,
+      "lexicalCandidates": 0,
+      "top5": []
+    },
+    {
+      "id": "ng8",
+      "category": "negative",
+      "mode": "lexical",
+      "recall5": null,
+      "rr10": null,
+      "returned": 0,
+      "vectorCandidates": null,
+      "lexicalCandidates": 0,
+      "top5": []
+    },
+    {
+      "id": "ih1",
+      "category": "ingredient_hidden",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "hero_traybake",
+        "filler_090",
+        "hero_shakshuka",
+        "filler_036",
+        "hero_tadka_dal"
+      ]
+    },
+    {
+      "id": "ih2",
+      "category": "ingredient_hidden",
+      "mode": "vector",
+      "recall5": 0,
+      "rr10": 0,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "filler_090",
+        "filler_030",
+        "hero_tadka_dal",
+        "filler_036",
+        "filler_143"
+      ]
+    },
+    {
+      "id": "ih3",
+      "category": "ingredient_hidden",
+      "mode": "vector",
+      "recall5": 0,
+      "rr10": 0,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "filler_145",
+        "hero_flatbreads",
+        "hero_fattoush",
+        "filler_063",
+        "filler_059"
+      ]
+    },
+    {
+      "id": "ih4",
+      "category": "ingredient_hidden",
+      "mode": "vector",
+      "recall5": 0,
+      "rr10": 0,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "filler_107",
+        "filler_087",
+        "filler_077",
+        "hero_miso_aubergine",
+        "filler_006"
+      ]
+    },
+    {
+      "id": "ih5",
+      "category": "ingredient_hidden",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "hero_pasta_night",
+        "filler_065",
+        "filler_155",
+        "filler_095",
+        "filler_134"
+      ]
+    },
+    {
+      "id": "ih6",
+      "category": "ingredient_hidden",
+      "mode": "vector",
+      "recall5": 0,
+      "rr10": 0,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "ml_filler_099",
+        "ml_filler_257",
+        "ml_filler_160",
+        "ml_filler_091",
+        "ml_filler_008"
+      ]
+    },
+    {
+      "id": "ih7",
+      "category": "ingredient_hidden",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 0.5,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "hero_fattoush",
+        "hero_desk_wraps",
+        "filler_106",
+        "hero_flatbreads",
+        "filler_134"
+      ]
+    },
+    {
+      "id": "ih8",
+      "category": "ingredient_hidden",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "hero_breakfast_bake",
+        "filler_035",
+        "filler_123",
+        "filler_041",
+        "filler_167"
+      ]
+    },
+    {
+      "id": "pp1",
+      "category": "paraphrase",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "hero_harira",
+        "filler_090",
+        "hero_gazpacho",
+        "filler_080",
+        "hero_fattoush"
+      ]
+    },
+    {
+      "id": "pp2",
+      "category": "paraphrase",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "hero_shakshuka",
+        "hero_breakfast_bake",
+        "hero_traybake",
+        "filler_005",
+        "filler_102"
+      ]
+    },
+    {
+      "id": "pp3",
+      "category": "paraphrase",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "hero_jook",
+        "filler_140",
+        "filler_012",
+        "hero_winter_soup",
+        "filler_126"
+      ]
+    },
+    {
+      "id": "pp4",
+      "category": "paraphrase",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "hero_tarte_tatin",
+        "filler_154",
+        "filler_048",
+        "filler_165",
+        "hero_overnight_oats"
+      ]
+    },
+    {
+      "id": "pp5",
+      "category": "paraphrase",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 0.5,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "hero_winter_soup",
+        "hero_gazpacho",
+        "hero_harira",
+        "filler_080",
+        "filler_010"
+      ]
+    },
+    {
+      "id": "pp6",
+      "category": "paraphrase",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "hero_overnight_oats",
+        "hero_breakfast_bake",
+        "hero_jook",
+        "hero_glow_bowl",
+        "filler_185"
+      ]
+    },
+    {
+      "id": "pp7",
+      "category": "paraphrase",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "hero_bubble_squeak",
+        "hero_traybake",
+        "filler_116",
+        "hero_winter_soup",
+        "filler_052"
+      ]
+    },
+    {
+      "id": "pp8",
+      "category": "paraphrase",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "hero_kra_pao",
+        "filler_091",
+        "filler_097",
+        "filler_132",
+        "filler_025"
+      ]
+    },
+    {
+      "id": "er1",
+      "category": "exact_rare_term",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "hero_wings",
+        "hero_jook",
+        "filler_131",
+        "hero_miso_aubergine",
+        "filler_140"
+      ]
+    },
+    {
+      "id": "er2",
+      "category": "exact_rare_term",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "hero_flatbreads",
+        "hero_fattoush",
+        "filler_143",
+        "filler_030",
+        "filler_171"
+      ]
+    },
+    {
+      "id": "er3",
+      "category": "exact_rare_term",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "hero_salmon_bowls",
+        "filler_181",
+        "hero_teriyaki",
+        "filler_079",
+        "hero_miso_aubergine"
+      ]
+    },
+    {
+      "id": "er4",
+      "category": "exact_rare_term",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 0.3333333333333333,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "filler_073",
+        "filler_077",
+        "hero_fattoush",
+        "hero_miso_aubergine",
+        "filler_107"
+      ]
+    },
+    {
+      "id": "er5",
+      "category": "exact_rare_term",
+      "mode": "vector",
+      "recall5": 0,
+      "rr10": 0,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "filler_012",
+        "ml_filler_154",
+        "ml_filler_066",
+        "ml_filler_050",
+        "ml_filler_133"
+      ]
+    },
+    {
+      "id": "er6",
+      "category": "exact_rare_term",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "hero_tadka_dal",
+        "filler_035",
+        "hero_flatbreads",
+        "filler_108",
+        "filler_051"
+      ]
+    },
+    {
+      "id": "er7",
+      "category": "exact_rare_term",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "hero_wings",
+        "hero_miso_aubergine",
+        "hero_jook",
+        "hero_teriyaki",
+        "filler_082"
+      ]
+    },
+    {
+      "id": "tm1",
+      "category": "temporal_meal_log",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "ml_mango_3",
+        "ml_mango_10",
+        "ml_filler_237",
+        "ml_filler_253",
+        "ml_filler_169"
+      ]
+    },
+    {
+      "id": "tm2",
+      "category": "temporal_meal_log",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "ml_sourdough_bread_5",
+        "ml_filler_074",
+        "ml_filler_165",
+        "ml_filler_207",
+        "ml_filler_038"
+      ]
+    },
+    {
+      "id": "tm3",
+      "category": "temporal_meal_log",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "ml_kimchi_20",
+        "ml_kimchi_21",
+        "ml_filler_011",
+        "ml_filler_144",
+        "ml_filler_077"
+      ]
+    },
+    {
+      "id": "tm4",
+      "category": "temporal_meal_log",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "ml_pomegranate_80",
+        "ml_filler_091",
+        "ml_filler_257",
+        "ml_filler_201",
+        "ml_filler_080"
+      ]
+    },
+    {
+      "id": "tm5",
+      "category": "temporal_meal_log",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 14,
+      "lexicalCandidates": null,
+      "top5": [
+        "ml_leftover_lasagne_1",
+        "ml_filler_040",
+        "ml_filler_151",
+        "ml_filler_074",
+        "ml_filler_130"
+      ]
+    },
+    {
+      "id": "tm6",
+      "category": "temporal_meal_log",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "ml_blueberries_30",
+        "ml_blueberries_2",
+        "ml_filler_231",
+        "ml_filler_279",
+        "ml_filler_245"
+      ]
+    },
+    {
+      "id": "tm7",
+      "category": "temporal_meal_log",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "ml_kimchi_20",
+        "ml_kimchi_21",
+        "ml_filler_011",
+        "ml_filler_144",
+        "ml_filler_207"
+      ]
+    },
+    {
+      "id": "tm8",
+      "category": "temporal_meal_log",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "ml_kimchi_20",
+        "ml_kimchi_21",
+        "ml_sourdough_bread_5",
+        "ml_sourdough_bread_60",
+        "ml_filler_273"
+      ]
+    },
+    {
+      "id": "tm9",
+      "category": "temporal_meal_log",
+      "mode": "vector",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "ml_mango_45",
+        "ml_mango_3",
+        "ml_mango_10",
+        "ml_filler_213",
+        "ml_filler_219"
+      ]
+    },
+    {
+      "id": "ng1",
+      "category": "negative",
+      "mode": "vector",
+      "recall5": null,
+      "rr10": null,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "filler_166",
+        "filler_010",
+        "filler_021",
+        "filler_129",
+        "filler_084"
+      ]
+    },
+    {
+      "id": "ng2",
+      "category": "negative",
+      "mode": "vector",
+      "recall5": null,
+      "rr10": null,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "filler_137",
+        "filler_082",
+        "filler_004",
+        "filler_047",
+        "filler_165"
+      ]
+    },
+    {
+      "id": "ng3",
+      "category": "negative",
+      "mode": "vector",
+      "recall5": null,
+      "rr10": null,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "hero_salmon_bowls",
+        "filler_059",
+        "hero_miso_aubergine",
+        "filler_012",
+        "filler_030"
+      ]
+    },
+    {
+      "id": "ng4",
+      "category": "negative",
+      "mode": "vector",
+      "recall5": null,
+      "rr10": null,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "ml_filler_051",
+        "ml_filler_203",
+        "ml_filler_058",
+        "ml_filler_206",
+        "ml_filler_252"
+      ]
+    },
+    {
+      "id": "ng5",
+      "category": "negative",
+      "mode": "vector",
+      "recall5": null,
+      "rr10": null,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "filler_165",
+        "filler_068",
+        "filler_021",
+        "filler_154",
+        "filler_060"
+      ]
+    },
+    {
+      "id": "ng6",
+      "category": "negative",
+      "mode": "vector",
+      "recall5": null,
+      "rr10": null,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "filler_154",
+        "hero_bubble_squeak",
+        "filler_048",
+        "filler_165",
+        "filler_013"
+      ]
+    },
+    {
+      "id": "ng7",
+      "category": "negative",
+      "mode": "vector",
+      "recall5": null,
+      "rr10": null,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "filler_143",
+        "filler_180",
+        "filler_025",
+        "filler_145",
+        "filler_171"
+      ]
+    },
+    {
+      "id": "ng8",
+      "category": "negative",
+      "mode": "vector",
+      "recall5": null,
+      "rr10": null,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": null,
+      "top5": [
+        "hero_shakshuka",
+        "ml_filler_167",
+        "ml_filler_199",
+        "ml_filler_131",
+        "ml_filler_184"
+      ]
+    },
+    {
+      "id": "ih1",
+      "category": "ingredient_hidden",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_traybake",
+        "filler_090",
+        "hero_shakshuka",
+        "filler_036",
+        "hero_tadka_dal"
+      ]
+    },
+    {
+      "id": "ih2",
+      "category": "ingredient_hidden",
+      "mode": "hybrid",
+      "recall5": 0,
+      "rr10": 0,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 0,
+      "top5": [
+        "filler_090",
+        "filler_030",
+        "hero_tadka_dal",
+        "filler_036",
+        "filler_143"
+      ]
+    },
+    {
+      "id": "ih3",
+      "category": "ingredient_hidden",
+      "mode": "hybrid",
+      "recall5": 0,
+      "rr10": 0,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 0,
+      "top5": [
+        "filler_145",
+        "hero_flatbreads",
+        "hero_fattoush",
+        "filler_063",
+        "filler_059"
+      ]
+    },
+    {
+      "id": "ih4",
+      "category": "ingredient_hidden",
+      "mode": "hybrid",
+      "recall5": 0,
+      "rr10": 0,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 0,
+      "top5": [
+        "filler_107",
+        "filler_087",
+        "filler_077",
+        "hero_miso_aubergine",
+        "filler_006"
+      ]
+    },
+    {
+      "id": "ih5",
+      "category": "ingredient_hidden",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_pasta_night",
+        "filler_065",
+        "filler_155",
+        "filler_095",
+        "filler_134"
+      ]
+    },
+    {
+      "id": "ih6",
+      "category": "ingredient_hidden",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_winter_soup",
+        "ml_filler_099",
+        "ml_filler_257",
+        "ml_filler_160",
+        "ml_filler_091"
+      ]
+    },
+    {
+      "id": "ih7",
+      "category": "ingredient_hidden",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_desk_wraps",
+        "hero_fattoush",
+        "filler_106",
+        "hero_flatbreads",
+        "filler_134"
+      ]
+    },
+    {
+      "id": "ih8",
+      "category": "ingredient_hidden",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_breakfast_bake",
+        "filler_035",
+        "filler_123",
+        "filler_041",
+        "filler_167"
+      ]
+    },
+    {
+      "id": "pp1",
+      "category": "paraphrase",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 0,
+      "top5": [
+        "hero_harira",
+        "filler_090",
+        "hero_gazpacho",
+        "filler_080",
+        "hero_fattoush"
+      ]
+    },
+    {
+      "id": "pp2",
+      "category": "paraphrase",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 0,
+      "top5": [
+        "hero_shakshuka",
+        "hero_breakfast_bake",
+        "hero_traybake",
+        "filler_005",
+        "filler_102"
+      ]
+    },
+    {
+      "id": "pp3",
+      "category": "paraphrase",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 0,
+      "top5": [
+        "hero_jook",
+        "filler_140",
+        "filler_012",
+        "hero_winter_soup",
+        "filler_126"
+      ]
+    },
+    {
+      "id": "pp4",
+      "category": "paraphrase",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_tarte_tatin",
+        "filler_154",
+        "filler_048",
+        "filler_165",
+        "hero_overnight_oats"
+      ]
+    },
+    {
+      "id": "pp5",
+      "category": "paraphrase",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_gazpacho",
+        "hero_winter_soup",
+        "hero_harira",
+        "filler_080",
+        "filler_010"
+      ]
+    },
+    {
+      "id": "pp6",
+      "category": "paraphrase",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 0,
+      "top5": [
+        "hero_overnight_oats",
+        "hero_breakfast_bake",
+        "hero_jook",
+        "hero_glow_bowl",
+        "filler_185"
+      ]
+    },
+    {
+      "id": "pp7",
+      "category": "paraphrase",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_bubble_squeak",
+        "hero_traybake",
+        "filler_116",
+        "hero_winter_soup",
+        "filler_052"
+      ]
+    },
+    {
+      "id": "pp8",
+      "category": "paraphrase",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 0,
+      "top5": [
+        "hero_kra_pao",
+        "filler_091",
+        "filler_097",
+        "filler_132",
+        "filler_025"
+      ]
+    },
+    {
+      "id": "er1",
+      "category": "exact_rare_term",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_wings",
+        "hero_jook",
+        "filler_131",
+        "hero_miso_aubergine",
+        "filler_140"
+      ]
+    },
+    {
+      "id": "er2",
+      "category": "exact_rare_term",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_flatbreads",
+        "hero_fattoush",
+        "filler_143",
+        "filler_030",
+        "filler_171"
+      ]
+    },
+    {
+      "id": "er3",
+      "category": "exact_rare_term",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_salmon_bowls",
+        "filler_181",
+        "hero_teriyaki",
+        "filler_079",
+        "hero_miso_aubergine"
+      ]
+    },
+    {
+      "id": "er4",
+      "category": "exact_rare_term",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_fattoush",
+        "filler_073",
+        "filler_077",
+        "hero_miso_aubergine",
+        "filler_107"
+      ]
+    },
+    {
+      "id": "er5",
+      "category": "exact_rare_term",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 2,
+      "top5": [
+        "hero_miso_aubergine",
+        "filler_012",
+        "hero_teriyaki",
+        "ml_filler_154",
+        "ml_filler_066"
+      ]
+    },
+    {
+      "id": "er6",
+      "category": "exact_rare_term",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_tadka_dal",
+        "filler_035",
+        "hero_flatbreads",
+        "filler_108",
+        "filler_051"
+      ]
+    },
+    {
+      "id": "er7",
+      "category": "exact_rare_term",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 1,
+      "top5": [
+        "hero_wings",
+        "hero_miso_aubergine",
+        "hero_jook",
+        "hero_teriyaki",
+        "filler_082"
+      ]
+    },
+    {
+      "id": "tm1",
+      "category": "temporal_meal_log",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 2,
+      "top5": [
+        "ml_mango_3",
+        "ml_mango_10",
+        "ml_filler_237",
+        "ml_filler_253",
+        "ml_filler_169"
+      ]
+    },
+    {
+      "id": "tm2",
+      "category": "temporal_meal_log",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 1,
+      "top5": [
+        "ml_sourdough_bread_5",
+        "ml_filler_074",
+        "ml_filler_165",
+        "ml_filler_207",
+        "ml_filler_038"
+      ]
+    },
+    {
+      "id": "tm3",
+      "category": "temporal_meal_log",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 2,
+      "top5": [
+        "ml_kimchi_20",
+        "ml_kimchi_21",
+        "ml_filler_011",
+        "ml_filler_144",
+        "ml_filler_077"
+      ]
+    },
+    {
+      "id": "tm4",
+      "category": "temporal_meal_log",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 1,
+      "top5": [
+        "ml_pomegranate_80",
+        "ml_filler_091",
+        "ml_filler_257",
+        "ml_filler_201",
+        "ml_filler_080"
+      ]
+    },
+    {
+      "id": "tm5",
+      "category": "temporal_meal_log",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 14,
+      "lexicalCandidates": 1,
+      "top5": [
+        "ml_leftover_lasagne_1",
+        "ml_filler_040",
+        "ml_filler_151",
+        "ml_filler_074",
+        "ml_filler_130"
+      ]
+    },
+    {
+      "id": "tm6",
+      "category": "temporal_meal_log",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 2,
+      "top5": [
+        "ml_blueberries_30",
+        "ml_blueberries_2",
+        "ml_filler_231",
+        "ml_filler_279",
+        "ml_filler_245"
+      ]
+    },
+    {
+      "id": "tm7",
+      "category": "temporal_meal_log",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 2,
+      "top5": [
+        "ml_kimchi_20",
+        "ml_kimchi_21",
+        "ml_filler_011",
+        "ml_filler_144",
+        "ml_filler_207"
+      ]
+    },
+    {
+      "id": "tm8",
+      "category": "temporal_meal_log",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 0,
+      "top5": [
+        "ml_kimchi_20",
+        "ml_kimchi_21",
+        "ml_sourdough_bread_5",
+        "ml_sourdough_bread_60",
+        "ml_filler_273"
+      ]
+    },
+    {
+      "id": "tm9",
+      "category": "temporal_meal_log",
+      "mode": "hybrid",
+      "recall5": 1,
+      "rr10": 1,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 3,
+      "top5": [
+        "ml_mango_3",
+        "ml_mango_45",
+        "ml_mango_10",
+        "ml_filler_213",
+        "ml_filler_219"
+      ]
+    },
+    {
+      "id": "ng1",
+      "category": "negative",
+      "mode": "hybrid",
+      "recall5": null,
+      "rr10": null,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 0,
+      "top5": [
+        "filler_166",
+        "filler_010",
+        "filler_021",
+        "filler_129",
+        "filler_084"
+      ]
+    },
+    {
+      "id": "ng2",
+      "category": "negative",
+      "mode": "hybrid",
+      "recall5": null,
+      "rr10": null,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 0,
+      "top5": [
+        "filler_137",
+        "filler_082",
+        "filler_004",
+        "filler_047",
+        "filler_165"
+      ]
+    },
+    {
+      "id": "ng3",
+      "category": "negative",
+      "mode": "hybrid",
+      "recall5": null,
+      "rr10": null,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 0,
+      "top5": [
+        "hero_salmon_bowls",
+        "filler_059",
+        "hero_miso_aubergine",
+        "filler_012",
+        "filler_030"
+      ]
+    },
+    {
+      "id": "ng4",
+      "category": "negative",
+      "mode": "hybrid",
+      "recall5": null,
+      "rr10": null,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 0,
+      "top5": [
+        "ml_filler_051",
+        "ml_filler_203",
+        "ml_filler_058",
+        "ml_filler_206",
+        "ml_filler_252"
+      ]
+    },
+    {
+      "id": "ng5",
+      "category": "negative",
+      "mode": "hybrid",
+      "recall5": null,
+      "rr10": null,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 0,
+      "top5": [
+        "filler_165",
+        "filler_068",
+        "filler_021",
+        "filler_154",
+        "filler_060"
+      ]
+    },
+    {
+      "id": "ng6",
+      "category": "negative",
+      "mode": "hybrid",
+      "recall5": null,
+      "rr10": null,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 0,
+      "top5": [
+        "filler_154",
+        "hero_bubble_squeak",
+        "filler_048",
+        "filler_165",
+        "filler_013"
+      ]
+    },
+    {
+      "id": "ng7",
+      "category": "negative",
+      "mode": "hybrid",
+      "recall5": null,
+      "rr10": null,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 0,
+      "top5": [
+        "filler_143",
+        "filler_180",
+        "filler_025",
+        "filler_145",
+        "filler_171"
+      ]
+    },
+    {
+      "id": "ng8",
+      "category": "negative",
+      "mode": "hybrid",
+      "recall5": null,
+      "rr10": null,
+      "returned": 10,
+      "vectorCandidates": 20,
+      "lexicalCandidates": 0,
+      "top5": [
+        "hero_shakshuka",
+        "ml_filler_167",
+        "ml_filler_199",
+        "ml_filler_131",
+        "ml_filler_184"
+      ]
+    }
+  ],
+  "distancesPerQuery": [
+    {
+      "id": "ih1",
+      "category": "ingredient_hidden",
+      "d": 0.4188
+    },
+    {
+      "id": "ih2",
+      "category": "ingredient_hidden",
+      "d": 0.5886
+    },
+    {
+      "id": "ih3",
+      "category": "ingredient_hidden",
+      "d": 0.6142
+    },
+    {
+      "id": "ih4",
+      "category": "ingredient_hidden",
+      "d": 0.5647
+    },
+    {
+      "id": "ih5",
+      "category": "ingredient_hidden",
+      "d": 0.6153
+    },
+    {
+      "id": "ih6",
+      "category": "ingredient_hidden",
+      "d": 0.6146
+    },
+    {
+      "id": "ih7",
+      "category": "ingredient_hidden",
+      "d": 0.5572
+    },
+    {
+      "id": "ih8",
+      "category": "ingredient_hidden",
+      "d": 0.5307
+    },
+    {
+      "id": "pp1",
+      "category": "paraphrase",
+      "d": 0.3599
+    },
+    {
+      "id": "pp2",
+      "category": "paraphrase",
+      "d": 0.3859
+    },
+    {
+      "id": "pp3",
+      "category": "paraphrase",
+      "d": 0.344
+    },
+    {
+      "id": "pp4",
+      "category": "paraphrase",
+      "d": 0.3572
+    },
+    {
+      "id": "pp5",
+      "category": "paraphrase",
+      "d": 0.4338
+    },
+    {
+      "id": "pp6",
+      "category": "paraphrase",
+      "d": 0.4474
+    },
+    {
+      "id": "pp7",
+      "category": "paraphrase",
+      "d": 0.4025
+    },
+    {
+      "id": "pp8",
+      "category": "paraphrase",
+      "d": 0.3374
+    },
+    {
+      "id": "er1",
+      "category": "exact_rare_term",
+      "d": 0.5305
+    },
+    {
+      "id": "er2",
+      "category": "exact_rare_term",
+      "d": 0.4305
+    },
+    {
+      "id": "er3",
+      "category": "exact_rare_term",
+      "d": 0.7074
+    },
+    {
+      "id": "er4",
+      "category": "exact_rare_term",
+      "d": 0.6862
+    },
+    {
+      "id": "er5",
+      "category": "exact_rare_term",
+      "d": 0.7361
+    },
+    {
+      "id": "er6",
+      "category": "exact_rare_term",
+      "d": 0.7374
+    },
+    {
+      "id": "er7",
+      "category": "exact_rare_term",
+      "d": 0.4798
+    },
+    {
+      "id": "tm1",
+      "category": "temporal_meal_log",
+      "d": 0.4837
+    },
+    {
+      "id": "tm2",
+      "category": "temporal_meal_log",
+      "d": 0.5042
+    },
+    {
+      "id": "tm3",
+      "category": "temporal_meal_log",
+      "d": 0.465
+    },
+    {
+      "id": "tm4",
+      "category": "temporal_meal_log",
+      "d": 0.4669
+    },
+    {
+      "id": "tm5",
+      "category": "temporal_meal_log",
+      "d": 0.6221
+    },
+    {
+      "id": "tm6",
+      "category": "temporal_meal_log",
+      "d": 0.5418
+    },
+    {
+      "id": "tm7",
+      "category": "temporal_meal_log",
+      "d": 0.465
+    },
+    {
+      "id": "tm8",
+      "category": "temporal_meal_log",
+      "d": 0.5985
+    },
+    {
+      "id": "tm9",
+      "category": "temporal_meal_log",
+      "d": 0.4831
+    },
+    {
+      "id": "ng1",
+      "category": "negative",
+      "d": 0.5954
+    },
+    {
+      "id": "ng2",
+      "category": "negative",
+      "d": 0.5288
+    },
+    {
+      "id": "ng3",
+      "category": "negative",
+      "d": 0.5274
+    },
+    {
+      "id": "ng4",
+      "category": "negative",
+      "d": 0.6851
+    },
+    {
+      "id": "ng5",
+      "category": "negative",
+      "d": 0.5376
+    },
+    {
+      "id": "ng6",
+      "category": "negative",
+      "d": 0.5518
+    },
+    {
+      "id": "ng7",
+      "category": "negative",
+      "d": 0.5101
+    },
+    {
+      "id": "ng8",
+      "category": "negative",
+      "d": 0.6493
+    }
+  ]
+}

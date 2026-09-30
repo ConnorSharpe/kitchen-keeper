@@ -14,3 +14,6 @@ dist/
 
 .vercel
 .env*
+
+# TASK-069 eval: local-only embedding cache (synthetic fixture data)
+eval/.cache/

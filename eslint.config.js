@@ -29,7 +29,7 @@ export default [
     },
   },
   {
-    files: ['server/**/*.js', 'api/**/*.js'],
+    files: ['server/**/*.js', 'api/**/*.js', 'eval/**/*.js'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',

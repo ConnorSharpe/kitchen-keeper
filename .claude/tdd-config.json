@@ -23,7 +23,12 @@
     "**/.gitignore",
     ".env.example",
     "**/package.json",
-    "**/package-lock.json"
+    "**/package-lock.json",
+    "eval/retrieval.js",
+    "eval/agent.js",
+    "eval/lib/household.js",
+    "eval/lib/runtime.js",
+    "eval/scripts/**"
   ],
   "sensitivePathPatterns": [
     "server/**",

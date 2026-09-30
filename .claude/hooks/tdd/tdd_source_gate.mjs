@@ -13,6 +13,7 @@
 // depends on tdd_new_case.sh actually being invoked for each subsequent one — it has
 // no way to verify a case's test cases were actually derived from Acceptance Criteria,
 // only that *a* red-confirmed run happened.
+import { existsSync } from 'node:fs';
 import {
   parseHookInput,
   projectDirFrom,
@@ -58,6 +59,16 @@ const gate = readGate(projectDir);
 if (gate.phase === 'red_confirmed' || gate.phase === 'green') {
   touchDirty(projectDir);
   allow();
+}
+
+// Interface stubs for a brand-new module (2026-09-30, approved by Connor): a test importing a
+// module that doesn't exist fails with "Cannot find module", which tdd_record_result rightly
+// treats as wrong-reason Red — so without this a new module could never reach confirmed Red.
+// Only a Write CREATING a file, small, and declaring itself a stub. Heuristic, not proof.
+const STUB_MAX_CHARS = 2000;
+if (gate.phase === 'awaiting_red' && input.tool_name === 'Write' && !existsSync(filePath)) {
+  const content = String(input.tool_input?.content ?? '');
+  if (content.length <= STUB_MAX_CHARS && /not implemented/i.test(content)) allow();
 }
 
 denyPreToolUse(

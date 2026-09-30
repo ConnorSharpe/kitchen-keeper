@@ -14,7 +14,11 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "node --test shared/expiry.test.js shared/pantryDefaults.test.js shared/recipeSources.test.js && npm test --prefix server"
+    "test": "node --test shared/expiry.test.js shared/pantryDefaults.test.js shared/recipeSources.test.js eval/lib/metrics.test.js eval/lib/guard.test.js eval/lib/fixtureCheck.test.js eval/lib/dates.test.js eval/lib/embedCache.test.js && npm test --prefix server",
+    "eval:test": "node --test \"eval/lib/*.test.js\"",
+    "eval:fixture": "node eval/scripts/generateFixture.js",
+    "eval:retrieval": "node eval/retrieval.js",
+    "eval:agent": "node eval/agent.js"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

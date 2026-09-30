@@ -65,8 +65,15 @@ const exitCode =
 
 const outputText = stripAnsi(`${response.stdout || ''}\n${response.stderr || ''}`);
 
+// node:test summary ("ℹ fail 1" / "# fail 1"). Checked BEFORE the exit code because the
+// `; true` suffix above makes a Bash exit code of 0 meaningless for test runs (2026-09-30).
+const nodeFail = outputText.match(/^\s*(?:ℹ|#)\s*fail\s+(\d+)\s*$/m);
+const nodePass = outputText.match(/^\s*(?:ℹ|#)\s*pass\s+(\d+)\s*$/m);
+
 let passed;
-if (exitCode !== null) {
+if (nodeFail) {
+  passed = Number(nodeFail[1]) === 0 && Number(nodePass?.[1] ?? 0) > 0;
+} else if (exitCode !== null) {
   passed = exitCode === 0;
 } else if (/\b\d+\s+failed\b/i.test(outputText)) {
   passed = false;

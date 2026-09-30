@@ -1,0 +1,3110 @@
+{
+  "task": "TASK-069",
+  "eval": "agent",
+  "date": "2026-09-30T02:57:55.261Z",
+  "git": {
+    "commit": "e201b73",
+    "dirty": true
+  },
+  "models": {
+    "chat": "gpt-4o-mini",
+    "embedding": "text-embedding-3-small"
+  },
+  "host": "ep-icy-rice-akewupba-pooler.c-3.us-west-2.aws.neon.tech",
+  "design": {
+    "runs": 3,
+    "arms": [
+      "without",
+      "with"
+    ],
+    "golden": 15,
+    "controls": 5,
+    "recipesInFixture": 207,
+    "recipeSummaryCap": 150,
+    "withoutArm": "search tool removed from the tool list; system prompt unchanged"
+  },
+  "arms": {
+    "without": {
+      "chats": 60,
+      "scored": 60,
+      "errors": 0,
+      "toolUseCorrectness": {
+        "mean": 0.25,
+        "min": 0.25,
+        "max": 0.25
+      },
+      "goldenCalledRate": 0,
+      "controlNotCalledRate": 1,
+      "retrievalCorrectness": {
+        "mean": 0,
+        "min": 0,
+        "max": 0
+      },
+      "heuristicAnswerMatch": {
+        "mean": 0.1778,
+        "min": 0.1333,
+        "max": 0.2
+      },
+      "tokensPerChat": {
+        "prompt": 10151,
+        "completion": 62,
+        "cachedPrompt": 9843,
+        "modelCalls": 1.78
+      },
+      "latencyMs": {
+        "p50": 1886,
+        "p95": 5418
+      },
+      "perRun": [
+        {
+          "run": 1,
+          "toolUseCorrectness": 0.25,
+          "retrievalCorrectness": 0,
+          "heuristicAnswerMatch": 0.2
+        },
+        {
+          "run": 2,
+          "toolUseCorrectness": 0.25,
+          "retrievalCorrectness": 0,
+          "heuristicAnswerMatch": 0.2
+        },
+        {
+          "run": 3,
+          "toolUseCorrectness": 0.25,
+          "retrievalCorrectness": 0,
+          "heuristicAnswerMatch": 0.1333
+        }
+      ]
+    },
+    "with": {
+      "chats": 60,
+      "scored": 60,
+      "errors": 0,
+      "toolUseCorrectness": {
+        "mean": 1,
+        "min": 1,
+        "max": 1
+      },
+      "goldenCalledRate": 1,
+      "controlNotCalledRate": 1,
+      "retrievalCorrectness": {
+        "mean": 1,
+        "min": 1,
+        "max": 1
+      },
+      "heuristicAnswerMatch": {
+        "mean": 0.9778,
+        "min": 0.9333,
+        "max": 1
+      },
+      "tokensPerChat": {
+        "prompt": 11128,
+        "completion": 83,
+        "cachedPrompt": 10658,
+        "modelCalls": 1.82
+      },
+      "latencyMs": {
+        "p50": 5020,
+        "p95": 8036
+      },
+      "perRun": [
+        {
+          "run": 1,
+          "toolUseCorrectness": 1,
+          "retrievalCorrectness": 1,
+          "heuristicAnswerMatch": 1
+        },
+        {
+          "run": 2,
+          "toolUseCorrectness": 1,
+          "retrievalCorrectness": 1,
+          "heuristicAnswerMatch": 0.9333
+        },
+        {
+          "run": 3,
+          "toolUseCorrectness": 1,
+          "retrievalCorrectness": 1,
+          "heuristicAnswerMatch": 1
+        }
+      ]
+    }
+  },
+  "perChat": [
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ag1",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11382,
+        "completion": 61,
+        "cached": 10496
+      },
+      "latencyMs": 2411,
+      "error": null,
+      "reply": "It looks like there are no recipes that use chickpeas in your saved collection. If you have other ingredients in mind or need recipe suggestions for different items, feel free to ask!"
+    },
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ag2",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11386,
+        "completion": 62,
+        "cached": 5632
+      },
+      "latencyMs": 3030,
+      "error": null,
+      "reply": "It seems you don't have any recipes that include tahini. If you're looking for ways to use it, feel free to ask for ideas or let me know what other ingredients you have!"
+    },
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ag3",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11400,
+        "completion": 53,
+        "cached": 11264
+      },
+      "latencyMs": 1549,
+      "error": null,
+      "reply": "It seems you haven't saved any recipes that include halloumi. If you'd like, I can suggest some ideas for using it!"
+    },
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ag4",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11382,
+        "completion": 76,
+        "cached": 11264
+      },
+      "latencyMs": 1957,
+      "error": null,
+      "reply": "It seems I can't retrieve the specific Moroccan soup recipe you saved at the moment. If you remember the name or some details about it, I can help you find it! Otherwise, feel free to let me know if you need suggestions for a similar type of recipe."
+    },
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ag5",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": true,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11391,
+        "completion": 96,
+        "cached": 11264
+      },
+      "latencyMs": 1791,
+      "error": null,
+      "reply": "It seems I can't directly search for that specific recipe at the moment. However, you can try looking through your saved recipes to find \"Shakshuka,\" which is a popular dish that features eggs baked in a flavorful tomato sauce. If you'd like, I can help you with something else or provide inspiration based on your pantry!"
+    },
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ag6",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11385,
+        "completion": 62,
+        "cached": 11264
+      },
+      "latencyMs": 1610,
+      "error": null,
+      "reply": "It seems I am currently unable to search for recipes including gochujang. If you have any other ingredients in mind or need help with something else, feel free to ask!"
+    },
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ag7",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11384,
+        "completion": 54,
+        "cached": 11264
+      },
+      "latencyMs": 1720,
+      "error": null,
+      "reply": "It seems that there are no saved recipes that include furikake. If you have any other ingredients in mind or need help with recipes, feel free to ask!"
+    },
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ag8",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11377,
+        "completion": 67,
+        "cached": 11264
+      },
+      "latencyMs": 4077,
+      "error": null,
+      "reply": "It seems I cannot check for recipes that require mirin at the moment. However, if you have specific ingredients or types of dishes in mind, feel free to ask, and I can suggest recipes based on those!"
+    },
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ag9",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": true,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5665,
+        "completion": 45,
+        "cached": 5632
+      },
+      "latencyMs": 853,
+      "error": null,
+      "reply": "I couldn't find any records of mango in your pantry or saved recipes, so I don't have information about when you last ate mango. If you have some in your pantry or would like to note it, let me know!"
+    },
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ag10",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": true,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5669,
+        "completion": 53,
+        "cached": 5632
+      },
+      "latencyMs": 1020,
+      "error": null,
+      "reply": "I don't have access to your meal history, so I can't check if you ate kimchi. If you remember consuming any or if it's in your pantry, I can help you with that. Would you like to check your pantry for kimchi or anything else?"
+    },
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ag11",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11381,
+        "completion": 62,
+        "cached": 11264
+      },
+      "latencyMs": 1844,
+      "error": null,
+      "reply": "It seems that I can't retrieve recipes specifically containing anchovies at the moment. If you have any other ingredients in mind or need help with a different recipe, feel free to let me know!"
+    },
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ag12",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11380,
+        "completion": 51,
+        "cached": 11264
+      },
+      "latencyMs": 1603,
+      "error": null,
+      "reply": "It looks like I can't check for recipes containing pearl barley at the moment. If you're looking for ideas, feel free to ask for general recipe suggestions!"
+    },
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ag13",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11385,
+        "completion": 86,
+        "cached": 11264
+      },
+      "latencyMs": 3739,
+      "error": null,
+      "reply": "It looks like I can't directly search for the \"upside-down apple tart\" recipe because my recipe suggestion tool is currently disabled. However, based on your pantry inventory, it may not be saved with that exact name. Would you like help with something else, like recipe ideas or a different inquiry?"
+    },
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ag14",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11377,
+        "completion": 54,
+        "cached": 11264
+      },
+      "latencyMs": 3220,
+      "error": null,
+      "reply": "It appears that none of your saved recipes include sumac. If you have another ingredient in mind or would like to find recipes with available pantry items, let me know!"
+    },
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ag15",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11386,
+        "completion": 68,
+        "cached": 11264
+      },
+      "latencyMs": 1651,
+      "error": null,
+      "reply": "It looks like I can't check for a specific savoury rice porridge recipe at the moment. However, you can utilize rice in various delicious ways. If you're looking for inspiration, feel free to ask for specific recipe ideas!"
+    },
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ct1",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5666,
+        "completion": 73,
+        "cached": 5632
+      },
+      "latencyMs": 1126,
+      "error": null,
+      "reply": "In your pantry, the following items are expiring soon:\n\n1. **Milk** - expires in 2 days (critical)\n2. **Spinach** - expires in 6 days (warning)\n3. **Chicken thighs** - expires in 6 days (warning)\n\nMake sure to use the milk soon, or consider freezing it to reduce waste!"
+    },
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ct2",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5697,
+        "completion": 13,
+        "cached": 5632
+      },
+      "latencyMs": 753,
+      "error": null,
+      "reply": "You inquired about how long eggs keep in the fridge."
+    },
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ct3",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5669,
+        "completion": 63,
+        "cached": 5632
+      },
+      "latencyMs": 976,
+      "error": null,
+      "reply": "Cooked rice leftovers can typically be kept in the fridge for about 4 to 6 days. Make sure to store it in an airtight container and refrigerate it promptly after cooking to ensure it stays safe to eat. If you're not planning to eat it within that timeframe, consider freezing it to reduce waste!"
+    },
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ct4",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [
+        "suggest_recipes",
+        "suggest_recipes",
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 4,
+        "prompt": 22918,
+        "completion": 100,
+        "cached": 22528
+      },
+      "latencyMs": 3023,
+      "error": null,
+      "reply": "It seems that I'm currently unable to access recipe suggestions. However, based on what's in your pantry, you could consider cooking a dish with chicken thighs, spinach, or rice. Would you like any specific recipe ideas based on those ingredients?"
+    },
+    {
+      "arm": "without",
+      "run": 1,
+      "id": "ct5",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5668,
+        "completion": 46,
+        "cached": 5632
+      },
+      "latencyMs": 944,
+      "error": null,
+      "reply": "One cup of all-purpose flour typically weighs around 120 grams. However, this can vary slightly depending on how the flour is measured. If you have any specific recipes you'd like to explore that involve flour, let me know!"
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ag1",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11382,
+        "completion": 55,
+        "cached": 11264
+      },
+      "latencyMs": 1467,
+      "error": null,
+      "reply": "It looks like there are no recipes in your collection that use chickpeas. If you're looking for recipe ideas or specific dishes, feel free to ask!"
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ag2",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11382,
+        "completion": 67,
+        "cached": 11264
+      },
+      "latencyMs": 1648,
+      "error": null,
+      "reply": "It looks like you don't have any recipes that include tahini in your saved recipes. If you're looking for ideas or recipes with tahini, let me know, and I can suggest something based on your pantry items or your preferences!"
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ag3",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11400,
+        "completion": 67,
+        "cached": 11264
+      },
+      "latencyMs": 1555,
+      "error": null,
+      "reply": "It looks like you haven't saved any recipes that include halloumi. If you're looking for ideas on how to use it, I can suggest recipes based on other ingredients you have. Let me know!"
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ag4",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11380,
+        "completion": 51,
+        "cached": 11264
+      },
+      "latencyMs": 1775,
+      "error": null,
+      "reply": "I couldn't find a Moroccan soup recipe in your saved recipes. If you remember any specific details or ingredients, I can help you search for something similar!"
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ag5",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11385,
+        "completion": 61,
+        "cached": 11264
+      },
+      "latencyMs": 1886,
+      "error": null,
+      "reply": "I can't locate the specific recipe for \"eggs baked in tomato sauce\". If you have the title or more details about it, please let me know, and I can assist further!"
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ag6",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11385,
+        "completion": 78,
+        "cached": 11264
+      },
+      "latencyMs": 1789,
+      "error": null,
+      "reply": "It seems that I can't search directly for recipes that include gochujang at the moment. If you're looking for ideas or need recipes that use it, please let me know, and I can suggest general recipe ideas or other ingredients you might use with it!"
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ag7",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11388,
+        "completion": 66,
+        "cached": 11264
+      },
+      "latencyMs": 1594,
+      "error": null,
+      "reply": "It appears I can't search for recipes with furikake at the moment. However, if you'd like, you can provide more ingredients or a dish type, and I can suggest recipes based on your pantry."
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ag8",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11373,
+        "completion": 54,
+        "cached": 11264
+      },
+      "latencyMs": 4733,
+      "error": null,
+      "reply": "It appears there are no recipes that specifically require mirin based on the current information. If you have other ingredients you'd like to explore for recipes, please let me know!"
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ag9",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": true,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5665,
+        "completion": 28,
+        "cached": 5632
+      },
+      "latencyMs": 3382,
+      "error": null,
+      "reply": "It appears that mango is not listed in your pantry or saved recipes. If you're looking for something else to make, let me know!"
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ag10",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": true,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5669,
+        "completion": 46,
+        "cached": 5632
+      },
+      "latencyMs": 1886,
+      "error": null,
+      "reply": "It looks like kimchi is not listed in your saved pantry or recipes, so I can't confirm any consumption related to it. If you need help with something else or would like to check other items, just let me know!"
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ag11",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11381,
+        "completion": 59,
+        "cached": 11264
+      },
+      "latencyMs": 5029,
+      "error": null,
+      "reply": "It seems I cannot directly search for recipes right now. However, if you have other ingredients or specific preferences, let me know, and I can assist you with some ideas!"
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ag12",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11384,
+        "completion": 54,
+        "cached": 11264
+      },
+      "latencyMs": 3366,
+      "error": null,
+      "reply": "It looks like there are no recipes with pearl barley available in your saved collection. If you're looking for something specific to make, let me know!"
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ag13",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": true,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11382,
+        "completion": 84,
+        "cached": 11264
+      },
+      "latencyMs": 1744,
+      "error": null,
+      "reply": "It seems I'm currently unable to search the saved recipes directly. However, you can try looking for \"Tarte Tatin\" in your saved recipes, as it typically corresponds to an upside-down apple tart. If you'd like me to assist with anything else regarding that recipe or another one, let me know!"
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ag14",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11381,
+        "completion": 64,
+        "cached": 11264
+      },
+      "latencyMs": 2134,
+      "error": null,
+      "reply": "It looks like I can't search for recipes with sumac specifically at the moment. However, if you know of any recipes that might use it, I can help you check them. Let me know!"
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ag15",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11386,
+        "completion": 67,
+        "cached": 5632
+      },
+      "latencyMs": 3356,
+      "error": null,
+      "reply": "It appears that I cannot search for recipe details at the moment. You can check your saved recipes for any that may resemble a savoury rice porridge. If you need help with something specific, feel free to ask!"
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ct1",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5666,
+        "completion": 102,
+        "cached": 5632
+      },
+      "latencyMs": 1476,
+      "error": null,
+      "reply": "You have the following items expiring soon in your pantry:\n\n1. **Milk** - 1 liter (critical, expires in 2 days)\n2. **Spinach** - 200 grams (warning, expires within 7 days)\n3. **Chicken thighs** - 500 grams (warning, expires within 7 days)\n\nThe milk is urgent, and I recommend using it or freezing it as soon as possible to avoid waste. Would you like recipe suggestions that use any of these ingredients?"
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ct2",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5697,
+        "completion": 11,
+        "cached": 5632
+      },
+      "latencyMs": 741,
+      "error": null,
+      "reply": "You asked how long eggs keep in the fridge."
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ct3",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5669,
+        "completion": 53,
+        "cached": 5632
+      },
+      "latencyMs": 1042,
+      "error": null,
+      "reply": "Cooked rice leftovers can typically be kept in the fridge for about 3 to 5 days. It's best to store it in an airtight container to maintain freshness. If you don't plan to eat it within that time frame, consider freezing it for longer storage."
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ct4",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [
+        "suggest_recipes",
+        "suggest_recipes",
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 4,
+        "prompt": 22920,
+        "completion": 122,
+        "cached": 22528
+      },
+      "latencyMs": 5970,
+      "error": null,
+      "reply": "It seems I'm currently unable to retrieve recipe suggestions. However, given your pantry items, you could consider a simple chicken stir-fry with spinach and rice. If you’d like specific recipes or ideas for a dish, you might want to check a recipe website or app. Let me know if there's anything else I can assist you with!"
+    },
+    {
+      "arm": "without",
+      "run": 2,
+      "id": "ct5",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5668,
+        "completion": 42,
+        "cached": 5632
+      },
+      "latencyMs": 1952,
+      "error": null,
+      "reply": "A standard cup of all-purpose flour weighs approximately 120 grams. However, this can vary slightly depending on factors like the type of flour and how it is measured (scooped vs. spooned)."
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ag1",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11378,
+        "completion": 53,
+        "cached": 11264
+      },
+      "latencyMs": 5145,
+      "error": null,
+      "reply": "It looks like I can't check your recipes for chickpeas right now. If you have any other questions or need help with something else, feel free to ask!"
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ag2",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11382,
+        "completion": 53,
+        "cached": 11264
+      },
+      "latencyMs": 1465,
+      "error": null,
+      "reply": "It seems you don't have any recipes that use tahini. If you need ideas for dishes that include tahini or any other ingredients, feel free to ask!"
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ag3",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11400,
+        "completion": 75,
+        "cached": 11264
+      },
+      "latencyMs": 3088,
+      "error": null,
+      "reply": "It looks like you don't have any saved recipes that specifically include halloumi. If you're looking for ideas, you might consider cooking it with some ingredients on hand, like spinach or in a salad. Would you like suggestions based on those?"
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ag4",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11380,
+        "completion": 70,
+        "cached": 11264
+      },
+      "latencyMs": 3797,
+      "error": null,
+      "reply": "It seems that I currently can't access the Moroccan soup recipe you saved. If you remember any specific details or ingredients from the recipe, I can help you find similar recipes or offer alternatives. Otherwise, let me know how else I can assist you!"
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ag5",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11385,
+        "completion": 56,
+        "cached": 11264
+      },
+      "latencyMs": 2276,
+      "error": null,
+      "reply": "It seems I couldn't access your recipe for eggs baked in tomato sauce at the moment. If you have the details or ingredients, I can help you recreate it!"
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ag6",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11385,
+        "completion": 86,
+        "cached": 11264
+      },
+      "latencyMs": 5985,
+      "error": null,
+      "reply": "It seems I can't directly find recipes that include gochujang at the moment. You might want to check some recipes from your saved collection or look for general recipes that incorporate gochujang, like Korean dishes or spicy sauces! If you need help with anything else, just let me know!"
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ag7",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11388,
+        "completion": 53,
+        "cached": 11264
+      },
+      "latencyMs": 4664,
+      "error": null,
+      "reply": "It seems that none of your saved recipes contain furikake. If you need help finding something else to cook, feel free to ask!"
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ag8",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11377,
+        "completion": 57,
+        "cached": 11264
+      },
+      "latencyMs": 2932,
+      "error": null,
+      "reply": "I can't find recipes that require mirin at the moment. If you have other ingredients in mind, let me know, and I can suggest recipes based on those!"
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ag9",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": true,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5665,
+        "completion": 35,
+        "cached": 5632
+      },
+      "latencyMs": 3488,
+      "error": null,
+      "reply": "I don't have information about specific food items like mango in your records. If you have any other questions or if you need help with something else, feel free to ask!"
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ag10",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": true,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5669,
+        "completion": 51,
+        "cached": 5632
+      },
+      "latencyMs": 1071,
+      "error": null,
+      "reply": "I don't have access to specific data about past meals including kimchi consumption. You can check your meal history or the pantry to see if you have any relevant notes. If you have any other questions about your pantry or recipes, feel free to ask!"
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ag11",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11381,
+        "completion": 96,
+        "cached": 11264
+      },
+      "latencyMs": 5389,
+      "error": null,
+      "reply": "It seems I can't access the recipe database right now. However, if you're looking for a pasta recipe featuring anchovies, a popular option is spaghetti aglio e olio with anchovies, which includes garlic, olive oil, and chili flakes. \n\nIf you have specific ingredients or types of pasta in mind, let me know, and I can suggest something!"
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ag12",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11380,
+        "completion": 50,
+        "cached": 11264
+      },
+      "latencyMs": 6594,
+      "error": null,
+      "reply": "It seems there are no recipes with pearl barley in your saved collection. If you're looking for something specific or need alternatives, just let me know!"
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ag13",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11382,
+        "completion": 68,
+        "cached": 11264
+      },
+      "latencyMs": 5060,
+      "error": null,
+      "reply": "It seems I can't search for the specific recipe right now. However, you can check your saved recipes to look for \"Upside-Down Apple Tart.\" If you need any help with something else, just let me know!"
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ag14",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11381,
+        "completion": 68,
+        "cached": 11264
+      },
+      "latencyMs": 1899,
+      "error": null,
+      "reply": "It seems I can't directly check for recipes containing sumac right now. However, if you know the names of any recipes you've saved that might include it, feel free to share, and I can help you with those!"
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ag15",
+      "kind": "golden",
+      "searchCalled": false,
+      "toolUseCorrect": false,
+      "retrievalHit": false,
+      "answerMatch": false,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11386,
+        "completion": 74,
+        "cached": 11264
+      },
+      "latencyMs": 2099,
+      "error": null,
+      "reply": "It seems that I can't check for a savory rice porridge recipe directly. However, you can try making rice porridge with any broth, spices, and vegetables you have on hand. If you'd like specific recipe ideas or further assistance, let me know!"
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ct1",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5666,
+        "completion": 111,
+        "cached": 5632
+      },
+      "latencyMs": 1599,
+      "error": null,
+      "reply": "In your pantry, the following items are expiring soon:\n\n- **Milk** (1 l) - Status: Critical (expires in 2 days)\n- **Spinach** (200 g) - Status: Warning (expires within 7 days)\n- **Chicken thighs** (500 g) - Status: Warning (expires within 7 days)\n\nMake sure to use the milk soon, and consider cooking with the spinach and chicken thighs as well! If you don't plan to use the milk right away, you could freeze it to reduce waste."
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ct2",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5697,
+        "completion": 11,
+        "cached": 5632
+      },
+      "latencyMs": 792,
+      "error": null,
+      "reply": "You asked how long eggs keep in the fridge."
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ct3",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5669,
+        "completion": 54,
+        "cached": 5632
+      },
+      "latencyMs": 969,
+      "error": null,
+      "reply": "Cooked rice leftovers can typically be stored in the fridge for about 4 to 6 days. To ensure food safety, it's best to store them in an airtight container. If you don't plan to eat them within that timeframe, consider freezing them to reduce waste."
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ct4",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [
+        "suggest_recipes",
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 3,
+        "prompt": 17124,
+        "completion": 110,
+        "cached": 16896
+      },
+      "latencyMs": 3348,
+      "error": null,
+      "reply": "It seems I'm currently unable to fetch recipe suggestions for you. However, you have some ingredients that are close to expiring, such as milk and spinach. If you have some chicken thighs, you might consider making a creamy chicken and spinach dish or a hearty soup. If you'd like, I can help you find more specific recipes if you let me know your preferences!"
+    },
+    {
+      "arm": "without",
+      "run": 3,
+      "id": "ct5",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5668,
+        "completion": 40,
+        "cached": 5632
+      },
+      "latencyMs": 915,
+      "error": null,
+      "reply": "A standard cup of all-purpose flour typically weighs about 120 grams. However, the weight can vary based on the type of flour and how it's measured (scooped vs. spooned)."
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ag1",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_traybake",
+        "hero_tadka_dal",
+        "hero_shakshuka",
+        "filler_093",
+        "filler_090"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12409,
+        "completion": 164,
+        "cached": 10624
+      },
+      "latencyMs": 5019,
+      "error": null,
+      "reply": "Your recipes that include chickpeas are:\n\n1. **Sunday Night Traybake** - One-pan roasted vegetables with a crispy, smoky finish.\n2. **Tadka Dal** - Yellow lentils finished with a sizzling spiced butter.\n3. **Shakshuka** - Eggs poached in a spiced tomato and pepper sauce, eaten with bread.\n4. **Sweet Chilli Paneer Curry** - A weeknight curry with paneer and sweet chilli flavours.\n5. **Mediterranean Black Bean Stew** - A weeknight stew with black bean and Mediterranean flavours.\n\nLet me know if you need more information about any of these recipes!"
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ag2",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_harira",
+        "hero_glow_bowl",
+        "filler_080",
+        "hero_tadka_dal",
+        "filler_031"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12411,
+        "completion": 74,
+        "cached": 11520
+      },
+      "latencyMs": 2938,
+      "error": null,
+      "reply": "You have a recipe that uses tahini called **Monday Glow Bowl**. It's a bright grain bowl with a creamy lemon dressing. If you need more details or want to save this recipe, just let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ag3",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_desk_wraps",
+        "hero_fattoush",
+        "filler_106",
+        "hero_flatbreads",
+        "filler_134"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12416,
+        "completion": 80,
+        "cached": 11520
+      },
+      "latencyMs": 3545,
+      "error": null,
+      "reply": "You have saved a recipe that includes halloumi:\n\n- **Desk Lunch Wraps**: Grilled cheese and roasted pepper wraps that travel well, using 225 g of halloumi.\n\nWould you like to make this recipe or need more information about it?"
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ag4",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_harira",
+        "hero_winter_soup",
+        "filler_080",
+        "filler_010",
+        "filler_090"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12408,
+        "completion": 81,
+        "cached": 11520
+      },
+      "latencyMs": 7491,
+      "error": null,
+      "reply": "The Moroccan soup recipe you saved is called **Harira**. It's a Moroccan tomato and lentil soup traditionally served to break the fast during Ramadan. If you'd like, I can provide more details or help you with something else related to this recipe!"
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ag5",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_shakshuka",
+        "hero_breakfast_bake",
+        "filler_044",
+        "filler_175",
+        "filler_139"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12413,
+        "completion": 142,
+        "cached": 10624
+      },
+      "latencyMs": 8032,
+      "error": null,
+      "reply": "Your recipe for eggs baked in tomato sauce is **Shakshuka**. Here are some details:\n\n- **Description**: Eggs poached in a spiced tomato and pepper sauce, eaten with bread.\n- **Ingredients**:\n  - Eggs — 4 item\n  - Tinned tomatoes — 400 g\n  - Red pepper — 2 item\n  - Ground cumin — 1 tsp\n  - Feta — 50 g\n\nIf you'd like more details or to make this dish, just let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ag6",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_wings",
+        "hero_jook",
+        "filler_131",
+        "hero_miso_aubergine",
+        "filler_140"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12398,
+        "completion": 74,
+        "cached": 11520
+      },
+      "latencyMs": 7429,
+      "error": null,
+      "reply": "The recipe that calls for gochujang is **Sticky Weeknight Wings**. It features oven-baked wings in a sweet, spicy glaze. If you're interested, I can provide more details or help with saving the recipe."
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ag7",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_salmon_bowls",
+        "filler_181",
+        "hero_teriyaki",
+        "filler_079",
+        "hero_miso_aubergine"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12421,
+        "completion": 75,
+        "cached": 11520
+      },
+      "latencyMs": 4160,
+      "error": null,
+      "reply": "Yes, you have saved a recipe that includes furikake. It's in the \"Salmon Rice Bowls\" recipe. If you'd like more details about this recipe or need help with anything else, let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ag8",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_miso_aubergine",
+        "hero_teriyaki",
+        "filler_012",
+        "filler_087",
+        "filler_184"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12405,
+        "completion": 126,
+        "cached": 11520
+      },
+      "latencyMs": 6189,
+      "error": null,
+      "reply": "Here are the recipes that require mirin:\n\n1. **Miso Glazed Aubergine**\n   - Tags: side, vegan, Japanese\n   - Description: Roasted aubergine halves with a sweet-salty glaze.\n\n2. **Teriyaki Chicken**\n   - Tags: dinner, Japanese\n   - Description: Glossy homemade teriyaki with chicken thighs.\n\nIf you want to know more details or save any of these recipes, just let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ag9",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "ml_mango_3",
+        "ml_mango_45",
+        "ml_mango_10",
+        "ml_filler_213",
+        "ml_filler_219"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12044,
+        "completion": 44,
+        "cached": 11520
+      },
+      "latencyMs": 6540,
+      "error": null,
+      "reply": "You last ate mango on September 27, 2026."
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ag10",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "ml_kimchi_20",
+        "ml_kimchi_21",
+        "ml_filler_011",
+        "ml_filler_144",
+        "ml_filler_207"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12081,
+        "completion": 77,
+        "cached": 11520
+      },
+      "latencyMs": 7178,
+      "error": null,
+      "reply": "Yes, you ate kimchi on two occasions in the past month: once on **September 9** and again on **September 10**."
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ag11",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_pasta_night",
+        "filler_065",
+        "filler_155",
+        "filler_095",
+        "filler_134"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12410,
+        "completion": 137,
+        "cached": 11520
+      },
+      "latencyMs": 8110,
+      "error": null,
+      "reply": "The recipe for pasta featuring anchovies is called **\"Friday Pasta Night.\"** Here’s a brief overview:\n\n- **Description**: A salty, garlicky spaghetti that comes together in just 15 minutes.\n- **Ingredients**:\n  - Spaghetti — 200 g\n  - Anchovies — 6 items\n  - Garlic — 3 cloves\n  - Chilli flakes — 1 tsp\n  - Parsley — 1 handful\n\nWould you like the full recipe details or to save it for later?"
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ag12",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_winter_soup",
+        "filler_087",
+        "filler_138",
+        "hero_jook",
+        "filler_151"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12415,
+        "completion": 78,
+        "cached": 11520
+      },
+      "latencyMs": 5020,
+      "error": null,
+      "reply": "You have a recipe called **\"Mum's Winter Soup\"** that includes pearl barley. This comforting soup is a thick and filling option for cold evenings. If you want more details or to save it, just let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ag13",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_tarte_tatin",
+        "filler_098",
+        "filler_163",
+        "filler_154",
+        "filler_020"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12418,
+        "completion": 71,
+        "cached": 11520
+      },
+      "latencyMs": 4965,
+      "error": null,
+      "reply": "The upside-down apple tart you saved is called **Tarte Tatin**. It features caramelized apples baked under puff pastry. If you need the full recipe or any specific details, just let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ag14",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_fattoush",
+        "filler_073",
+        "filler_077",
+        "hero_miso_aubergine",
+        "filler_107"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12408,
+        "completion": 80,
+        "cached": 11520
+      },
+      "latencyMs": 4360,
+      "error": null,
+      "reply": "The recipe that includes sumac is:\n\n- **Fattoush**: A crunchy Levantine bread salad that uses sumac among other ingredients. \n\nIf you'd like to know more about the recipe or use it, just let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ag15",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_jook",
+        "filler_140",
+        "filler_012",
+        "filler_185",
+        "filler_087"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12403,
+        "completion": 118,
+        "cached": 11520
+      },
+      "latencyMs": 3992,
+      "error": null,
+      "reply": "Yes, you have a savory rice porridge recipe called \"Jook.\" It's a Cantonese rice porridge simmered for hours and topped with scallions and ginger. Here's a brief overview:\n\n**Jook**\n- **Description**: Gentle food for sick days.\n- **Ingredients**: Jasmine rice, chicken stock, fresh ginger, scallions, and white pepper.\n\nIf you need more details about this recipe, let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ct1",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5844,
+        "completion": 95,
+        "cached": 5760
+      },
+      "latencyMs": 1866,
+      "error": null,
+      "reply": "Here's what's expiring soon in your pantry:\n\n- **Milk**: 1 liter (critical, expires in 2 days)\n- **Spinach**: 200 grams (warning, expires within 7 days)\n- **Chicken Thighs**: 500 grams (warning, expires within 7 days)\n- **Lemons**: 3 items (expired)\n\nIf you need any recipe ideas or suggestions for using these ingredients, just let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ct2",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5875,
+        "completion": 12,
+        "cached": 5760
+      },
+      "latencyMs": 826,
+      "error": null,
+      "reply": "You previously asked how long eggs keep in the fridge."
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ct3",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5847,
+        "completion": 52,
+        "cached": 5760
+      },
+      "latencyMs": 922,
+      "error": null,
+      "reply": "Cooked rice leftovers can typically be stored in the fridge for about 4 to 6 days. Make sure to store it in an airtight container to maintain its freshness. If you're unsure you'll eat it within that time, consider freezing it to reduce waste!"
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ct4",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11728,
+        "completion": 92,
+        "cached": 11520
+      },
+      "latencyMs": 4856,
+      "error": null,
+      "reply": "I'm unable to suggest specific recipes at the moment. You can take a look at your pantry items, including spinach and chicken thighs, which are set to expire soon. You might consider making a stir-fry or salad using these ingredients. If you have a specific dish in mind, let me know, and I can help you find something based on your saved recipes!"
+    },
+    {
+      "arm": "with",
+      "run": 1,
+      "id": "ct5",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5846,
+        "completion": 49,
+        "cached": 5760
+      },
+      "latencyMs": 1406,
+      "error": null,
+      "reply": "A standard cup of all-purpose flour typically weighs around 120 to 125 grams, depending on how it's measured (scooped vs. spooned into the cup). For the most accurate measurement, it's best to use a kitchen scale."
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ag1",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": false,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_traybake",
+        "hero_tadka_dal",
+        "hero_shakshuka",
+        "filler_093",
+        "filler_090"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12405,
+        "completion": 54,
+        "cached": 11520
+      },
+      "latencyMs": 4003,
+      "error": null,
+      "reply": "It looks like none of your saved recipes contain chickpeas. Would you like to search for recipes that use other ingredients from your pantry?"
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ag2",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_harira",
+        "hero_glow_bowl",
+        "filler_080",
+        "hero_tadka_dal",
+        "filler_031"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12407,
+        "completion": 64,
+        "cached": 11520
+      },
+      "latencyMs": 5281,
+      "error": null,
+      "reply": "Yes, you have a recipe that uses tahini called **Monday Glow Bowl**. It's a bright grain bowl with a creamy lemon dressing. Would you like more details on this recipe?"
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ag3",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_desk_wraps",
+        "hero_fattoush",
+        "filler_106",
+        "hero_flatbreads",
+        "filler_134"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12420,
+        "completion": 83,
+        "cached": 11520
+      },
+      "latencyMs": 6501,
+      "error": null,
+      "reply": "You have saved a recipe that includes halloumi:\n\n- **Desk Lunch Wraps**: Grilled cheese and roasted pepper wraps that travel well, featuring 225 g of halloumi.\n\nWould you like to use this recipe or look for something else?"
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ag4",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_harira",
+        "hero_winter_soup",
+        "filler_080",
+        "filler_010",
+        "filler_090"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12408,
+        "completion": 79,
+        "cached": 12288
+      },
+      "latencyMs": 6262,
+      "error": null,
+      "reply": "The Moroccan soup recipe you saved is called **Harira**. It's a Moroccan tomato and lentil soup, traditionally served to break the fast during Ramadan. \n\nIf you need more details or want to make it, just let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ag5",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_shakshuka",
+        "hero_breakfast_bake",
+        "filler_044",
+        "filler_175",
+        "filler_139"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12409,
+        "completion": 68,
+        "cached": 11520
+      },
+      "latencyMs": 4351,
+      "error": null,
+      "reply": "Your recipe for \"Shakshuka\" features eggs poached in a spiced tomato and pepper sauce, eaten with bread. Would you like more details about the recipe or its ingredients?"
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ag6",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_wings",
+        "hero_jook",
+        "filler_131",
+        "hero_miso_aubergine",
+        "filler_140"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12402,
+        "completion": 87,
+        "cached": 11520
+      },
+      "latencyMs": 3904,
+      "error": null,
+      "reply": "The recipe that calls for gochujang is **Sticky Weeknight Wings**. It features oven-baked wings in a sweet, spicy glaze, using gochujang among its ingredients. If you'd like to see more details or save this recipe, let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ag7",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_salmon_bowls",
+        "filler_181",
+        "hero_teriyaki",
+        "filler_079",
+        "hero_miso_aubergine"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12421,
+        "completion": 85,
+        "cached": 12288
+      },
+      "latencyMs": 5184,
+      "error": null,
+      "reply": "Yes, you have saved a recipe that includes furikake. It's in the \"Salmon Rice Bowls\" recipe, which features seared salmon over sticky rice with quick pickles. If you need more details or would like to cook it, let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ag8",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_miso_aubergine",
+        "hero_teriyaki",
+        "filler_012",
+        "filler_087",
+        "filler_184"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12401,
+        "completion": 163,
+        "cached": 11520
+      },
+      "latencyMs": 6379,
+      "error": null,
+      "reply": "The following recipes include mirin:\n\n1. **Miso Glazed Aubergine** - Roasted aubergine halves with a sweet-salty glaze.\n2. **Teriyaki Chicken** - Glossy homemade teriyaki with chicken thighs.\n3. **Ginger Soy Black bean Rice Bowl** - A fresh rice bowl with black bean and ginger soy flavors.\n4. **Honey Mustard Paneer Rice Bowl** - A simple rice bowl with paneer and honey mustard flavors.\n5. **Garlic Butter Beef Rice Bowl** - A fresh rice bowl with beef and garlic butter flavors.\n\nIf you need more information about any of these recipes, just let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ag9",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "ml_mango_3",
+        "ml_mango_45",
+        "ml_mango_10",
+        "ml_filler_213",
+        "ml_filler_219"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12044,
+        "completion": 44,
+        "cached": 11904
+      },
+      "latencyMs": 5713,
+      "error": null,
+      "reply": "You last ate mango on September 27, 2026."
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ag10",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "ml_kimchi_20",
+        "ml_kimchi_21",
+        "ml_filler_011",
+        "ml_filler_144",
+        "ml_filler_207"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12081,
+        "completion": 68,
+        "cached": 11520
+      },
+      "latencyMs": 4079,
+      "error": null,
+      "reply": "Yes, you ate kimchi on September 9th and September 10th, 2026."
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ag11",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_pasta_night",
+        "filler_065",
+        "filler_155",
+        "filler_095",
+        "filler_134"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12406,
+        "completion": 130,
+        "cached": 11520
+      },
+      "latencyMs": 6950,
+      "error": null,
+      "reply": "The pasta recipe you're looking for is called **\"Friday Pasta Night.\"** \n\nIt's a quick dish that comes together in just 15 minutes, featuring salty, garlicky spaghetti with anchovies. Here’s a brief overview of the ingredients:\n\n- Spaghetti — 200 g\n- Anchovies — 6 items\n- Garlic — 3 cloves\n- Chilli flakes — 1 tsp\n- Parsley — 1 handful\n\nLet me know if you'd like to save this recipe or need more details!"
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ag12",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_winter_soup",
+        "filler_087",
+        "filler_138",
+        "hero_jook",
+        "filler_151"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12415,
+        "completion": 95,
+        "cached": 12288
+      },
+      "latencyMs": 6148,
+      "error": null,
+      "reply": "You have one recipe that includes pearl barley:\n\n**Mum's Winter Soup** - A thick, filling soup for cold evenings. The recipe calls for 100 g of pearl barley, along with other ingredients like carrots, celery, and leek. \n\nWould you like more details about this recipe or help with something else?"
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ag13",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_tarte_tatin",
+        "filler_098",
+        "filler_163",
+        "filler_154",
+        "filler_020"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12418,
+        "completion": 76,
+        "cached": 12288
+      },
+      "latencyMs": 6817,
+      "error": null,
+      "reply": "I found the recipe you were looking for. It's called **Tarte Tatin**, which is an upside-down caramelised apple tart baked under puff pastry. \n\nIf you need more details or have questions about it, let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ag14",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_fattoush",
+        "filler_073",
+        "filler_077",
+        "hero_miso_aubergine",
+        "filler_107"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12404,
+        "completion": 81,
+        "cached": 11520
+      },
+      "latencyMs": 4384,
+      "error": null,
+      "reply": "The recipe that uses sumac is **Fattoush**. It features a crunchy Levantine bread salad with ingredients like pitta breads, romaine lettuce, tomatoes, and a dressing that includes sumac. Would you like to get more details about this recipe?"
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ag15",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_jook",
+        "filler_140",
+        "filler_012",
+        "filler_185",
+        "filler_087"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12403,
+        "completion": 86,
+        "cached": 12288
+      },
+      "latencyMs": 4813,
+      "error": null,
+      "reply": "Yes, you have a savoury rice porridge recipe called \"Jook\". It's Cantonese rice porridge simmered for hours and topped with scallion and ginger, making it a gentle food for sick days. \n\nWould you like to see the full details of this recipe?"
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ct1",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5844,
+        "completion": 94,
+        "cached": 5760
+      },
+      "latencyMs": 5097,
+      "error": null,
+      "reply": "You have the following items expiring soon:\n\n1. **Milk** - 1 l (critical status, expires in 2 days)\n2. **Spinach** - 200 g (warning status, expires within 7 days)\n3. **Chicken thighs** - 500 g (warning status, expires within 7 days)\n\nIt's a good idea to use or freeze the milk soon to avoid waste. Would you like suggestions on recipes or storage options?"
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ct2",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5875,
+        "completion": 12,
+        "cached": 5760
+      },
+      "latencyMs": 828,
+      "error": null,
+      "reply": "You asked about how long eggs keep in the fridge."
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ct3",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5847,
+        "completion": 67,
+        "cached": 5760
+      },
+      "latencyMs": 1050,
+      "error": null,
+      "reply": "Cooked rice leftovers can generally be stored in the fridge for about 3 to 5 days. To ensure quality and safety, make sure to store it in an airtight container and reheat it thoroughly before consuming. If you don't plan to eat it within that time frame, you can also freeze it to extend its shelf life."
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ct4",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [
+        "suggest_recipes",
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 3,
+        "prompt": 17656,
+        "completion": 89,
+        "cached": 17280
+      },
+      "latencyMs": 8272,
+      "error": null,
+      "reply": "I'm currently unable to provide recipe suggestions. However, you might want to consider using the spinach and chicken thighs you have in your pantry. They can work well together in a stir-fry or a salad. If you would like to know more, please let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 2,
+      "id": "ct5",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5846,
+        "completion": 36,
+        "cached": 5760
+      },
+      "latencyMs": 3002,
+      "error": null,
+      "reply": "A standard cup of all-purpose flour typically weighs about 120 grams. However, this can vary slightly depending on how the flour is measured or the specific type of flour used."
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ag1",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_traybake",
+        "hero_tadka_dal",
+        "hero_shakshuka",
+        "filler_093",
+        "filler_090"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12405,
+        "completion": 102,
+        "cached": 12288
+      },
+      "latencyMs": 5687,
+      "error": null,
+      "reply": "Here are your recipes that use chickpeas:\n\n1. **Sunday Night Traybake** - One-pan roasted vegetables with a crispy, smoky finish.\n2. **Shakshuka** - Eggs poached in a spiced tomato and pepper sauce, eaten with bread.\n\nIf you want to explore these recipes in detail or need help with something else, let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ag2",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_harira",
+        "hero_glow_bowl",
+        "filler_080",
+        "hero_tadka_dal",
+        "filler_031"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12411,
+        "completion": 119,
+        "cached": 12288
+      },
+      "latencyMs": 7398,
+      "error": null,
+      "reply": "Yes, you have a recipe that uses tahini! Here are some details:\n\n- **Recipe Name:** Monday Glow Bowl\n  - **Tags:** Lunch, Vegan, Meal Prep\n  - **Description:** A bright grain bowl with a creamy lemon dressing.\n  - **Key Ingredients:** Quinoa, Kale, Tahini, Lemon, Cucumber.\n\nIf you need more information or want to cook this recipe, just let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ag3",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_desk_wraps",
+        "hero_fattoush",
+        "filler_106",
+        "hero_flatbreads",
+        "filler_134"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12420,
+        "completion": 90,
+        "cached": 12288
+      },
+      "latencyMs": 7596,
+      "error": null,
+      "reply": "You have a saved recipe that includes halloumi: **Desk Lunch Wraps**. It calls for 225g of halloumi along with tortilla wraps, roasted red peppers, and rocket. \n\nWould you like to see the full recipe details or do you have something else in mind?"
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ag4",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_harira",
+        "hero_winter_soup",
+        "filler_080",
+        "filler_010",
+        "filler_090"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12404,
+        "completion": 73,
+        "cached": 11520
+      },
+      "latencyMs": 7097,
+      "error": null,
+      "reply": "The Moroccan soup recipe you saved is called **Harira**. It's a Moroccan tomato and lentil soup traditionally served to break the fast during Ramadan. \n\nIf you need more details or want to make it, let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ag5",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_shakshuka",
+        "hero_breakfast_bake",
+        "filler_044",
+        "filler_175",
+        "filler_139"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12409,
+        "completion": 146,
+        "cached": 12288
+      },
+      "latencyMs": 8574,
+      "error": null,
+      "reply": "I found your recipe for **Shakshuka**, which features eggs poached in a spiced tomato and pepper sauce. Here are some details:\n\n- **Tags:** Brunch, Vegetarian\n- **Description:** Eggs poached in a spiced tomato and pepper sauce, eaten with bread.\n\n**Ingredients:**\n- Eggs — 4 item\n- Tinned tomatoes — 400 g\n- Red pepper — 2 item\n- Ground cumin — 1 tsp\n- Feta — 50 g\n\nWould you like more details or instructions on how to prepare it?"
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ag6",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_wings",
+        "hero_jook",
+        "filler_131",
+        "hero_miso_aubergine",
+        "filler_140"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12402,
+        "completion": 80,
+        "cached": 12288
+      },
+      "latencyMs": 7588,
+      "error": null,
+      "reply": "The recipe that calls for gochujang is **Sticky Weeknight Wings**. It features oven-baked wings coated in a sweet and spicy glaze. If you'd like to know more about it or save it, just let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ag7",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_salmon_bowls",
+        "filler_181",
+        "hero_teriyaki",
+        "filler_079",
+        "hero_miso_aubergine"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12421,
+        "completion": 93,
+        "cached": 12288
+      },
+      "latencyMs": 6658,
+      "error": null,
+      "reply": "Yes, you have saved a recipe that includes furikake:\n\n- **Salmon Rice Bowls**: Seared salmon over sticky rice with quick pickles, which includes furikake in the ingredients.\n\nIf you need any details about this recipe or would like to cook it, just let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ag8",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_miso_aubergine",
+        "hero_teriyaki",
+        "filler_012",
+        "filler_087",
+        "filler_184"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12401,
+        "completion": 168,
+        "cached": 12288
+      },
+      "latencyMs": 6228,
+      "error": null,
+      "reply": "The following recipes include mirin as an ingredient:\n\n1. **Miso Glazed Aubergine** - Roasted aubergine halves with a sweet-salty glaze.\n2. **Teriyaki Chicken** - Glossy homemade teriyaki with chicken thighs.\n3. **Ginger Soy Black Bean Rice Bowl** - A fresh rice bowl with black bean and ginger soy flavors.\n4. **Honey Mustard Paneer Rice Bowl** - A simple rice bowl with paneer and honey mustard flavors.\n5. **Garlic Butter Beef Rice Bowl** - A fresh rice bowl with beef and garlic butter flavors.\n\nIf you have any questions about these recipes or need further assistance, feel free to ask!"
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ag9",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "ml_mango_3",
+        "ml_mango_45",
+        "ml_mango_10",
+        "ml_filler_213",
+        "ml_filler_219"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12044,
+        "completion": 44,
+        "cached": 11904
+      },
+      "latencyMs": 4649,
+      "error": null,
+      "reply": "You last ate mango on September 27, 2026."
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ag10",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "ml_kimchi_20",
+        "ml_kimchi_21",
+        "ml_filler_011",
+        "ml_filler_144",
+        "ml_filler_207"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12081,
+        "completion": 64,
+        "cached": 11904
+      },
+      "latencyMs": 4172,
+      "error": null,
+      "reply": "Yes, you ate kimchi on September 9th and September 10th."
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ag11",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_pasta_night",
+        "filler_065",
+        "filler_155",
+        "filler_095",
+        "filler_134"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12410,
+        "completion": 138,
+        "cached": 12288
+      },
+      "latencyMs": 6929,
+      "error": null,
+      "reply": "The pasta recipe with anchovies is called **Friday Pasta Night**. It's a quick dish that can be made in just 15 minutes. Here are the details:\n\n- **Ingredients**:\n  - 200 g spaghetti\n  - 6 anchovies\n  - 3 cloves garlic\n  - 1 tsp chilli flakes\n  - 1 handful parsley\n\n- **Description**: Salty, garlicky spaghetti that comes together quickly.\n\nIf you'd like to save this recipe or need more information, just let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ag12",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_winter_soup",
+        "filler_087",
+        "filler_138",
+        "hero_jook",
+        "filler_151"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12415,
+        "completion": 98,
+        "cached": 12288
+      },
+      "latencyMs": 3981,
+      "error": null,
+      "reply": "You have a recipe that includes pearl barley:\n\n1. **Mum's Winter Soup** - A thick, filling soup for cold evenings, which uses 100 g of pearl barley along with carrots, celery, leek, and vegetable stock.\n\nIf you need more information about this recipe or would like to save it, let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ag13",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_tarte_tatin",
+        "filler_098",
+        "filler_163",
+        "filler_154",
+        "filler_020"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12422,
+        "completion": 76,
+        "cached": 11520
+      },
+      "latencyMs": 4131,
+      "error": null,
+      "reply": "I found the recipe for \"Tarte Tatin,\" which is your upside-down caramelised apple tart baked under puff pastry. If you need more details or want to revisit any specific steps, just let me know!"
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ag14",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_fattoush",
+        "filler_073",
+        "filler_077",
+        "hero_miso_aubergine",
+        "filler_107"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12408,
+        "completion": 65,
+        "cached": 12288
+      },
+      "latencyMs": 5106,
+      "error": null,
+      "reply": "The recipe that uses sumac is **Fattoush**, which is a crunchy Levantine bread salad. Would you like more details about this recipe or anything else?"
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ag15",
+      "kind": "golden",
+      "searchCalled": true,
+      "toolUseCorrect": true,
+      "retrievalHit": true,
+      "answerMatch": true,
+      "toolCalls": [
+        "search_recipes_and_meals"
+      ],
+      "returnedKeys": [
+        "hero_jook",
+        "filler_140",
+        "filler_012",
+        "filler_185",
+        "filler_087"
+      ],
+      "usage": {
+        "calls": 2,
+        "prompt": 12403,
+        "completion": 86,
+        "cached": 12288
+      },
+      "latencyMs": 5632,
+      "error": null,
+      "reply": "Yes, you have a savory rice porridge recipe called \"Jook.\" It is a Cantonese rice porridge simmered for hours, topped with scallions and ginger, making it a comforting dish. \n\nIf you'd like, I can provide you with the full recipe details!"
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ct1",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5844,
+        "completion": 77,
+        "cached": 5760
+      },
+      "latencyMs": 1793,
+      "error": null,
+      "reply": "In your pantry, the following items are expiring soon:\n\n1. Milk - Critical status, expires in 2 days.\n2. Spinach - Warning status, expires within 7 days.\n3. Chicken thighs - Warning status, expires within 7 days.\n4. Lemons - Expired.\n\nMake sure to use the milk soon or consider freezing it to avoid waste!"
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ct2",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5875,
+        "completion": 11,
+        "cached": 5760
+      },
+      "latencyMs": 2696,
+      "error": null,
+      "reply": "You asked how long eggs keep in the fridge."
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ct3",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5847,
+        "completion": 50,
+        "cached": 5760
+      },
+      "latencyMs": 1111,
+      "error": null,
+      "reply": "Cooked rice leftovers typically keep for about 3 to 5 days in the fridge. Make sure to store them in an airtight container to maintain freshness. If you think you won't eat them within that timeframe, consider freezing them to reduce waste."
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ct4",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [
+        "suggest_recipes"
+      ],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 2,
+        "prompt": 11726,
+        "completion": 67,
+        "cached": 11520
+      },
+      "latencyMs": 4296,
+      "error": null,
+      "reply": "I’m currently unable to provide recipe suggestions. You might consider checking any saved recipes you have or looking for something based on what you have in your pantry! If you'd like to share specific ingredients you're thinking of, I can try to help with that."
+    },
+    {
+      "arm": "with",
+      "run": 3,
+      "id": "ct5",
+      "kind": "control",
+      "searchCalled": false,
+      "toolUseCorrect": true,
+      "retrievalHit": null,
+      "answerMatch": null,
+      "toolCalls": [],
+      "returnedKeys": [],
+      "usage": {
+        "calls": 1,
+        "prompt": 5846,
+        "completion": 60,
+        "cached": 5760
+      },
+      "latencyMs": 986,
+      "error": null,
+      "reply": "A standard cup of all-purpose flour typically weighs about 120 to 130 grams. However, the exact weight can vary depending on how the flour is measured (scooped vs. spooned). For the most accurate measurement, it's best to weigh the flour if you have a kitchen scale."
+    }
+  ]
+}

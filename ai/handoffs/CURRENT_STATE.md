@@ -5,96 +5,106 @@ Phase A of the agent-knowledge roadmap. Spec: [TASK-069-spec.md](../tasks/TASK-0
 
 # Current Status
 
-**Green COMPLETE for criteria 1–11e, committed on `staging` (`7e34395`), not pushed. Migration 0022 applied on local only.
-Local smoke test (§6 step 4) PASSED 2026-09-29.**
-Unit tests 223/223, dbtests 44/44 (local), eslint clean. Three locked tests were fixed with Connor's
-permission (see Decisions Made).
+**§6 step 5 (evals) DONE on local 2026-09-30. All eval work is UNCOMMITTED on `staging`.** The Green code (`7e34395`)
+is committed, not pushed. 0022 has been applied on local only.
+Eval harness (spec §2.8) built and run. Results in [docs/eval/TASK-069-results.md](../../docs/eval/TASK-069-results.md):
+- Retrieval: hybrid recall@5 0.906, lexical 0.719, vector 0.844.
+- Agent, with tool: tool-use 1.0, retrieval 1.0.
+- The results doc cites commit `e201b73` + dirty tree. Commit, then re-run both evals for a clean hash.
 
-# Files Modified
+# Files Modified (this session, all uncommitted)
 
-- New: `server/services/retrieval/{constants,documents,fusion,indexer,searchService}.js`,
-  `server/services/chat/handlers/searchRecipesAndMeals.js`, `server/scripts/backfillSearchDocuments.js`,
-  `server/db/migrations/0022_search_documents.sql`, `server/test/db/snapshotGuard.dbtest.js` (test-writer,
-  Red first: it failed on the missing migration/export; now locked)
-- Edited: `server/db/schema.js` (`searchDocuments` + `vector`/`tsvector` customType),
-  `db/migrations/meta/_journal.json` (idx 20, `when` 1790728028520), `server/instrument.js` (`logServerEvent`),
-  `services/ai/{providerInterface,openaiProvider}.js` (`embed`, `EMBEDDING_MODEL`), `services/aiService.js`
-  (tool entry, one prompt rule, `export PANTRY_TOOLS`), `services/chat/createToolHandlers.js`,
-  `server/package.json` (`test:db` script), `ai/migrations/MIGRATION_LEDGER.md` (row 6)
+- New `eval/`:
+  - `lib/{metrics,guard,fixtureCheck,dates,embedCache}.js` + `*.test.js` (99 tests, Red-first via test-writer, locked)
+  - `lib/{runtime,household}.js`, `retrieval.js`, `agent.js`, `scripts/generateFixture.js`
+  - `fixtures/{household,golden}.json`
+  - `results/{retrieval,agent}-2026-09-30.json`
+- New `docs/eval/TASK-069-results.md`; new `ai/memory/STABLE_CONTEXT.md` (the first one: TDD Exemptions list).
+- Edited:
+  - root `package.json`: `eval:test|fixture|retrieval|agent` scripts
+  - `.gitignore`: `eval/.cache/`
+  - `eslint.config.js`: `eval/**/*.js` added to the Node-globals block. **Not in the spec §3 Allowed list; flagged to Connor.**
+- TDD kit (Connor approved "Fix the kit"):
+  - `.claude/hooks/tdd/tdd_record_result.mjs` parses the node:test `ℹ fail N` / `ℹ pass N` summary before the exit code.
+  - `tdd_source_gate.mjs` allows a Write that CREATES a new file of ≤2000 chars containing "not implemented"
+    while the gate is awaiting_red (interface stubs).
+  - `.claude/tdd-config.json`: eval orchestration exemptions.
 
 # Files Required Next
 
-- The 3 locked test files named in Known Risks, only once Connor grants permission
-- Spec §2.8 (eval), §2.10 (ADRs/README), §6 steps 4–7 for the rollout
+- Spec §2.10 (ADRs 0001–0005, README section), §6 steps 6–7 (staging/prod rollout), `docs/eval/TASK-069-results.md`.
 
 # Files Already Reviewed (don't re-read unless changed)
 
-Spec §2–§8 and every TASK-069 test file. Also `dbHarness.js`, `aiService.js` (tool list and prompt rules),
-`resolveProvider.js`, `loadEnv.js`, `db/client.js`, `db/migrate.js`.
+Spec §2–§8, every TASK-069 test file, `searchService.js`, `indexer.js` (reconcile + exports), `documents.js`
+builders, `aiService.chat` + `PANTRY_TOOLS` search entry, `openaiProvider.js`, `instrument.js`, the chat route's
+context building (`routes/ai.js` ~380–440), the search handler, the backfill script, the TDD kit hooks.
 
 # Dependency Chain
 
-Editing: spec §3 Allowed only (all edits so far are inside it).
-Requires: recipes/meal_logs (read-only), households FK, `resolveProvider()` → OpenAI SDK, drizzle `db.execute`.
+Editing: `eval/**`, `docs/eval/**`, `docs/adr/**`, README (per spec §3).
+Requires: server retrieval modules and `aiService.chat` (imported by the eval, never the reverse), local Neon branch, OpenAI.
 Irrelevant: client/**, auth, push, shopping, onboarding, recipeSearchService.
 
 # Architecture Notes
 
-- `upsertRecipeDocuments` is ONE statement for the batch: a `jsonb_to_recordset` payload CTE, then
-  `src` (`JOIN recipes r` … `ORDER BY r.id FOR SHARE OF r`), then a top-level INSERT … ON CONFLICT … WHERE
-  household matches. The G9 shape is otherwise unchanged. 11d(v) proves the batched/joined form still
-  blocks and rechecks (commit → `written=[]`, rollback → `[rid]`).
-- Household-mismatch integrity check: a separate query in `reconcileHousehold`, run only when some
-  snapshots went unwritten. It emits `retrieval-integrity` plus `captureExceptionSafely`.
-- `reconcileHousehold` also returns `docCount`, `reconcileEmbed`, `embedTokens` (extra fields beyond C9).
-  `searchService` logs them, so it issues no extra queries (the C2 statement classification stays clean).
-- The search `mode` override: `lexical` skips the query embed and vector query; `vector` skips lexical.
-  The returned `mode` is the override's name. The eval uses this.
-- `planReconcile(hh)` (read-only) powers the backfill dry run and shares the detect queries with reconcile.
-- Backfill loads `.env.local` only for `--env local`. Staging and production need `DATABASE_URL` set explicitly.
+- The eval imports server modules and deps via `eval/lib/runtime.js` (`serverModule` / `serverDependency` resolve the
+  ESM entry under `server/node_modules`, so patches hit the same instances). The guard runs before any DB import.
+- `loadEvalEnv` deletes `SENTRY_DSN` (`.env.local` has it). Timings come from Sentry's
+  `getClient().on('beforeCaptureLog')`. `Sentry.logger` is a module namespace and can't be patched.
+- The frozen index is enforced by an index-state hash before and after the measured passes, because
+  `searchRecipesAndMeals` has no `embedBudget` override. That's a recorded deviation.
+- The agent "without" arm filters the tool out of `startChatSession` (eval process only). The prompt is unchanged.
+  Non-search tools are stubbed with refusals.
 
 # Decisions Made
 
-- `test:db` runs the dbtest files serially (`--test-concurrency=1`). backfill.dbtest's "writes nothing"
-  counts ALL `search_documents` rows, so it fails when other files write concurrently.
-- 2026-09-30 Connor: "You have permission to fix all three test files". The enforcement kit isn't installed,
-  so `approve_test_rewrite.sh` doesn't exist and was not run. Edits:
-  - `fingerprint.dbtest.js`: each pair is seeded in 2 households, because recipes are unique on
-    (household_id, name) and household_id is not a fingerprint input.
-  - `bootCompat.dbtest.js`: the child no longer calls `process.exit(0)` (Windows/Node 24 libuv crash).
-  - `backfill.dbtest.js`: removed the unused `spawnSync` import.
+- 2026-09-30 Connor: "Fix the kit (Recommended)". Kit gaps: (1) node:test output was never parsed, so every run was
+  UNKNOWN; (2) a new module can't reach a valid Red. Fixed as listed under Files Modified.
+- 2026-09-30 Connor: "Test logic, exempt runners". `eval/{retrieval,agent}.js`, `eval/lib/{household,runtime}.js` and
+  `eval/scripts/**` are TDD-exempt (STABLE_CONTEXT + `alwaysExemptPatterns`). `runtime.js` was added to the list
+  Connor approved, and he was told.
+- The first agent run was discarded: at concurrency 4, 71/120 chats hit the 200k TPM limit. Now concurrency 2,
+  backoff retry, and errors are excluded from rates. The reported run had 0 errors.
+- No `approve_test_rewrite.sh` use this session. No test file was edited after being written.
 
 # Remaining Work
 
-1. Evals + results doc, ADRs 0001–0005, README section. (Local smoke test §6 step 4 PASSED 2026-09-29.)
-   Local DB residue from the smoke test, for Connor to clear (Claude's DB access was blocked by the auto-mode
-   classifier): `chat_messages` with id > 144 (the smoke Q&A turns), and `search_documents` (0 rows before;
-   now lazily indexed for household 1, including an orphaned doc for the deleted recipe 823, which the next reconcile deletes).
-2. 0022 on staging → push staging → backfill; then production (ledger row each, per the migrations skill).
-3. Separate, unfiled task: the README stack table says Gemini.
+1. Commit the eval work. Then re-run `eval:retrieval` and `eval:agent` so the results doc cites a clean commit,
+   and update its header and table values if they move.
+2. ADRs 0001–0005 + README section (§2.10). ADR-0001 must cover the OpenAI embeddings data flow (R3). The README
+   must state quality ≠ capacity benchmark (§2.8).
+3. 0022 on staging → push staging → backfill; then production (ledger row each, per the migrations skill).
+4. Separate, unfiled: the README stack table says Gemini. The lint chip "Fix eslint no-undef errors in TDD kit hooks"
+   is offered (30 pre-existing errors in `.claude/hooks/tdd/*.mjs`, so `npx eslint .` fails).
+5. Observations from the evals, out of scope (candidate follow-ups, not filed):
+   - The agent once ignored a correct search hit (chickpeas). Possible prompt-rule mismatch: the "ingredients array"
+     rule vs search snippets.
+   - Synonym misses (garbanzo/chickpea, sesame paste/tahini).
+   - `websearch_to_tsquery` ANDs filler words ("uses").
+   - Agent search args aren't recorded by the harness.
+6. Local DB residue from the earlier smoke test is still for Connor: `chat_messages` id > 144, and
+   `search_documents` for household 1. The eval households were torn down (verified: 0 left).
 
 # Known Risks / Open Questions
 
-- Don't push until the rollout is sequenced: staging needs 0022 applied first (ledger), per the migrations skill.
-- R3: the new outbound data flow to OpenAI embeddings must be documented in ADR-0001 and the README.
+- Don't push until the rollout is sequenced: staging needs 0022 first (ledger), per the migrations skill.
+- The kit's stub allowance is a heuristic (small new file + "not implemented"). Consider upstreaming both kit fixes
+  to the source project.
+- Re-running `eval:agent` costs about $0.2–0.4 in gpt-4o-mini calls. Retrieval is about $0.001 (cached).
 
 # Verification Results
 
-- `server` npm test: 223 pass / 0 fail.
-- `RUN_DB_TESTS=1 npm run test:db` (local): 44/44 pass.
-- eslint on changed source + server/test/db: clean.
-- 0022 on local: `vector` 0.8.0, table + 4 indexes, `__drizzle_migrations` 8 rows, max 1790728028520.
-- Local smoke (§6 step 4), real UI, observed via scratchpad-only OpenAI SDK preloads (no repo edits):
-  (1) chickpeas (ingredient only, temp recipe) → `search_recipes_and_meals`, `mode: hybrid`, correct recipe ranked #1;
-  (2) forced `embeddings.create` throw → `lexical_only`, correct recipe, chat 200, normal answer;
-  (3) "What did I ask you earlier?" → single model request, no tool round. PASS.
-  Local gotcha: Clerk 401s on every call were Windows clock skew (−5.5 s, over Clerk's 5 s tolerance); a resync fixed them.
+- Root `npm test`: 19 pass. `server` tests: 223/223 pass. `eval:test`: 99/99 pass.
+- `npx eslint eval`: clean. Repo-wide lint: 30 errors, all pre-existing in the kit's `.claude/hooks/tdd/*.mjs`.
+- Guard: refuses with the flag unset and with `production` (exit 1, before any DB import).
+- `eval:retrieval` (local): 507 docs, pending 0; index hash unchanged across passes; teardown done.
+- `eval:agent` (local): 120/120 chats scored, 0 errors; teardown done. Eval households remaining: 0.
 
 # Recommended Next Action
 
-Fresh session: spec §6 step 5. Run `eval:retrieval` and `eval:agent` (§2.8), commit the results doc,
-then write ADRs 0001–0005 and the README section (§2.10; ADR-0001 must cover the OpenAI embeddings data flow, R3).
-Before any local browser smoke: check the clock is synced (Clerk rejects tokens at >5 s skew).
+Commit the eval work (Connor to confirm), re-run both evals for a clean commit hash, then write ADRs 0001–0005 +
+the README section (§2.10) in a fresh session.
 
 # Forbidden Exploration
 
@@ -102,19 +112,13 @@ Before any local browser smoke: check the clock is synced (Clerk rejects tokens 
 
 # Context Notes
 
-- branch: `staging`. TASK-069 Green committed (`7e34395`). Nothing pushed.
-- TDD enforcement kit INSTALLED 2026-09-30, copied from the Ahab-phisherman project (Node port). Files:
-  `.claude/{settings.json,tdd-config.json,flaky-quarantine.json,hooks/tdd/*,tdd-state/.gitignore}`,
-  `githooks/pre-commit`. The only script change: `tdd_record_result.mjs` also recognizes `node … --test`.
-  All 9 simulated hook checks behave correctly. Hooks take effect from the next session.
-  `git config core.hooksPath githooks` is SET (2026-09-30), after committing TASK-069 Green (`7e34395`) and the kit (`1af7501`).
-- Kit gaps: flaky-quarantine.json is not wired into node:test (no file-exclude config). No STABLE_CONTEXT.md
-  exists to sync `alwaysExemptPatterns` with. CI (`.github/workflows/ci.yml`) runs on main only, on Node 20
-  (`--experimental-test-module-mocks` needs Node ≥22.3), and doesn't run client tests.
-- Pre-existing uncommitted changes, unrelated and left as is: `.claude/settings.local.json`,
-  `ai/tasks/TASK-059-smoke-tests.md`. (`archive/TASK-061-implementation.md` was committed 2026-09-29, since
-  handoff docs link to it.)
-- context pressure: medium; fresh session recommended (phase boundary: local smoke verified → evals/docs).
+- branch: `staging`. TASK-069 Green committed (`7e34395`); eval work uncommitted. Nothing pushed.
+- TDD enforcement kit installed and active (node:test parsing fixed this session). Run shell commands from the repo
+  root: a `cd server` drifts the session cwd and the hooks then misresolve the project (it happened this session).
+- CI (`.github/workflows/ci.yml`) runs on main only, on Node 20 (`--experimental-test-module-mocks` needs ≥22.3),
+  and doesn't run client or eval tests.
+- Pre-existing uncommitted changes, unrelated: `.claude/settings.local.json`, `ai/tasks/TASK-059-smoke-tests.md`.
+- context pressure: high. A fresh session is recommended (phase boundary: evals done → docs/rollout).
 
 ---
 
