@@ -1,0 +1,4 @@
+{
+  "_comment": "Flaky (non-deterministic, not wrong) tests are quarantined here, never by editing the locked test file. Each entry: { file, reason, followUp }. NOT YET WIRED: node:test has no config-file exclude, so honoring this list needs a runner change (see CURRENT_STATE Known Risks).",
+  "tests": []
+}

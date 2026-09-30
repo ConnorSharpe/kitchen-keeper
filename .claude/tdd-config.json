@@ -1,0 +1,36 @@
+{
+  "testFilePatterns": [
+    "**/*.test.js",
+    "**/*.test.jsx",
+    "**/*.dbtest.js",
+    "server/test/db/dbHarness.js"
+  ],
+  "testCommand": "npm test && npm test --prefix client",
+  "singleFileTestCommand": "node --experimental-test-module-mocks --test \"{file}\"; true",
+  "approvalTtlMs": 600000,
+  "stopGateTimeoutMs": 180000,
+  "cosmeticUiPatterns": [
+    "**/*.css",
+    "client/index.html"
+  ],
+  "alwaysExemptPatterns": [
+    "**/*.md",
+    "ai/**",
+    "docs/**",
+    ".claude/**",
+    "githooks/**",
+    ".github/**",
+    "**/.gitignore",
+    ".env.example",
+    "**/package.json",
+    "**/package-lock.json"
+  ],
+  "sensitivePathPatterns": [
+    "server/**",
+    "shared/**",
+    "api/**",
+    "client/src/api/**",
+    "client/src/hooks/**",
+    "client/src/lib/**"
+  ]
+}
