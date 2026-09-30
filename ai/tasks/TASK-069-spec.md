@@ -1,6 +1,6 @@
 # TASK-069 — Semantic Retrieval for the Chat Agent (pgvector + Hybrid Search + Eval Harness)
 
-**Status:** DRAFT-6 — ✅ **APPROVED** (round 6, 2026-09-29), subject to G1–G9 recorded in §8 (G9 verbatim) before any test authoring or implementation. If G9 fails: apply the pre-agreed fallback (§2.0 G9), record a one-paragraph confirmation of the downgraded invariant for the architect, and proceed — no third mechanism.
+**Status:** ✅ **DONE 2026-09-29** (shipped to production; handoff archived at `ai/handoffs/archive/TASK-069.md`). Was: DRAFT-6 — ✅ **APPROVED** (round 6, 2026-09-29), subject to G1–G9 recorded in §8 (G9 verbatim) before any test authoring or implementation. If G9 fails: apply the pre-agreed fallback (§2.0 G9), record a one-paragraph confirmation of the downgraded invariant for the architect, and proceed — no third mechanism.
 
 **Normative vs illustrative (round 3 structural note):** statements labeled *invariant* or *normative*,
 acceptance criteria, and the schema DDL are binding. SQL snippets and helper names elsewhere are
