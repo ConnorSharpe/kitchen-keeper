@@ -19,7 +19,10 @@ is a **new row**, not an edit to the old one — the old row stays as the histor
 
 ## ⚠️ Outstanding gaps (check this first)
 
-None currently open.
+- **`0022_search_documents.sql` on staging: dependent code pushed, migration NOT yet applied** (2026-09-29).
+  Additive, so nothing breaks: the chat agent's `search_recipes_and_meals` tool returns `search_unavailable` and chat
+  continues. Close by: Connor runs 0022 in the Neon SQL Editor on branch `staging`, then append a staging row here.
+  Production: not started (no code on `main`, no migration).
 
 *(If this section is ever non-empty, that is a live, standing risk — surface it before starting unrelated
 work in the affected environment. See Rule 7 in the Efficiency Guide.)*

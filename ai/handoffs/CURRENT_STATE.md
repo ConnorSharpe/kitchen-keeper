@@ -14,7 +14,13 @@ Eval harness (spec §2.8) built and run. Results in [docs/eval/TASK-069-results.
   0.111 (was 0.178). The chickpeas answer failure reproduced (2 of 6 attempts).
 - The eval unit tests now run in the root `npm test` (explicit file list: CI is Node 20, which has no `--test` globs).
 
-# Files Modified (this session, committed)
+**Pushed to `staging` 2026-09-29 (docs + all TASK-069 commits). 0022 NOT applied on staging yet (ledger Outstanding gap);
+search tool degrades to `search_unavailable` there until Connor runs it.**
+**§2.10 docs DONE 2026-09-29:** ADRs 0001–0005 in `docs/adr/` + README "Agent retrieval" section
+(inserted after Features; cites `docs/eval/TASK-069-results.md`, states the R3 data flow and quality ≠ capacity).
+README stack table (Gemini) deliberately untouched (spec §4).
+
+# Files Modified (eval session, committed)
 
 - New `eval/`:
   - `lib/{metrics,guard,fixtureCheck,dates,embedCache}.js` + `*.test.js` (99 tests, Red-first via test-writer, locked)
@@ -34,7 +40,7 @@ Eval harness (spec §2.8) built and run. Results in [docs/eval/TASK-069-results.
 
 # Files Required Next
 
-- Spec §2.10 (ADRs 0001–0005, README section), §6 steps 6–7 (staging/prod rollout), `docs/eval/TASK-069-results.md`.
+- §6 steps 6–7 (staging/prod rollout), `ai/migrations/MIGRATION_LEDGER.md`, the backfill script's CLI flags (§2.9).
 
 # Files Already Reviewed (don't re-read unless changed)
 
@@ -73,8 +79,7 @@ Irrelevant: client/**, auth, push, shopping, onboarding, recipeSearchService.
 # Remaining Work
 
 1. (Done: committed and re-run at `4c4df4d`.)
-2. ADRs 0001–0005 + README section (§2.10). ADR-0001 must cover the OpenAI embeddings data flow (R3). The README
-   must state quality ≠ capacity benchmark (§2.8).
+2. (Done: ADRs + README section written; commit them: `TASK-069: add ADRs 0001-0005 and README retrieval section`.)
 3. 0022 on staging → push staging → backfill; then production (ledger row each, per the migrations skill).
 4. Separate, unfiled: the README stack table says Gemini. The lint chip "Fix eslint no-undef errors in TDD kit hooks"
    is offered (30 pre-existing errors in `.claude/hooks/tdd/*.mjs`, so `npx eslint .` fails).
@@ -105,7 +110,8 @@ Irrelevant: client/**, auth, push, shopping, onboarding, recipeSearchService.
 
 # Recommended Next Action
 
-Fresh session: write ADRs 0001–0005 + the README section (§2.10), citing docs/eval/TASK-069-results.md.
+After Connor applies 0022 on staging: append the staging ledger row + clear the gap, run the backfill on staging
+(dry-run → `--execute`, needs staging `DATABASE_URL`), smoke on Preview. Then production (§6 step 7).
 
 # Forbidden Exploration
 
@@ -119,7 +125,8 @@ Fresh session: write ADRs 0001–0005 + the README section (§2.10), citing docs
 - CI (`.github/workflows/ci.yml`) runs on main only, on Node 20 (`--experimental-test-module-mocks` needs ≥22.3),
   and doesn't run client or eval tests.
 - Pre-existing uncommitted changes, unrelated: `.claude/settings.local.json`, `ai/tasks/TASK-059-smoke-tests.md`.
-- context pressure: high. A fresh session is recommended (phase boundary: evals done → docs/rollout).
+- Docs session: no code/tests touched (docs are TDD-exempt: no testable surface). Phase boundary crossed: docs → rollout.
+- context pressure: low.
 
 ---
 
