@@ -124,7 +124,8 @@ PASS (dates still used when named), coconut sugar → Curry Cod PASS, no console
 **Production: 0022 applied by Connor (ledger 9), `main` fast-forwarded to `d9309d4` (ledger 10 ✅).** Production backfill DONE
 (host `ep-misty-hill-ak264gcz`): 9 docs (households 1, 28), 0 unembedded, 1,473 tokens. Prod 0022 verified (ledger 11).
 Note: the backfill guard requires `--i-understand-production` even for the production dry run.
-Remaining: Sentry check (connector unauthenticated), then close TASK-069 (session-handoff, archive this write-up).
+**Sentry check DONE 2026-09-29 (via Chrome, all projects/envs): 0 issues first seen in 14d; 0 warn/error/fatal logs in 7d; `retrieval-search`/`retrieval-embed` info logs arriving. Only unresolved issue is pre-existing KITCHEN-KEEPER-SERVER-2 (Authentication required, GET /api/pantry, 1mo old), unrelated.**
+Remaining: close TASK-069 (session-handoff, archive this write-up).
 Connor pasted staging + prod DB URLs (same `neondb_owner` password) into chat: password reset recommended.
 Test chat rows 99–104 deleted (max id back to 98).
 
