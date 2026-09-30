@@ -14,8 +14,8 @@ Eval harness (spec §2.8) built and run. Results in [docs/eval/TASK-069-results.
   0.111 (was 0.178). The chickpeas answer failure reproduced (2 of 6 attempts).
 - The eval unit tests now run in the root `npm test` (explicit file list: CI is Node 20, which has no `--test` globs).
 
-**Pushed to `staging` 2026-09-29 (docs + all TASK-069 commits). 0022 NOT applied on staging yet (ledger Outstanding gap);
-search tool degrades to `search_unavailable` there until Connor runs it.**
+**Pushed to `staging` 2026-09-29 (docs + all TASK-069 commits). 0022 applied on staging by Connor (ledger row 7).
+Staging index fills lazily (each search upserts all docs and embeds up to 25); the backfill makes it fully current.**
 **§2.10 docs DONE 2026-09-29:** ADRs 0001–0005 in `docs/adr/` + README "Agent retrieval" section
 (inserted after Features; cites `docs/eval/TASK-069-results.md`, states the R3 data flow and quality ≠ capacity).
 README stack table (Gemini) deliberately untouched (spec §4).
@@ -110,7 +110,7 @@ Irrelevant: client/**, auth, push, shopping, onboarding, recipeSearchService.
 
 # Recommended Next Action
 
-After Connor applies 0022 on staging: append the staging ledger row + clear the gap, run the backfill on staging
+Run the backfill on staging
 (dry-run → `--execute`, needs staging `DATABASE_URL`), smoke on Preview. Then production (§6 step 7).
 
 # Forbidden Exploration

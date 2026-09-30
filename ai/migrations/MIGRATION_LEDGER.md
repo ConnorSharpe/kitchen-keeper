@@ -19,10 +19,7 @@ is a **new row**, not an edit to the old one — the old row stays as the histor
 
 ## ⚠️ Outstanding gaps (check this first)
 
-- **`0022_search_documents.sql` on staging: dependent code pushed, migration NOT yet applied** (2026-09-29).
-  Additive, so nothing breaks: the chat agent's `search_recipes_and_meals` tool returns `search_unavailable` and chat
-  continues. Close by: Connor runs 0022 in the Neon SQL Editor on branch `staging`, then append a staging row here.
-  Production: not started (no code on `main`, no migration).
+None currently open.
 
 *(If this section is ever non-empty, that is a live, standing risk — surface it before starting unrelated
 work in the affected environment. See Rule 7 in the Efficiency Guide.)*
@@ -39,6 +36,7 @@ work in the affected environment. See Rule 7 in the Efficiency Guide.)*
 | 4 | `0021_drop_byok.sql` | `ALTER TABLE households DROP COLUMN openai_api_key` | staging | Migration applied + code deployed | 2026-08-05 ~21:11 | `46c2549` | No gap here — `46c2549` was committed directly to `staging`, which auto-deploys its Preview on push per CONVENTIONS.md's push workflow, so migration and code landed on `staging` together. |
 | 5 | `0021_drop_byok.sql` | `ALTER TABLE households DROP COLUMN openai_api_key` | local | Migration applied + code deployed | 2026-08-05 ~21:00 | `46c2549` | `local` tracks the working tree directly; no separate deploy step. |
 | 6 | `0022_search_documents.sql` | `CREATE EXTENSION IF NOT EXISTS vector; CREATE TABLE search_documents` + 2 indexes (additive) | local | Migration applied + code deployed | 2026-09-30 00:32 UTC | uncommitted working tree on `staging` (TASK-069 Green) | Applied by Claude via `server/db/migrate.js` (drizzle migrator), host `ep-icy-rice-akewupba` verified first. `__drizzle_migrations`: 8 rows, max `created_at` 1790728028520 (= journal `when`). Extension installed: yes (pre-existing, 0.8.0; installed on local by gate G1). Additive, so there is no old-code breakage risk. `local` tracks the working tree. |
+| 7 | `0022_search_documents.sql` | `CREATE EXTENSION IF NOT EXISTS vector; CREATE TABLE search_documents` + 2 indexes (additive) | staging | Migration applied + code deployed | 2026-09-30 03:25 UTC (approx.; time Connor reported it done) | `b005205` (push to `staging`, exit 0, 2026-09-30 UTC, before the migration) | Applied by Connor in the Neon SQL Editor on branch `staging` (not via `migrate.js`, so no `__drizzle_migrations` row; harmless because every statement is `IF NOT EXISTS`). Extension installed: yes, by this migration (G1 case (b), not pre-existing). Between the push and this apply the search tool returned `search_unavailable` on staging; chat unaffected. Not independently verified by Claude (no staging credentials). |
 
 ---
 
