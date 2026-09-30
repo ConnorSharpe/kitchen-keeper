@@ -1,93 +1,107 @@
 # Task
 
 TASK-069: Semantic retrieval for the chat agent (pgvector + hybrid lexical/vector search + eval harness).
-This is Phase A of 3 in the agent-knowledge roadmap: B = food knowledge graph + allergen guard, C = graph-backed
-household memory. Spec: [TASK-069-spec.md](../tasks/TASK-069-spec.md)
+This is Phase A of the agent-knowledge roadmap. Spec: [TASK-069-spec.md](../tasks/TASK-069-spec.md)
 
 # Current Status
 
-**Spec APPROVED (DRAFT-6, architect round 6, 2026-09-29). No code written yet.** The next phase is the
-pre-implementation gate G1–G9 (§2.0), with results recorded in spec §8. G9 must be recorded verbatim, and before
-any test authoring. The motivation is Connor's job-search portfolio (spec §0.1), so the eval harness and ADRs are
-first-class deliverables.
-
-Also created this session: `ai/architecture/SYSTEM_OVERVIEW.md` and `ai/maps/FILE_MAP.md`. Both were missing.
+**Gate G1–G9 CLOSED (2026-09-29), all passing; recorded in spec §8. Red tests written and committed. NO
+implementation code exists.**
+- G9 passed exactly, so the strong `FOR SHARE` invariant stands and the fallback was not applied.
+- G1 is case (b) on staging and production: the extension is not installed, but `neondb_owner` can create it.
+  The `vector` extension 0.8.0 is now installed on local only (by the gate).
+- All three environments share the same migration history: 7 rows, max `created_at` 1785171529668 (0020).
 
 # Files Modified
 
-- `ai/tasks/TASK-069-spec.md` (new; 6 drafts, review history and dispositions in §9–§13)
-- `ai/architecture/SYSTEM_OVERVIEW.md` (new), `ai/maps/FILE_MAP.md` (new)
-- `ai/handoffs/CURRENT_STATE.md` (this file); TASK-068's handoff moved to `archive/TASK-068.md`
+- `ai/tasks/TASK-069-spec.md` §8 (gate results, G9 verbatim)
+- New Red tests, all untracked until this commit. Every file is locked, and editing any of them needs
+  Connor's per-file permission:
+  - `server/services/retrieval/{constants,documents,fusion,indexer,searchService}.test.js`
+  - `server/services/ai/openaiProvider.test.js`
+  - `server/instrument.test.js`
+  - `server/services/chat/handlers/searchRecipesAndMeals{,.unavailable}.test.js`
+  - `server/services/aiService.pantryTools.test.js`
+  - `server/services/chat/createToolHandlers.test.js`
+  - `server/scripts/backfillSearchDocuments.test.js`
+  - `server/test/db/{backfill,bootCompat,fingerprint,reconcile,tenancy}.dbtest.js`
+  - `server/test/db/dbHarness.js` (helper)
 
 # Files Required Next
 
-- `ai/tasks/TASK-069-spec.md`: §2.0 (G1–G9), §2.4 step 1b (the FOR SHARE mechanism G9 proves), §8
-- `server/db/migrations/meta/_journal.json`, `server/db/migrate.js` (G5)
-- `ai/migrations/MIGRATION_LEDGER.md` (before applying 0022 anywhere)
+- Spec §2.2–§2.11, §3 (Allowed), §5 (criteria), §8 (G9 statement and fingerprint expression to reuse verbatim)
+- The test files above. They define the seams the implementation must meet (see Decisions Made).
+- `ai/migrations/MIGRATION_LEDGER.md` before applying 0022 anywhere
 
 # Files Already Reviewed (don't re-read unless changed)
 
-server/db/schema.js, server/routes/ai.js (chat route), server/services/aiService.js (chat(), PANTRY_TOOLS,
-context caps), server/services/ai/providerInterface.js, chatService.js, createToolHandlers.js,
-mealLogService.js (exports), recipeService.js (write paths), server/instrument.js (exports),
-client/src/lib/debugLog.js, drizzle-orm pg-core/dialect.js (migrator rule), ai/handoffs/CONVENTIONS.md.
+server/db/schema.js (recipes/meal_logs/households), server/db/migrate.js, drizzle migrator.js and
+pg-core/dialect.js, meta/_journal.json, plus everything listed in the spec's review history.
 
 # Dependency Chain
 
-Editing (implementation phase): see spec §3 Allowed.
-Requires: recipes/meal_logs (read-only), households FK, server/instrument.js (adds logServerEvent), the OpenAI SDK.
+Editing (implementation): spec §3 Allowed only.
+Requires: recipes/meal_logs (read-only), households FK, the OpenAI SDK, and `@neondatabase/serverless` 0.10.4
+(HTTP for production, websocket `Pool` in tests only).
 Irrelevant: client/**, auth, push, shopping, onboarding, recipeSearchService.
 
 # Architecture Notes
 
-- Facts verified in code during spec review. Each one corrected an earlier assumption:
-  - `logEvent()` is **client-only**; the server has only `captureExceptionSafely` and `flush`. Hence spec §2.11
-    `logServerEvent`.
-  - **Migrations never auto-run on Vercel.** `migrate.js` is imported only by local `server/index.js`.
-  - Drizzle's migrator applies a journal entry only if its `when` is greater than the latest applied
-    `created_at`; otherwise it is silently skipped (`dialect.js:45`).
-  - `recipes.id` and `meal_logs.id` are global SERIALs, so `UNIQUE(source_type, source_id)` is the stronger
-    constraint. G6 re-confirms this.
-  - Recipe context to the agent is `{id,name,tags}` only. Chat is trimmed to 50 messages.
-- There are no real-DB tests in the repo yet. TASK-069 adds opt-in `*.dbtest.js` (`RUN_DB_TESTS=1`, local only).
+- The G9-proven fingerprint expression is `md5(json_build_array(r.name, r.description, r.tags, r.ingredients,
+  r.steps, r.saved_at)::text)`. `RECIPE_FINGERPRINT_SQL` must use it verbatim (indexer.test.js asserts it).
+- On Node 24 the websocket `Pool` needs no `neonConfig.webSocketConstructor` (G8).
+- `node --test`'s default discovery includes `**/test/**/*.js`, so the dbtests run inside `npm test`. Without
+  `RUN_DB_TESTS=1` they skip, and they refuse any host other than `ep-icy-rice-` (local).
 
 # Decisions Made
 
-All are in the spec's decision table (§2.1) and disposition tables. Key ones:
-- pgvector in Neon; one `search_documents` table.
-- Hybrid FTS + vector with RRF; no ANN index.
-- Lazy reconcile with an interactive embed budget of 25.
-- Content-fingerprint staleness with a same-statement `FOR SHARE` guard.
-- Chat is excluded from the corpus.
-- Tool name: `search_recipes_and_meals`.
+- The test-writer made interface assumptions, now locked in the tests; the implementation must match them.
+  Recommended: write them into the spec (Remaining Work 1).
+  - SQL goes through `db.execute(sql)` with `.rows`.
+  - The only statement containing `<=>` is the vector query, and the only one containing
+    `websearch_to_tsquery` is the lexical query.
+  - Search takes `{sourceTypes, dateFrom, dateTo}`, with `dateTo` exclusive, and resolves to `{mode, results}`.
+  - The builders take the raw stored row (JSON text columns; snake_case or camelCase).
+  - Fusion takes lists of string keys and returns entries with `.score` and `.id`/`.key`.
+  - The handler is the named export `searchRecipesAndMeals(args, ctx)`.
+  - `aiService.js` exports `PANTRY_TOOLS`.
+  - The backfill guard messages mention `BACKFILL_CONFIRM_ENV` and `i-understand-production`. The dry run
+    prints `estimated_tokens_chars_div4` and the Neon host.
+  - 11a keeps docs unembedded because the fake OpenAI fails multi-text calls.
+  - `search_unavailable` is tested end to end through the handler, not by error class.
 
 # Remaining Work
 
-1. Gate G1–G9 against local/staging/production (read-only on staging and production, except the local
-   `CREATE EXTENSION`). **G9 fails → apply the pre-agreed fallback. Do not invent a third mechanism.**
-2. Red tests via the `test-writer` for criteria 1–11e.
-3. Implementation.
-4. Migration 0022 local → staging → production, logged in the ledger.
-5. Backfill.
-6. Evals and results doc.
-7. ADRs 0001–0005 and the README section.
-8. Separate small task, not yet filed: the README stack table says Gemini, but the app uses OpenAI.
+1. **Before implementing:**
+   - Add a spec addendum that names the guarded-upsert export (signature and how rows written are reported).
+   - Record the seam assumptions above in the spec.
+   - Then have the test-writer author `server/test/db/snapshotGuard.dbtest.js` for 11d(i), 11d(ii), 11d(iii)
+     and 11d(v). 11d(v) uses G9's `pg_stat_activity` lock-wait observation plus the websocket `Pool` writer.
+     These are NOT written yet.
+2. Implementation (Green) via the `implementer`.
+3. Migration 0022: local, then staging, then production. Each application goes in the ledger with an honest
+   status. G1 case (b) means 0022 creates the extension itself. The journal `when` must be > 1785171529668.
+4. Backfill, evals and results doc, ADRs 0001–0005, README section.
+5. Separate task, not yet filed: the README stack table says Gemini, but the app uses OpenAI.
 
 # Known Risks / Open Questions
 
-- G1 case (c) on any environment means STOP and no partial roll-forward (spec G1).
-- G9 is the empirical proof of the concurrency mechanism.
-- A new outbound data flow (full recipe and meal-log text to OpenAI embeddings) is accepted and must be
-  documented (spec R3).
+- **The suite is RED on `staging` (34 failing unit tests).** Do not push until Green, or CI goes red.
+- The seam assumptions were guesses. If the implementer finds one unworkable, escalate to Connor. Never
+  edit a locked test.
+- A new outbound data flow (recipe and meal-log text to OpenAI embeddings) must be documented (spec R3).
 
 # Verification Results
 
-- None. This was spec-only; no code or tests changed.
+- New unit tests: 35, of which 34 FAIL (missing modules/exports, the correct Red reason) and 1 passes
+  (an intentional regression guard).
+- Full `npm test` in server: 134 tests, 100 pass, 34 fail (exactly the new ones; existing suite unaffected).
+- dbtests with `RUN_DB_TESTS=1` on local: all FAIL with "migration 0022 not applied" (expected).
 
 # Recommended Next Action
 
-In a fresh session, run gate G1–G9 exactly as written in spec §2.0 and record the results in §8. Stop at any
-failed gate per its stated rule.
+Draft the §2.4 guarded-upsert interface addendum and the seam list for Connor's approval (Remaining Work 1).
+Then have the test-writer write `snapshotGuard.dbtest.js`, and only after that start Green.
 
 # Forbidden Exploration
 
@@ -95,11 +109,13 @@ failed gate per its stated rule.
 
 # Context Notes
 
-- branch: `staging` (spec work only, uncommitted).
-- Pre-existing uncommitted, unrelated to this work: `.claude/settings.local.json`,
-  `ai/tasks/TASK-059-smoke-tests.md`, and `ai/handoffs/archive/TASK-061-implementation.md` (untracked). Leave as is.
-- Enforcement kit: not checked this session (no code changes).
-- context pressure: high (long 6-round spec review); fresh session recommended.
+- branch: `staging`. Committed locally, not pushed (the suite is red).
+- Enforcement kit NOT installed (no `.claude/tdd-config.json`). Test locking is by rule only.
+- Pre-existing uncommitted changes, unrelated and left as is: `.claude/settings.local.json`,
+  `ai/tasks/TASK-059-smoke-tests.md`, `ai/handoffs/archive/TASK-061-implementation.md`.
+- Staging and production credentials are not available to Claude (pulling them was blocked). Connor runs the
+  read-only SQL for those environments in the Neon SQL Editor.
+- context pressure: high; fresh session required.
 
 ---
 

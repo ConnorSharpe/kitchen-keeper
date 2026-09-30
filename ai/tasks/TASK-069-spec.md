@@ -1033,7 +1033,87 @@ Risks:
 
 ## 8. Pre-Implementation Gate Results
 
-*(to be filled in)*
+Run 2026-09-29. Local = Neon branch host `ep-icy-rice-akewupba` (from `server/.env.local`; the script refused
+any other host). Node v24.14.1, `@neondatabase/serverless` 0.10.4, `drizzle-orm` 0.29.5.
+Staging and production were run by Connor as read-only queries in the Neon SQL Editor, because this
+session could not obtain their credentials (pulling them was blocked).
+**GATE CLOSED 2026-09-29: G1–G9 pass. No environment is in G1 case (c); G9 passes, so no fallback.**
+Test authoring may proceed.
+
+| Gate | local | staging | production |
+|---|---|---|---|
+| G1 | Case **(b)→(a)**: not installed; `vector` 0.8.0 available; role `neondb_owner` (db owner, `neon_superuser` member). Ran `CREATE EXTENSION IF NOT EXISTS vector` → **0.8.0** installed | Case **(b)**: not installed; `vector` 0.8.0 available; `neondb_owner` (db owner, `neon_superuser` member). Neon branch `staging`, run by Connor in the SQL Editor | Case **(b)**: not installed; `vector` 0.8.0 available; `neondb_owner` (db owner, `neon_superuser` member). Neon branch `main`, run by Connor in the SQL Editor |
+| G5.1 | `__drizzle_migrations`: 7 rows, max `created_at` 1785171529668, latest hash `573668176c7c…04c3` | 7 rows, max 1785171529668, hash `573668176c7c…04c3` (identical) | 7 rows, max 1785171529668, hash `573668176c7c…04c3` (identical to local) |
+| G7 | recipes 0/5 bad, meal_logs 0/5 bad | recipes 0 bad, meal_logs 0 bad | recipes 0 bad, meal_logs 0 bad |
+
+- **G5.2 journal:** 20 entries; last `idx` 19 `0020_suggestions`, `when` 1785171529668 (2026-07-27T16:58:49.668Z).
+  `0021_drop_byok.sql` is on disk with no journal entry.
+- **G5.3 migrator (installed source):** `db/migrate.js` calls `drizzle-orm/neon-http/migrator` `migrate()`.
+  `migrator.js` `readMigrationFiles` iterates **only** `journal.entries` (`folderMillis = entry.when`).
+  `pg-core/dialect.js:40–45` reads the single latest row by `created_at` and applies an entry only if
+  `created_at < folderMillis`. The rule is confirmed.
+- **G5.4:** local's max is 1785171529668. `0022`'s `when` must exceed the max across **all three** environments,
+  and that max is 1785171529668 on every environment. **Confirmed:** any real generation-time epoch
+(≥ 2026-09-29, i.e. > 1790000000000) is strictly greater.
+- **G5.5:** `0021` cannot replay at boot. It has no journal entry, and the migrator only iterates the journal.
+- **G2 (local):** `$1::vector` with 1536 dims gives `vector_dims` 1536. The `::real[]` round-trip matches the float32 input
+  (max abs error 3.0e-8). `<=>` works (a vs b 0.99983, self 0).
+- **G3:** `text-embedding-3-small`, batched `input: string[2]` → 2 vectors × 1536 dims (9 tokens).
+  Pricing is **$0.02 / 1M tokens** (developers.openai.com/api/docs/pricing, fetched 2026-09-29; no separate batch tier listed).
+- **G4:** grep of `server/` (excluding tests and node_modules): every `insert/update/delete(recipes)` is in
+  `services/recipeService.js` (lines 92, 112, 126, 147, 158). There is no `update/delete(mealLogs)` or raw
+  UPDATE/DELETE on `meal_logs`; the only write is `insert(mealLogs)` at `mealLogService.js:17`. Note that
+  `meal_logs` rows are still removed by `ON DELETE CASCADE` when a household is deleted. `search_documents`
+  cascades the same way, so the derived index stays consistent.
+- **G6:** `public.recipes_id_seq`, `public.meal_logs_id_seq`, one each. Global id uniqueness is confirmed.
+- **G8:** passes. The websocket `Pool` held an interactive transaction (`BEGIN`, a 1 s hold, the same `txid_current()`,
+  then `ROLLBACK`). Node 24 provides a global `WebSocket`, so **no `neonConfig.webSocketConstructor` setup was needed**
+  (the default is `undefined`) and no new dependency.
+- **G9: PASS. The strong invariant stands and the fallback is not applied.** Setup: a scratch schema `g9_scratch`
+  holding a copy of the §2.2 `search_documents` DDL, because `0022` must not be applied before G1 closes everywhere.
+  A seeded household and recipe in the real `recipes` table. Everything was dropped and deleted afterwards
+  (residue check: 0 schemas, 0 households). The statement differs from production **only** in the schema
+  qualifier on the INSERT target. Session 2 used HTTP `neon()`, session 1 a websocket `Pool` client, session 3 HTTP `neon()`.
+  Verbatim statement:
+  ```sql
+  WITH src AS (
+    SELECT r.id FROM recipes r
+    WHERE r.id = $1 AND r.household_id = $2
+      AND md5(json_build_array(r.name, r.description, r.tags, r.ingredients, r.steps, r.saved_at)::text) = $3
+    FOR SHARE
+  )
+  INSERT INTO g9_scratch.search_documents
+    (household_id, source_type, source_id, content, content_hash, occurred_at, source_fingerprint)
+  SELECT $2, 'recipe', src.id, $4, $5, $6::timestamptz, $3 FROM src
+  ON CONFLICT (source_type, source_id) DO UPDATE SET
+    content = EXCLUDED.content, content_hash = EXCLUDED.content_hash, occurred_at = EXCLUDED.occurred_at,
+    source_fingerprint = EXCLUDED.source_fingerprint, updated_at = now()
+  WHERE search_documents.household_id = EXCLUDED.household_id
+  RETURNING search_documents.id
+  ```
+  Verbatim output:
+  ```
+  G9 seeded household/recipe: {"H":30,"R":15}
+  G9 baseline upsert RETURNING rows: 1
+  G9 baseline doc content: content-v1
+  G9 COMMIT session1: BEGIN; UPDATE recipes SET name='S2' WHERE id=15 (held)
+  G9 COMMIT session2 settled before session1 ends: false
+  G9 COMMIT session3 pg_stat_activity: [{"wait_event_type":"Lock","wait_event":"transactionid","state":"active","query":"WITH src AS (\n  SELECT r.id FROM recipes r\n  WHERE r.id = $1"}]
+  G9 COMMIT session1: COMMIT
+  G9 COMMIT session2 RETURNING rows: 0
+  G9 COMMIT session2 elapsed ms: 1830
+  G9 COMMIT doc content after: content-v1
+  G9 ROLLBACK session1: BEGIN; UPDATE recipes SET name='S3' WHERE id=15 (held)
+  G9 ROLLBACK session2 settled before session1 ends: false
+  G9 ROLLBACK session3 pg_stat_activity: [{"wait_event_type":"Lock","wait_event":"transactionid","state":"active","query":"WITH src AS (\n  SELECT r.id FROM recipes r\n  WHERE r.id = $1"}]
+  G9 ROLLBACK session1: ROLLBACK
+  G9 ROLLBACK session2 RETURNING rows: 1
+  G9 ROLLBACK session2 elapsed ms: 1892
+  G9 ROLLBACK doc content after: content-v3
+  G9 cleanup residue: [{"schema_left":0,"households_left":0}]
+  ```
+  The fingerprint expression above (`md5(json_build_array(name, description, tags, ingredients, steps,
+  saved_at)::text)`) is the one proven. `RECIPE_FINGERPRINT_SQL` should use it verbatim.
 
 ---
 
