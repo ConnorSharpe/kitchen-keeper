@@ -121,9 +121,11 @@ Red-first via test-writer: new `server/services/aiService.searchDateGuidance.tes
 Pushed `ea2901b`; re-smoke on the Preview 2026-09-30 03:44Z: Spam Musubi → June 24 PASS, "what did I eat on June 22" → eggs, milk
 PASS (dates still used when named), coconut sugar → Curry Cod PASS, no console errors. Test chat rows 105–110 deleted (max id 98).
 **Staging §6 step 6 done except the Sentry check.**
-**Production: 0022 applied by Connor (ledger 9), `main` fast-forwarded to `d9309d4` (ledger 10 ✅).** Remaining: production
-backfill (dry-run → `--execute --i-understand-production`, needs prod `DATABASE_URL` + `OPENAI_API_KEY` in env), optional
-prod verification query, Sentry check. Then close TASK-069.
+**Production: 0022 applied by Connor (ledger 9), `main` fast-forwarded to `d9309d4` (ledger 10 ✅).** Production backfill DONE
+(host `ep-misty-hill-ak264gcz`): 9 docs (households 1, 28), 0 unembedded, 1,473 tokens. Prod 0022 verified (ledger 11).
+Note: the backfill guard requires `--i-understand-production` even for the production dry run.
+Remaining: Sentry check (connector unauthenticated), then close TASK-069 (session-handoff, archive this write-up).
+Connor pasted staging + prod DB URLs (same `neondb_owner` password) into chat: password reset recommended.
 Test chat rows 99–104 deleted (max id back to 98).
 
 # Forbidden Exploration
