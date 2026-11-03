@@ -1,6 +1,7 @@
 # TASK-071 — Dependency Security Update (Phase B: breaking upgrades)
 
-Version: DRAFT-5 (2026-11-03). Spec only; nothing implemented. For architect re-review (round 5).
+Version: DRAFT-5, **approved** (2026-11-03). Implementation in progress: G1, G2, G5 and the G4 0.29.5 half are
+done; Red is blocked (§11).
 
 Phase A is TASK-070 (non-breaking `npm audit` fixes). Every production advisory still open needs a major
 upgrade. This file recommends the split (§2) and fully specifies **TASK-071 = drizzle-orm 0.29.5 → 0.45.4**
@@ -363,9 +364,72 @@ TASK-074 require G6.
 
 ## 11. Gate Results / Baseline Records
 
-(empty: filled during implementation. Required entries: G1 baselines + "before" ledger listing/fingerprint;
-G2 8-point table per version; G5; G6; G4 0.29.5 half; G3; G4 0.45.4 half + decision table; "after" ledger
-listing/fingerprint; staging and prod before/after fingerprints.)
+Still to record: G6; G3; G4 0.45.4 half + decision table; "after" ledger listing/fingerprint; staging and prod
+before/after fingerprints.
+
+**G1 (2026-11-03, 0.29.5).** TASK-070 `9e243da` is on `staging`. Baselines: root shared 118/118, server 225/225,
+client 75/75, test:db 44/44, `npm run lint` exit 0 with **0 errors** (since `e3fe613`, which ignores `.claude/`,
+the 30 hook errors are gone, so the baseline is now 0), `npm run build` OK (only the chunk-size warning).
+Local ledger "before": n=8, max_created=1790728028520, **fingerprint `4ece5377cd4cd53324b2de1a38fcd46a`**.
+
+| id | hash | created_at |
+|---|---|---|
+| 1 | `backfill-manual-migrations-0000-0013` | 1745799180000 |
+| 2 | `184a8a743cb1ff52bc6195fc058feef0146a07cb4ed1d44839e83a730b871160` | 1745799240000 |
+| 3 | `a38edfe9347fdd33e518ac973098073f32070ef91ec2f685c76896f9abf48d38` | 1745799300000 |
+| 4 | `7a0933c6ba971aa7b69b3e50e84711fde04f33c0048c79fbd9f9c47c5ebf7dfe` | 1745799360000 |
+| 5 | `6b55e2252f31d26b0395166028f0fad077c852523e563d20a7f19ebfb7db5421` | 1753142400000 |
+| 6 | `9626e52a91130a9c51ecc949e672121b924754b601eebc22ed42429d9a0d8c61` | 1753142460000 |
+| 7 | `573668176c7c195b43c6b3d79f980b03cd02febf91bac8e91c658350d0d104c3` | 1785171529668 |
+| 8 | `c263f1080b6fee539efc648e596a82a988df58716572394b24299edb2034abf8` | 1790728028520 |
+
+**G2 (pass).** I diffed `neon-http/migrator.js`, `migrator.js` (`readMigrationFiles`) and `PgSession.execute/all`
+between 0.29.5 and 0.45.4 (scratch install). The decisions are identical on all 8 points:
+1. Discovery: `${migrationsFolder}/meta/_journal.json`, and `${tag}.sql` per entry. **Only difference:** 0.45
+   dropped the string-config overload (a path to a JSON config). `migrate.js:9` passes `{ migrationsFolder }`,
+   so it isn't affected.
+2. Ordering: journal `entries` order (both).
+3. Hashing: sha256 hex of the raw file text, then a split on `--> statement-breakpoint` (both).
+4. Ledger: `CREATE SCHEMA IF NOT EXISTS drizzle`, then `__drizzle_migrations (id SERIAL, hash text, created_at
+   bigint)`. The defaults are the same.
+5. Last applied: `select … order by created_at desc limit 1` (both).
+6. Apply rule: `Number(last.created_at) < folderMillis` (strict `<`, both).
+7. Execution: each statement is a separate `session.execute(sql.raw)`, with no transaction (neon-http), and the
+   ledger rows are inserted afterwards (both). In 0.45 a failure is rethrown wrapped in `DrizzleQueryError`.
+   That changes only the error shape, not the decisions.
+8. Qualification: the ledger is referenced as `sql.identifier(schema).identifier(table)`, and the migration SQL
+   runs raw and unqualified (both).
+
+The neon-http driver sets the same `TIMESTAMPTZ`/`TIMESTAMP`/`DATE` → string parsers in both versions. 0.45 adds
+interval and array OIDs, which this app doesn't read.
+
+**G5 (pass).** `drizzle-kit: v0.31.11`. `check` on a scratch copy of `drizzle.config.js`, `schema.js` and
+`migrations/` (with drizzle-orm 0.45.4 installed beside it) printed "Everything's fine", didn't demand `up`, and
+left the migrations copy byte-identical. Run against the repo's 0.29.5 it only says "Please install latest
+version of drizzle-orm", which is expected before the bump.
+
+**G4, 0.29.5 half.** (A) `db.execute(sql\`SELECT id, occurred_at FROM search_documents ORDER BY id LIMIT 1\`)`
+returns an object with `rows` (keys `fields, rows, command, rowCount, …`), not an array. (B) The local
+`search_documents` is **empty** (0 rows, 5 households), so the exact query returns no value for `occurred_at`.
+**Substitute:** `SELECT 1 AS id, '2026-01-02T03:04:05Z'::timestamptz AS occurred_at` through the same
+`db.execute` gives `typeof` = `string` (`"2026-01-02 03:04:05+00"`), and the column is `timestamp with time zone`.
+Repeat both queries on 0.45.4.
+
+**Red (step 6).** The first run failed with `ERR_MODULE_NOT_FOUND pgError.js`, the reason this spec names. But the
+TDD kit classes a missing module as wrong-reason Red, so Connor hand-created a stub `pgError.js` that always
+returns `false`.
+
+Against the stub:
+- AC2: a, b, c, k and l fail. d through j pass, since `false` is the correct answer for those.
+- AC3: 3a and 3d fail (the stub returns `false`). 3b and 3c pass, as the behavior locks predicted on 0.29.5,
+  because the inline check still sees the unwrapped errors.
+
+3b/3c's exact call counts (2) and sizes (`[4,4]`) confirm that `mock.module('crypto')` intercepts
+`householdService`'s `import 'crypto'`. The cleanup left the `households` and `user_onboarding` counts unchanged.
+
+**Green (step 6, 0.29.5).** `pgError.js` was implemented per §7, and `householdService.js` got the import and its
+2 expressions. Results: AC2 12/12, AC3 4/4, server unit 237/237 (225 + 12), root shared 118/118, test:db 48/48
+(44 + 4).
 
 ## 12. Dependency Chain
 

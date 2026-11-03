@@ -2,6 +2,7 @@ import { randomBytes } from 'crypto';
 import { eq } from 'drizzle-orm';
 import { clerkClient } from '@clerk/express';
 import { db } from '../db/client.js';
+import { isUniqueViolation } from '../db/pgError.js';
 import {
   households,
   householdMembers,
@@ -176,8 +177,7 @@ async function createHousehold(clerkUserId) {
       await onboardingService.upsertFlow(clerkUserId, 'new_household');
       return row;
     } catch (err) {
-      const isJoinCodeCollision =
-        err.code === '23505' && err.constraint === JOIN_CODE_CONSTRAINT;
+      const isJoinCodeCollision = isUniqueViolation(err, JOIN_CODE_CONSTRAINT);
       if (!isJoinCodeCollision || attempt === 2) throw err;
     }
   }
@@ -290,8 +290,7 @@ export async function create(ownerName) {
         .returning();
       return household;
     } catch (err) {
-      const isJoinCodeCollision =
-        err.code === '23505' && err.constraint === JOIN_CODE_CONSTRAINT;
+      const isJoinCodeCollision = isUniqueViolation(err, JOIN_CODE_CONSTRAINT);
       if (!isJoinCodeCollision || attempt === 2) throw err;
     }
   }
