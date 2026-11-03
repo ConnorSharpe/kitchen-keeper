@@ -42,9 +42,8 @@ Irrelevant: client, `clerkAuth.js` (forbidden), migrations, `package*.json`.
 
 # Remaining Work
 
-1. Phase 2 AC7 (Connor triggers): after the staging deploy, an unauthenticated `curl` to `/api/pantry` returns 401
-   `{"error":"Authentication required"}`, with no new SERVER-2 event for the staging SHA within 5 min. Then
-   fast-forward `main` → AC8 (same probe on production; Connor resolves KITCHEN-KEEPER-SERVER-2).
+1. Phase 2 AC7 PASSED on staging (2026-11-03 21:34Z probes; no Sentry events through 21:40Z). Next: fast-forward
+   `main` → AC8 (same probe on production; Connor resolves KITCHEN-KEEPER-SERVER-2).
 3. Connor: check the `/api/push/cron` logs within about an hour after an 08:00Z run (Hobby log retention is about 1 h).
 4. TASK-072 DRAFT-4 items (still open): Phase 4 is likely moot (lint is already 0 via the `.claude/` ignore), and
    Phase 5 should be ordered after TASK-071's bump. The spec is 35KB against a 15KB budget.
@@ -66,7 +65,7 @@ Irrelevant: client, `clerkAuth.js` (forbidden), migrations, `package*.json`.
 
 # Recommended Next Action
 
-When Connor triggers it: run Phase 2 AC7 on staging, then fast-forward `main` and run AC8.
+On Connor's go: fast-forward `main` to `staging`, push, then run AC8 when Connor triggers it.
 
 # Forbidden Exploration
 

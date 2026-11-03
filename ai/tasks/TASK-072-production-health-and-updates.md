@@ -189,7 +189,12 @@ criterion 7 when Connor triggers it → fast-forward `main` → stop ("pushed") 
 - Green: `shouldReportError` exported from `server/instrument.js`; `server/app.js` calls `captureExceptionSafely`
   and `flush(2000)` only when it returns true. Nothing else in the handler changed.
 - Root `npm test`: exit 0 (118 + 245 pass, 0 fail, 0 skipped). `npm run lint`: exit 0.
-- Criteria 7 and 8: not run; they wait for Connor to trigger them after the staging deploy and the promotion to main.
+- Criterion 7: **PASS** (2026-11-03, triggered by Connor; probe by verifier subagent, body and Sentry checked
+  by Claude). Staging Preview for `6dc998d` Ready. Unauthenticated `curl` GET `/api/pantry` at 21:34:09Z and
+  21:34:33Z → 401, body `{"error":"Authentication required"}`. Sentry at 21:40:50Z: no events in
+  KITCHEN-KEEPER-SERVER-2 in the last 30 min, and no `environment:staging` errors in any issue in the last 1 h.
+  Staging does report to Sentry (550 staging events in 90 d), so the empty result is meaningful.
+- Criterion 8: not run; waits for the `main` fast-forward and Connor's trigger.
 
 ---
 
