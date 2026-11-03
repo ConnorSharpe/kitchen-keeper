@@ -1,101 +1,83 @@
 # Task
 
-TASK-071: drizzle-orm 0.29.5 → 0.45.4 (approved DRAFT-5). §9 Order steps 1–3, 5 and 6 are done; **next is step 7,
-the dependency bump**.
+TASK-072: production health and outstanding updates (approved DRAFT-3). **Phase 1 is COMPLETE; next is Phase 2**
+(stop reporting 4xx errors to Sentry, TDD). TASK-071 is paused at §9 step 7 (see Archived History).
 
 # Current Status
 
-- Recorded in TASK-071 §11: G1 (baselines, and the local ledger fingerprint `4ece5377cd4cd53324b2de1a38fcd46a`),
-  G2 (the migrator decides identically on all 8 points), G5 (pass), and the G4 0.29.5 half.
-- Red: confirmed against a stub `pgError.js` that Connor created, because the kit rejects a missing-module Red.
-- Green on 0.29.5: `isUniqueViolation` is implemented, and `householdService` uses it in both retry loops.
-- Still on 0.29.5: `server/package*.json` are untouched. Green work is committed (`11d8417`).
-- Side work this session: TASK-072 spec (production health + updates) went through architect rounds 1–2 and is
-  at DRAFT-3 (reviewer: approve after round-2 fixes, which DRAFT-3 makes). Not approved by Connor yet.
+- Phase 1 (production smoke test) was run 2026-11-03 by Claude in Chrome as Connor's signed-in session, at Connor's
+  request. Rows 1–6, 8 and 9 pass. Connor marked it COMPLETE. Results are in the TASK-072 Phase 1 Results block.
+- Production's pantry and recipes are empty, and Connor says that's expected (an earlier chat "compost all" request
+  cleared the pantry). All test data was deleted, and the Blob image now returns 404.
+- No code changed this session.
 
 # Files Modified
 
-- New: `server/db/pgError.js`, `server/db/pgError.test.js`, `server/test/db/joinCodeCollision.dbtest.js`
-  (both test files are locked: Red was confirmed).
-- `server/services/householdService.js` (the import + 2 expressions).
-- `ai/tasks/TASK-071-dependency-security-phase-b.md` (status line, §11), this file.
+- `ai/tasks/TASK-072-production-health-and-updates.md` (Phase 1 Results only), this file,
+  new `ai/handoffs/archive/TASK-071-green-handoff.md` (TASK-071's handoff, moved unchanged).
 
 # Files Required Next
 
-- `server/package.json`, `server/package-lock.json`. Maybe `backfillSearchDocuments.js:84`, only if G4 needs it.
-  Docs: SYSTEM_OVERVIEW (the "drizzle-orm 0.29" mention), the `schema.js:223` comment, CONVENTIONS.md (G6).
+- Phase 2: `server/instrument.js`, `server/instrument.test.js`, `server/app.js` (error handler, ~lines 73–83).
 
 # Files Already Reviewed
 
-- `householdService.js`, `onboardingService.upsertFlow`, `db/client.js`, `db/migrate.js`, `test/db/dbHarness.js`,
-  `backfillSearchDocuments.js:75-95`, the `schema.js` FKs (all `ON DELETE CASCADE`).
+- `server/services/recipeService.js:1-48`: the only Blob upload path (recipe images).
 
 # Dependency Chain
 
-Editing: server manifests/lockfile, docs. Requires: G6 (Connor). Irrelevant: client, zod/openai/blob, migrations.
+Editing (P2): `server/instrument.js`, `server/instrument.test.js`, `server/app.js`. Requires: Q1 answered.
+Irrelevant: client, `clerkAuth.js` (forbidden), migrations, `package*.json`.
 
 # Architecture Notes
 
-- The dbtest mocks `'crypto'` with a spread of the real `node:crypto` plus a dispatcher `randomBytes`. Interception is
-  confirmed (3b/3c call counts and sizes).
+- Blob is used only by `recipeService.uploadImage`, via the "Upload Recipe Image" flow (OpenAI extraction, then save).
 
 # Decisions Made
 
-- No fast-check property test: fast-check isn't installed and §6 forbids new deps. AC2g–j/l cover never-throws.
-- AC3 selector (ii) is satisfied by `ON DELETE CASCADE` when the captured households are deleted.
-- Red was confirmed via a stub that Connor created ("add the stub and we will address it later"). **To address
-  later:** the kit treats a missing module of the unit under test as wrong-reason Red, while TASK-071 §9 step 6
-  specified exactly that reason. Either the kit or the spec template needs to change.
+- Row 2's pass condition was relaxed to "renders, 200, correct account", because the account is empty by design.
+- Row 4 used a test recipe created in-session, since Connor had no saved recipes.
+- Phase 1 counts as COMPLETE with row 7 (cron) left as a carried-over check, not a failure.
 
 # Remaining Work
 
-1. §9 step 7: `npm install --prefix server drizzle-orm@0.45.4` and `drizzle-kit@0.31.11 -D` (exact versions; check
-   that the manifest ranges don't drift).
-2. Step 8: G3 (unique-violation shape on 0.45.4); the G4 0.45.4 half (rerun the exact query + the timestamptz
-   literal) and its decision table.
-3. Step 9: AC3 again, test:db (expect 48), AC4 (root 118, server 237, client 75, lint 0 errors, build), the AC6
-   "after" ledger (must equal `4ece5377…`), AC1 (`npm ls` + audit), AC7 (`git diff --stat`). Docs updates.
-4. Then: commit, and the staging smoke (Connor runs the ledger query before/after). Load the `migrations` skill
-   before any push.
-5. Connor: G6, `vercel login`, TASK-072 DRAFT-3 approval and its gate answers (Q1, Q3, Q4, Q5).
-6. TASK-072 DRAFT-4 (small): resolve the two notes at the top of the spec. Phase 4 is likely moot (lint is
-   already 0 via the `.claude/` ignore in `e3fe613`), and its "TASK-072 before TASK-071" order is stale because
-   TASK-071 is underway. The spec is ~32KB (budget 15KB); splitting Phase 3 out into its own TASK is the cleanest cut.
+1. **Q1 (gate for Phase 2):** Connor's answer is still needed. The recommendation is "out completely" (the spec's contract).
+2. Phase 2 per the spec: Red (AC 1–6a) → Green → `npm test` and lint → push `staging` → stop. AC 7/8 run when Connor triggers them.
+3. Connor: check the `/api/push/cron` logs within about an hour after an 08:00Z run (Hobby log retention is about 1 h).
+4. TASK-072 DRAFT-4 items (still open): Phase 4 is likely moot (lint is already 0 via the `.claude/` ignore), and
+   Phase 5 should be ordered after TASK-071's bump. The spec is 35KB against a 15KB budget.
+5. Resume TASK-071 at §9 step 7 (see the archived handoff).
+6. Then Phase 3 gates (G1–G3, Q3); Connor only.
 
 # Known Risks / Open Questions
 
-- Local `search_documents` is empty, so G4(B) uses a typed `timestamptz` literal as a substitute (recorded in §11).
-- The zod GHSA-mrhx exposure is unmitigated (TASK-075 on hold). The TASK-071 spec is 32KB, over the 15KB budget.
-- TASK-072 Phase 3 (Neon password rotation) is a deliberate production outage. Only Connor runs it, and only after
-  its G1–G3 gates. Approving the spec doesn't authorize it, or the Phase 1 production smoke test.
+- Q1, Q3, Q5 and Q6 are unanswered. Phase 3 is a deliberate production outage, run by Connor only.
+- The zod GHSA-mrhx exposure is unmitigated (TASK-075 on hold).
 
 # Verification Results
 
-- G1 (0.29.5): shared 118, server 225, client 75, test:db 44, all pass. Lint 0 errors (the baseline is now 0,
-  not 30). Build OK.
-- Green (0.29.5): AC2 12/12, AC3 4/4, server 237/237, shared 118/118, test:db 48/48. Client, lint and build were
-  not rerun (no client/lint-relevant change).
-- `tdd_weakening_report`: not run (no locked tests were edited).
+- Phase 1: health 200; Neon write and reload OK; Blob 200 image/jpeg; chat retrieval returned the exact ingredients;
+  production deploy `e3fe613` Ready; Neon 0.11 CU-hrs used (Free plan, Vercel-managed), not suspended; Sentry
+  showed no new issues or events (SERVER-2 at 505).
 
 # Recommended Next Action
 
-In a fresh session, start at §9 Order step 7 (the bump), using the commands in Remaining Work.
+In a fresh session: get Connor's Q1 answer, then start TASK-072 Phase 2 Red (`server/instrument.test.js`, AC 1–6a).
 
 # Forbidden Exploration
 
-- `client/**` and the zod/openai/blob code paths.
+- `client/**`, `server/middleware/clerkAuth.js`, and the zod/openai/blob code paths.
 
 # Context Notes
 
-- Branch: `staging`. No worktree. TDD enforcement kit installed.
-- Stray untracked `ai/.claude/` and **`server/.claude/`**: TDD-hook state created when the shell cwd was a
-  subfolder. Not committed; safe to delete. Run the kit commands from the repo root.
-- Context pressure: high. Continue in a fresh session.
-- Scratch installs of drizzle 0.29.5/0.45.4/kit 0.31.11 are in this session's scratchpad (disposable).
+- Branch: `staging`. No worktree. The TDD enforcement kit is installed; run kit commands from the repo root.
+- Stray untracked `ai/.claude/` and `server/.claude/` hold TDD-hook state; they're safe to delete and not committed.
+- Context pressure: high (this session). Start fresh.
 
 ---
 
 ## Archived History
+- TASK-071 paused handoff (Green on 0.29.5; next: §9 step 7 bump): see [archive/TASK-071-green-handoff.md](archive/TASK-071-green-handoff.md)
 
 - TASK-072 spec drafting (DRAFT-1…3): see [TASK-072](../tasks/TASK-072-production-health-and-updates.md) "Changes"
 - TASK-071 spec drafting (DRAFT-1…5): commits `2f444d6`, `9a13de8`, `23c3f4d`, `da6666b`, `430972b`; round tables in TASK-071

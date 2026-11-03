@@ -101,7 +101,36 @@ TASK-069 follow-up). Pick a recipe whose ingredients the model could not guess f
 **Verification:** Connor records pass/fail per row in Results. Any failure stops the task: debug that
 failure first (load the `smoke-testing` skill) and re-scope before going on.
 
-**Results:** _(empty)_
+**Results** (2026-11-03, run by Claude in Chrome as Connor's signed-in session, at Connor's request):
+
+- **N1 baseline (20:59Z):** `kitchen-keeper-server` unresolved = KITCHEN-KEEPER-SERVER-2 only (505 events,
+  last 18:58Z); `kitchen-keeper-client` = none. (`NONPROFIT-NETWORK-*` issues are a different project.)
+- **Row 1 PASS:** `/api/health` → `200`.
+- **Row 2 PASS (adjusted):** signed in; `/api/pantry` and `/api/recipes` → `200`, but both lists were **empty**.
+  Connor confirmed empty is expected (chat history shows an earlier "compost all of the items" request
+  that cleared the pantry). Pass condition "renders with real items" relaxed to "renders, 200, correct account".
+- **Row 3 PASS:** added `TASK-072 smoke test` via the form; persisted after reload.
+- **Row 5 PASS:** with no saved recipes, and Blob used only for recipe images (`recipeService.uploadImage`), a
+  generated plain-text recipe card (no personal content) went through "Upload Recipe Image" → saved as
+  `TASK-072 Smoke Test Recipe`; Blob URL → `200 image/jpeg`, `<img>` rendered.
+- **Row 4 PASS:** one message, `TASK-072 smoke: what's in my TASK-072 Smoke Test Recipe?` → reply listed the exact
+  ingredients (black garlic paste, lychee juice, saffron threads, yuzu kosho tofu) and steps. Substitute for
+  "a recipe Connor has saved", since there were none; the recipe was created minutes earlier (indirect evidence
+  for `search_documents`, as before).
+- **Cleanup:** recipe deleted (204) and pantry item deleted (200); both lists back to 0; Blob URL → `404`.
+  The chat turn remains (Connor's own history).
+- **Row 6 PASS:** current Production deployment = `e3fe613` (main), Ready (later than `9e243da`).
+- **Row 7 NOT VERIFIED:** cron `/api/push/cron` `0 8 * * *` is Enabled, but Hobby runtime logs only reach back
+  ~1 h, so the 08:00Z run isn't visible. "Run" was not pressed (it would send real push notifications).
+  Connor: check logs shortly after a 08:00Z run.
+- **Row 8 PASS:** project `neon-violet-compass` (3 branches), compute last active minutes earlier, not
+  suspended. Usage since 2026-11-01: 0.11 CU-hrs compute, 0.07 GB storage. Plan: Free, subscription managed by
+  Vercel; the console shows no numeric compute limit (Billing points to Vercel → Integrations → Neon).
+- **Row 9 PASS:** no issue seen in the last hour in either project; SERVER-2 still 505 events (no new events,
+  because every request in this run was authenticated).
+
+**Status: COMPLETE** (Connor, 2026-11-03). Rows 1–6, 8 and 9 pass. Row 7 (cron) is a carried-over check for
+Connor, not a failure, and it does not block Phase 2.
 
 ---
 
