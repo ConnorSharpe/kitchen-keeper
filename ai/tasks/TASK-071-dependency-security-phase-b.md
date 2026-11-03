@@ -1,6 +1,6 @@
 # TASK-071 — Dependency Security Update (Phase B: breaking upgrades)
 
-Version: DRAFT-4 (2026-11-03). Spec only; nothing implemented. For architect re-review (round 4).
+Version: DRAFT-5 (2026-11-03). Spec only; nothing implemented. For architect re-review (round 5).
 
 Phase A is TASK-070 (non-breaking `npm audit` fixes). Every production advisory still open needs a major
 upgrade. This file recommends the split (§2) and fully specifies **TASK-071 = drizzle-orm 0.29.5 → 0.45.4**
@@ -39,6 +39,13 @@ upgrade. This file recommends the split (§2) and fully specifies **TASK-071 = d
 | B1 cleanup can delete pre-existing rows | Accepted. `join_code` is unique, so if a chosen C1 already existed the seed insert would fail and the by-join-code cleanup would delete a household the test never created | AC3 isolation contract: per-run codes verified absent, cleanup only by captured PKs (+ the verified-absent synthetic `clerkUserId`), and a check that pre-existing rows are untouched |
 | (author) shared C2 | Found while revising: 3b and 3c both ended on one C2, so 3c would collide on C2 if 3b's row still existed and fail for the wrong reason | Each sub-test gets its own fresh C2 |
 | (author) uncaptured id | Found while revising: if `getOrCreate`'s insert succeeds and `upsertFlow` then throws, the household id is never returned | The synthetic `clerkUserId` (unique, verified absent) is an allowed cleanup selector |
+
+**Round 4 (DRAFT-4 → DRAFT-5): request changes, one blocker.**
+
+| # | Assessment | Fix in DRAFT-5 |
+|---|---|---|
+| B1 `clerkUserId` selector scope | Accepted; option 1 (narrow). Checked: `create()` writes only `households`; `getOrCreate()` writes `households` and, via `onboardingService.upsertFlow`, only `user_onboarding`; `server/db/migrations` defines no triggers | Selector (iii) is limited to those two tables, which are exactly the tables checked for absence |
+| Mock sequencing (non-blocking) | Accepted | One module instance and one armed/disarmed dispatcher, reset per sub-test; disarmed calls go to the real `randomBytes` and aren't counted |
 
 ## 0. Baseline (2026-11-03, `npm audit --omit=dev`, after TASK-070)
 
@@ -197,20 +204,32 @@ must return a 4-byte `Buffer`.
      buffers). The codes are generated without the mocked `randomBytes` (e.g. from `Math.random`). No fixed
      literal codes. The synthetic `clerkUserId` is unique per run (e.g. `t071_<random>`).
    - **Verified absent.** Before any insert, the test queries `households` for every generated join code and the
-     synthetic `clerkUserId`, and the onboarding flow table for that `clerkUserId`. If any match exists, it
+     synthetic `clerkUserId`, and `user_onboarding` for that `clerkUserId`. If any match exists, it
      regenerates that value and checks again (bounded, e.g. 5 tries, then fails with a clear message and writes
      nothing).
    - **Captured keys.** Each row the test inserts directly (the seed, and the 3a insert if it unexpectedly
      succeeds) uses `.returning()` and its primary key is recorded. Every household id a call under test returns
      is recorded the moment it resolves.
-   - **Cleanup selectors** (in `finally`, children before parents): only (i) the captured primary keys, (ii) rows
-     referencing those household ids, and (iii) rows keyed by the synthetic `clerkUserId`, which covers the
-     `getOrCreate` household and its onboarding flow row (`onboardingService.upsertFlow`) even if the call
-     rejects before returning an id. Rows are never deleted only because their join code matches a generated
-     code.
+   - **Cleanup selectors** (in `finally`, children before parents): only (i) the captured primary keys; (ii) rows
+     referencing those household ids (none are expected; the ids are new, so no pre-existing row can reference
+     them); and (iii) the synthetic `clerkUserId`, **in exactly two tables: `households` and `user_onboarding`**.
+     Those are the only tables the tested flows write (`create` → `households`; `getOrCreate` → `households` +
+     `onboardingService.upsertFlow` → `user_onboarding`; no triggers exist), and the same two tables are checked
+     for absence. (iii) covers a `getOrCreate` that rejects after its insert. No other table is cleaned by
+     `clerkUserId`. Rows are never deleted only because their join code matches a generated code.
    - **Post-cleanup checks.** Zero rows remain for the captured ids and the synthetic `clerkUserId`. Before setup
-     the test records `count(*)` of `households` and of the onboarding flow table. After cleanup both counts
+     the test records `count(*)` of `households` and of `user_onboarding`. After cleanup both counts
      are equal to those values. (Pre-existing rows are untouched; the local branch is single-user.)
+   - **Mock control.** `householdService.js` is imported once (one module instance), after the `crypto` mock is
+     registered. The test keeps the real `randomBytes` from an import resolved before registration. The mock is
+     one dispatcher with `arm(buffers)` / `disarm()` and a call counter:
+     - while armed, each call increments the counter and returns the next buffer, and the last buffer repeats
+       once the list runs out (3d's every-call C1);
+     - while disarmed, calls go to the real `randomBytes` and are not counted.
+     Each sub-test calls `arm([...])` (which also resets the counter) immediately before its call under test and
+     `disarm()` in its own `finally`. Sub-tests run sequentially. If an armed call comes from anything other
+     than `householdService` (e.g. the size isn't 4, or the counts are off for that reason), the test-writer
+     reports it and does not loosen the count assertions.
    Setup: insert the seed household with join code C1 (captured).
    a. **Error shape:** a drizzle `db.insert(households)` with `joinCode: C1` rejects with an error satisfying
       `isUniqueViolation(err, 'households_join_code_unique')`.
