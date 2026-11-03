@@ -1,63 +1,70 @@
 # Task
 
-No task in progress. TASK-070 (non-breaking dependency security fixes) is **DONE and shipped 2026-11-03**.
-The next tasks, TASK-071 and TASK-072, are DRAFT-1 specs waiting for review.
+No implementation in progress. TASK-071 (drizzle-orm 0.29.5 → 0.45.4) is at **DRAFT-2, waiting for architect
+re-review**. TASK-072 (production health) is still at DRAFT-1, waiting for review.
 
 # Current Status
 
-- TASK-070 is pushed to `staging` and fast-forwarded to `main` (`9e243da`). The TASK-072 investigation
-  confirmed production is serving `9e243da` (client bundle and Sentry release both match).
-- [TASK-071-dependency-security-phase-b.md](../tasks/TASK-071-dependency-security-phase-b.md) covers the
-  breaking upgrades: drizzle 0.45, zod 4 + openai, @vercel/blob 2, react-router 7. It recommends four
-  separate tasks, drizzle first.
-- [TASK-072-production-health-and-updates.md](../tasks/TASK-072-production-health-and-updates.md) has six
-  phases. Production is healthy. Phase 2 is the only code change: stop sending 4xx errors to Sentry,
-  because `server/app.js` error handler reports and `flush(2000)`s every error, and that is what
-  KITCHEN-KEEPER-SERVER-2 is (504 events, 0 users).
-- Both specs are uncommitted and need Connor's architect review before implementation.
-- MIGRATION_LEDGER: no open rows. TASK-070 had no migrations.
+- [TASK-071](../tasks/TASK-071-dependency-security-phase-b.md) DRAFT-2 addresses every round-1 finding (B1–B4,
+  N2–N5); the change table is in its Architect Review History. Key changes: pre-bump and post-bump gates in one
+  order; the migration ledger is verified by an md5 fingerprint of all `(id, hash, created_at)` rows instead of
+  count/max; AC3b–d test the join-code retry itself, using a mocked `crypto.randomBytes` against the real DB;
+  the `isUniqueViolation` walk order, try/catch and depth are pinned; G2 is an 8-point migrator checklist.
+- The zod/blob/react-router investigation, the full advisory table and the TASK-072/073/074 scopes moved to
+  [dependency-phase-b-followons.md](../plans/dependency-phase-b-followons.md). TASK-071 is ~21KB, over the
+  15KB spec budget; what's left is ACs and gates.
+- Q1 (an interim zod `.max()` task, TASK-075): **Connor said hold off (2026-11-03).** It stays open: the zod
+  exposure is deferred, not accepted. Don't create TASK-075 unless asked.
+- TASK-070 shipped 2026-11-03 (`9e243da`). MIGRATION_LEDGER: no open rows.
 
 # Files Modified
 
-- `server/package.json` (qs/body-parser overrides), `server/package-lock.json`, `client/package-lock.json`,
-  `ai/tasks/TASK-070-dependency-security.md` (committed, `9e243da`)
-- New and uncommitted: `ai/tasks/TASK-071-*.md`, `ai/tasks/TASK-072-*.md`
+- `ai/tasks/TASK-071-dependency-security-phase-b.md` (DRAFT-2), new `ai/plans/dependency-phase-b-followons.md`,
+  this file. Docs only; no code changed.
+
+# Files Required Next
+
+- TASK-071 only, for the re-review. For implementation, its §4 Allowed Files.
 
 # Decisions Made
 
-- The app does not use Supabase (Connor suspected a paused Supabase project). The database is Neon,
-  which scales to zero and wakes on demand.
-- body-parser and qs were fixed by bumping the TASK-042 security overrides, staying inside
-  express 4.22.3's own ranges.
-- Skipped the staging-preview gate for TASK-070 under the "prod verification bypass" feedback
-  (dependency-only change, green suite).
+- Every round-1 architect finding was accepted. Q2 is resolved: record the Vercel Node version in CONVENTIONS.md
+  and don't add `engines`.
+- TASK-075 is on hold (Connor).
 
 # Remaining Work
 
-- Connor: review the TASK-071 and TASK-072 specs and answer TASK-072's open questions, including
-  whether 4xx errors should stay out of Sentry entirely, whether `www` should resolve, a downtime window
-  for the password rotation, and whether any Fly.io app is still running.
-- Connor: run `vercel login`. The CLI token is invalid, so deploy, function-log and cron checks weren't possible.
-- Connor: rotate the Neon `neondb_owner` password (TASK-072 Phase 3 gives the order).
+- Connor: send TASK-071 DRAFT-2 for architect re-review; review TASK-072 and answer its open questions (4xx in
+  Sentry, `www`, downtime window for the password rotation, Fly.io).
+- Connor: run `vercel login` (the CLI token is invalid). Rotate the Neon `neondb_owner` password (TASK-072 Phase 3).
+- Connor: record the Vercel project Node version in CONVENTIONS.md (TASK-071 G6; blocks TASK-073/074).
 
 # Known Risks / Open Questions
 
-- Remaining audit advisories need TASK-071: drizzle-orm (high), zod (high), @fastify/busboy (high), react-router (moderate).
-- Neon quota and suspend state are unverified (no console access). Signed-in production flows weren't smoke-tested.
+- zod GHSA-mrhx has real exposure (unbounded arrays on authed routes) and stays unmitigated while TASK-075 is on hold.
+- TASK-071's migrator semantics are unverified until G2 runs. The retry test assumes `mock.module('crypto')`
+  intercepts `householdService`'s import; the test-writer has to confirm that.
+- Neon quota and suspend state are unverified. Signed-in production flows weren't smoke-tested.
 
 # Verification Results
 
-- TASK-070: shared/server 118+225 pass, client 75 pass, build OK. Lint has the 30 pre-existing
-  `.claude/hooks/tdd/*.mjs` errors, same as baseline.
-- Production: `/` 200, `/api/health` 200, `/api/pantry` without a session 401 (expected).
+- Docs-only session: no tests run. TASK-070's last results: shared/server 118+225 pass, client 75 pass, build OK,
+  and lint has the 30 known `.claude/hooks/tdd/*.mjs` errors.
 
 # Recommended Next Action
 
-Review TASK-072 first (Phase 2 is small and fixes the Sentry noise), then TASK-071 starting with drizzle.
+When the TASK-071 re-review comes back, critically assess each finding, then produce DRAFT-3 or mark it approved.
+Implementation starts at §9 Order step 1 (G1), after TASK-070 is confirmed on `staging`.
+
+# Forbidden Exploration
+
+- `client/**` and the zod/openai/blob code paths: out of scope for TASK-071.
 
 # Context Notes
 
-- Branch: `staging` (= `origin/staging` = `origin/main` = `9e243da`). No worktree.
+- Branch: `staging`. No worktree. Stray untracked `ai/.claude/tdd-state/` is TDD-hook state created when a
+  shell ran from `ai/`. It is safe to delete and is not committed.
+- Context pressure at handoff: high (~130K). Start the re-review in a fresh session.
 - TDD enforcement kit is installed. Pre-existing unrelated uncommitted changes:
   `.claude/settings.local.json`, `ai/tasks/TASK-059-smoke-tests.md`.
 - Gotcha: `npm audit fix --omit=dev` prunes devDependencies from `node_modules`. Run `npm install` afterwards.
@@ -67,6 +74,7 @@ Review TASK-072 first (Phase 2 is small and fixes the Sentry noise), then TASK-0
 
 ## Archived History
 
+- TASK-071 DRAFT-1 + TASK-072 spec-drafting: see commit `2f444d6`
 - TASK-070 (non-breaking dependency fixes, shipped 2026-11-03): see [TASK-070](../tasks/TASK-070-dependency-security.md)
 - TASK-069 (semantic retrieval: pgvector + hybrid search + eval harness, shipped to production): see [archive/TASK-069.md](archive/TASK-069.md)
 

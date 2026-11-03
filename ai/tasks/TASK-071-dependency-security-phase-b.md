@@ -1,25 +1,33 @@
 # TASK-071 — Dependency Security Update (Phase B: breaking upgrades)
 
-Version: DRAFT-1 (2026-11-03). Spec only; nothing implemented. For architect review.
+Version: DRAFT-2 (2026-11-03). Spec only; nothing implemented. For architect re-review.
 
 Phase A is TASK-070 (non-breaking `npm audit` fixes). Every production advisory still open needs a major
-upgrade. This file records the investigation (§1), recommends a 4-way split (§2), fully specifies the first
-part, **TASK-071 = drizzle-orm 0.29.5 → 0.45.4** (§3–§9), and scopes the other three (§10).
+upgrade. This file recommends the split (§2) and fully specifies **TASK-071 = drizzle-orm 0.29.5 → 0.45.4**
+(§3–§9). The other tasks are scoped in `ai/plans/dependency-phase-b-followons.md`.
 
 ## Architect Review History
 
-(none yet)
+**Round 1 (DRAFT-1 → DRAFT-2): request changes. All findings accepted.**
+
+| # | Fix in DRAFT-2 |
+|---|---|
+| B1 G3 ordered before the bump | §9 splits pre-bump and post-bump gates under one numbered order |
+| B2 count/max ≠ ledger identity | AC6 and staging/prod compare the full ordered ledger + md5 fingerprint |
+| B3 retry not tested | AC3b–d drive `create()`/`getOrCreate()` through a forced collision (mocked `randomBytes`, real DB) |
+| B4 "never throws" not guaranteed | §7 fixes the walk order, try/catch, and depth (err + ≤5 causes); AC2 i–l |
+| N1 Q1 zod first | §2: interim TASK-075 `.max()` bounds recommended; **owner decision open** |
+| N2 G2 too narrow | G2 is an 8-point decision checklist; STOP only on unexplained semantic differences |
+| N3 server suite implicit | AC4 lists `npm test --prefix server` explicitly |
+| N4 file limit ambiguous | §6: ≤5 production source files; tests/manifests/lockfile/docs excluded |
+| N5 G4 decision record | §9 G4 per-consumer decision table |
 
 ## 0. Baseline (2026-11-03, `npm audit --omit=dev`, after TASK-070)
 
-| Advisory | Package | Path | Sev | Fix | Real exposure here |
-|---|---|---|---|---|---|
-| GHSA-gpj5-g38j-94v9 (escaping in `sql.identifier()`/`.as()`) | drizzle-orm 0.29.5 | direct | high | ≥0.45.2 | None: one `.as('trigger')` constant, no `sql.identifier` |
-| GHSA-mrhx-c7xc-m3w5 (OOM: array schema issues accumulate) | zod 3.25.76 | direct, + openai 4 peer, + drizzle-kit (dev) | high | ≥4.6.6, **no 3.x fix** | **Yes:** unbounded `z.array` on authed routes, 10mb JSON limit |
-| (via zod peer) | openai 4.104.0 | direct | high | openai ≥6 (peer `^3.25 \|\| ^4.0`) | n/a |
-| GHSA-x8mw-p69m-v3mx, GHSA-gxm5-99cw-xjw9 + 15 undici | @fastify/busboy 2.1.1, undici 5.29 | @vercel/blob 0.27.3 | high | blob ≥2.0.1 (undici ^6.23) | Low: outbound calls to Vercel API only |
-| GHSA-wrjc-x8rr-h8h6 (external redirect, `>=6 <7.18`) | react-router 6.30.6 (client) | direct | mod | ≥7.18.0, **no 6.x fix** | None: every `navigate`/`<Navigate>` uses a constant path |
-| GHSA-337j-9hxr-rhxg (SSR hydration) | react-router (client) | direct | mod | ≥7.18.0 | None: Declarative Mode is unaffected (advisory text) |
+Open production advisories: drizzle-orm (GHSA-gpj5, high, fix ≥0.45.2, no real exposure: one constant
+`.as('trigger')` and no `sql.identifier`); zod/openai (GHSA-mrhx, high, **real exposure**); @vercel/blob via
+undici 5/@fastify/busboy (high, low exposure); react-router client (moderate, none). The full table is in
+`ai/plans/dependency-phase-b-followons.md`.
 
 **Prerequisite:** TASK-070's lockfile changes are still uncommitted. Every Phase B task starts only after
 TASK-070 is committed and on `staging`.
@@ -47,68 +55,56 @@ TASK-070 is committed and on `staging`.
 `_journal.json` (hand-written migrations). 0.31.11 no longer depends on zod. Folder-format changes are v1-only.
 
 **Correction to Phase A notes:** there is a real-DB suite. It is opt-in: `RUN_DB_TESTS=1 npm run test:db
---prefix server`, local Neon branch only. It covers `bootCompat` (imports `app.js`, a typed query, and
-**"`migrate.js` is a no-op on a second boot"**), `tenancy`, `reconcile`, `snapshotGuard`, `fingerprint` (drizzle
-`db.execute`) and `backfill`. This is TASK-071's main safety net.
+--prefix server`, local Neon branch only, and it already runs with `--experimental-test-module-mocks`. It covers
+`bootCompat` (imports `app.js`, a typed query, and **"`migrate.js` is a no-op on a second boot"**), `tenancy`,
+`reconcile`, `snapshotGuard`, `fingerprint` (drizzle `db.execute`) and `backfill`. This is TASK-071's main
+safety net.
 
-### 1.2 zod 4 + openai 6
+**Retry seam (for B3):** both retry loops (`createHousehold` behind `getOrCreate`, and `create`) take their code
+from the module-private `generateJoinCode()` = `randomBytes(4).toString('hex').toUpperCase()`, where
+`randomBytes` comes from `'crypto'`. No existing test mocks `crypto` or covers either retry.
 
-- zod: 16 server files (10 routes, 6 chat handlers), none in the client. Unbounded arrays: `recipes.js`
-  (ingredients, steps, tags), `ai.js` (steps), `shopping.js` (recipeIds).
-- v4 effects: **default messages change** ("Required" → "Invalid input: expected …"), and `validate.js` sends
-  `issues[].message` in 400 bodies, so this is user-visible. `.default()` short-circuits on undefined (no
-  `.optional().default()` combinations found). `.email()/.url()/.datetime()` are deprecated but work (keep them).
-  `.refine(fn,'string')` is unconfirmed. `ZodError.message` format changes (it goes to the model only).
-  `zod/v3` is no escape (all of 3.x is affected).
-- openai: zod 4 needs openai ≥6.0.0 (latest 6.49.0; 7.x requires Node ≥22). No `zodResponseFormat` in use.
-  Call sites: `openaiProvider.js`, `aiService.js` (`new OpenAI`), `transcribe.js` (`toFile` from `'openai'`:
-  root export in 6.x unconfirmed). Embeddings now default to base64, decoded by the SDK.
+### 1.2–1.4 zod + openai, @vercel/blob, react-router
 
-### 1.3 @vercel/blob 2.x
+Moved to `ai/plans/dependency-phase-b-followons.md` (unchanged from DRAFT-1). Key facts used here: the zod
+exposure is five unbounded arrays (`recipes.js` ingredients/steps/tags, `ai.js` steps, `shopping.js` recipeIds);
+blob 2 and RR7 need Node ≥20.
 
-One file: `recipeService.js` calls `put(\`recipes/${hh}/${uuid}.${ext}\`, buf, {access:'public', contentType})` and
-`del(url)` ×2. 1.0 changes: `addRandomSuffix` defaults to false and overwrite needs `allowOverwrite`. Our paths
-are UUID-unique, and old URLs stay deletable. `BLOB_READ_WRITE_TOKEN` still works (OIDC added with fallback).
-The first version on undici 6 is **2.0.1**. Node ≥20. No receipt path uses Blob, contrary to
-SYSTEM_OVERVIEW; fix that wording in TASK-073.
-
-### 1.4 react-router-dom 7
-
-8 client files, Declarative Mode only, no data router or SSR. `App.jsx:114` already sets `v7_startTransition` and
-`v7_relativeSplatPath`; the other flags are data-router only. `react-router-dom@7` still re-exports
-`react-router`, so imports stay unchanged. Peer `react >=18` (18.3.1 installed); Node ≥20. v8 drops
-`react-router-dom` and needs React 19, so it is out of scope.
-
-## 2. Recommendation: four tasks, drizzle first
+## 2. Recommendation: four tasks, drizzle first, plus an interim zod mitigation
 
 Split them. The upgrades share no source files, and each has a distinct failure mode (DB boot, validation,
 uploads, routing) and needs its own smoke. Bundling would make a staging failure ambiguous and a rollback coarse.
 
+0. **(Recommended, pending owner decision: Q1) TASK-075 interim zod array bounds.** Add `.max()` to the five
+   unbounded arrays (`recipes.js` ingredients/steps/tags, `ai.js` steps, `shopping.js` recipeIds) on zod 3,
+   with one route test per bound. It shares no files with TASK-071, so it can run before or alongside it.
+   It closes the only exposure we can show while the zod 4 + openai 6 upgrade is done carefully.
 1. **TASK-071 drizzle**: largest blast radius and best safety net; do it while nothing else moves.
-2. **TASK-072 zod + openai** (coupled by the peer range): the only advisory with real exposure.
+2. **TASK-072 zod + openai** (coupled by the peer range): clears the advisory itself.
 3. **TASK-073 @vercel/blob**: one file, mostly audit noise.
 4. **TASK-074 react-router**: client-only, nil exposure.
 
-**Q1 (review):** zod is the only real exposure. Should TASK-072 go first instead? An interim `.max()` on the
-five unbounded arrays would be an alternative mitigation. It is outside every task's current scope; this
-spec does not decide it.
-**Q2:** blob 2 and RR7 need Node ≥20. The Vercel project Node version is not recorded in the repo (→ G6).
-Recommended: record it in CONVENTIONS.md and do not add `engines`.
+**Q1 (owner decision, open):** accept TASK-075 as above (architect and author both recommend it), or explicitly
+accept the zod exposure until TASK-072 lands. Not deciding is not an option: the choice is recorded here.
+*2026-11-03, Connor: hold off on TASK-075 for now. Q1 stays open; the zod exposure is deferred, not accepted.*
+**Q2 (resolved, architect agrees):** blob 2 and RR7 need Node ≥20. Record the Vercel project Node version in
+CONVENTIONS.md (G6) and do not add `engines`. This must be done before TASK-073/074 start.
 
 ## 3. TASK-071 Goal
 
 drizzle-orm 0.29.5 → **0.45.4** (clears GHSA-gpj5) and drizzle-kit 0.21.4 → **0.31.11**. Make only the source
-changes the upgrade forces. Behavior stays the same: queries, household scoping, migration state in every
-environment, and the join-code collision retry.
+changes the upgrade forces. Behavior stays the same: queries, household scoping, the **identity** of the
+existing migration ledger in every environment, and the join-code collision retry.
 
 ## 4. Allowed Files
 
 - `server/package.json`, `server/package-lock.json`
 - New: `server/db/pgError.js`, `server/db/pgError.test.js`, `server/test/db/joinCodeCollision.dbtest.js`
-- `server/services/householdService.js`: only the two `isJoinCodeCollision` expressions
+- `server/services/householdService.js`: only the two `isJoinCodeCollision` expressions (+ the import)
 - `server/scripts/backfillSearchDocuments.js:84`: only if G4 shows the shape changed
-- `indexer.js` / `searchService.js`: only if G4 shows a type change their helpers don't absorb (STOP first)
-- Docs: SYSTEM_OVERVIEW "drizzle-orm 0.29" mention, the `schema.js:223` comment, this file, CURRENT_STATE.md
+- `indexer.js` / `searchService.js`: only if G4 shows a change their helpers don't absorb (STOP first)
+- Docs: SYSTEM_OVERVIEW "drizzle-orm 0.29" mention, the `schema.js:223` comment, CONVENTIONS.md (Node version,
+  G6), this file, CURRENT_STATE.md
 
 ## 5. Forbidden Files
 
@@ -120,20 +116,38 @@ comment; all existing tests (locked); zod/openai/blob code; `client/**`; root `p
 - Stay on drizzle 0.x (no v1 beta/rc). No new direct deps. `@neondatabase/serverless` stays 0.10.4.
 - TDD: the manifest/lockfile bump is exempt (`**/package*.json`). `pgError.js` + the householdService change go
   Red first.
-- **STOP** if G2 finds any migrator semantic change; if any existing unit test or dbtest fails after the bump;
-  if G4 needs edits beyond Allowed; if G5 wants to write to `migrations/`; or if more than 5 source files change.
+- **File limit:** at most **5 production source files** change (new or edited, under `server/` and excluding
+  tests). Expected: `pgError.js`, `householdService.js`, maybe `backfillSearchDocuments.js` = 2–3. Tests
+  (`*.test.js`, `*.dbtest.js`), manifests, the lockfile and docs do not count. A 6th production file → STOP.
+- **STOP** if G2 finds an unexplained semantic difference (see G2); if any existing unit test or dbtest fails
+  after the bump; if G4 needs edits beyond Allowed; if G5 wants to write to `migrations/`; if the ledger
+  fingerprint changes anywhere; or if the file limit is hit.
 - Lint baseline: 30 pre-existing `no-undef` errors in `.claude/hooks/tdd/*.mjs`. No new errors.
 
 ## 7. Interface contract
 
 `server/db/pgError.js`: `export function isUniqueViolation(err, constraintName) // -> boolean`
 
-- `true` iff some object in the chain `err, err.cause, err.cause.cause, …` (max depth 5, stops at non-objects)
-  has **both** `code === '23505'` and `constraint === constraintName` on that same object.
-- Never throws. Any non-matching input returns `false`.
+- Walk: `cur = err`, depth 0. At each step:
+  1. If `cur` is not a non-null object (`typeof cur !== 'object' || cur === null`), return `false`.
+  2. If `cur.code === '23505' && cur.constraint === constraintName`, return `true`. (The match is checked on
+     this object **before** `cause` is read.)
+  3. If depth is 5, return `false`. Otherwise `cur = cur.cause`, depth + 1, repeat.
+  So at most 6 objects are inspected: `err` plus up to 5 nested causes. Cycles terminate by the depth bound.
+- **Never throws.** The whole walk sits in `try/catch`, and any exception (e.g. a throwing getter on `code`,
+  `constraint` or `cause`) returns `false`. Because of the order in step 2, a match found before the throwing
+  access still returns `true`.
+- Pure: no logging, no mutation of `err`.
 
-`householdService.js` replaces both inline checks with `isUniqueViolation(err, JOIN_CODE_CONSTRAINT)`. This works
-on 0.29 (unwrapped) and on 0.45 (wrapped), so it lands before the bump.
+`householdService.js` replaces both inline checks with `isUniqueViolation(err, JOIN_CODE_CONSTRAINT)` and changes
+nothing else (still 3 attempts, still rethrows non-collision errors and the third collision unchanged). This
+works on 0.29 (unwrapped) and on 0.45 (wrapped), so it lands before the bump.
+
+**Test seam for the retry (AC3b/c):** `mock.module('crypto', { namedExports: { randomBytes } })` (or
+`'node:crypto'`, whichever the loader matches; the test-writer confirms which actually intercepts by checking
+the mock's call count, and reports if neither does), registered **before** a dynamic `import()` of
+`householdService.js`. The real `db` client and real Neon local branch are used: no db mock. `randomBytes(4)`
+must return a 4-byte `Buffer`.
 
 ## 8. Acceptance Criteria
 
@@ -148,83 +162,138 @@ on 0.29 (unwrapped) and on 0.45 (wrapped), so it lands before the bump.
    f. `{code:'23505', cause:{constraint:'households_join_code_unique'}}` (split across objects) → false
    g. `null`, `undefined`, `'23505'`, `{}` → false, no throw
    h. self-cycle `e = {code:'X'}; e.cause = e` → false, terminates
-3. `joinCodeCollision.dbtest.js` (opt-in, local branch, cleans up in `finally`): a drizzle
-   `db.insert(households)` whose `joinCode` duplicates an existing row rejects with an error satisfying
-   `isUniqueViolation(err, 'households_join_code_unique')`. It passes on 0.29.5 before the bump and on 0.45.4
-   after (behavior lock across the upgrade).
-4. Root `npm test`, `npm test --prefix client`, `npm run lint` and `npm run build` match the pre-change baseline.
+   i. `{ get cause() { throw new Error('boom') } }` → false, no throw
+   j. `{ get code() { throw new Error('boom') } }` → false, no throw
+   k. a match at depth 5 (`err.cause` ×5 is the matching object) → true; the same match at depth 6 → false
+   l. `{code:'23505', constraint:'households_join_code_unique', get cause() { throw … }}` → true (match is
+      checked before `cause` is read)
+3. `joinCodeCollision.dbtest.js` (opt-in, local branch; every row it creates, including the onboarding-flow row
+   `getOrCreate` writes, is deleted in `finally`). Setup: insert a household with join code `C1` =
+   `randomBytes`-shaped 8-char uppercase hex chosen by the test (e.g. from `Buffer.from([0xde,0xad,0xbe,0xef])`),
+   and pick a distinct fresh `C2`.
+   a. **Error shape:** a drizzle `db.insert(households)` with `joinCode: C1` rejects with an error satisfying
+      `isUniqueViolation(err, 'households_join_code_unique')`.
+   b. **Retry via `create(ownerName)`:** with `randomBytes` mocked to return the C1 bytes, then the C2 bytes,
+      `create('T071')` resolves to a household whose `joinCode === C2`. The mock was called exactly 2 times, and
+      exactly one new `households` row exists with `C2`.
+   c. **Retry via `getOrCreate(clerkUserId)`:** same mock sequence and a fresh synthetic `clerkUserId` with no
+      household: resolves to a household with `joinCode === C2` and `clerkUserId` equal to the input; mock called
+      2 times.
+   d. **Exhaustion:** with the mock returning the C1 bytes on every call, `create('T071')` rejects with an error
+      satisfying `isUniqueViolation`, after exactly 3 calls.
+   All of 3a–d pass on 0.29.5 before the bump (with the Green `householdService`) and on 0.45.4 after. On 0.45.4,
+   3b–d are what prove the retry still recognises the wrapped `DrizzleQueryError`.
+4. These match the pre-change baseline recorded at G1: root `npm test`, **`npm test --prefix server`** (root
+   `npm test` also chains it; it is listed separately so it is never implicit), `npm test --prefix client`,
+   `npm run lint`, `npm run build`.
 5. The full `test:db` suite passes on 0.45.4, including `bootCompat`'s second-boot no-op. A pre-bump baseline
    run is recorded first.
-6. Local `drizzle.__drizzle_migrations` `count(*)` and `max(created_at)` are identical before and after a boot
-   on 0.45.4 (recorded in §11).
+6. **Ledger identity (local):** the full output of the ledger query (§9) and its fingerprint are identical
+   before the bump (0.29.5) and after a 0.45.4 boot. The before/after rows and both fingerprints are recorded
+   in §11.
 7. `git diff --stat` touches only §4 files.
 
 ## 9. Verification
 
-**Gates (record in §11 before Red):**
-- **G1:** TASK-070 is on `staging`. Baselines recorded for test, lint, build and test:db.
-- **G2 (migrator):** in a scratch dir (not the repo), diff `pg-core` dialect `migrate()` and
-  `neon-http/migrator` between 0.29.5 and 0.45.4. Expect the same table `drizzle.__drizzle_migrations`, the
-  same `hash`/`created_at` columns, and the same rule "apply journal entries with `when` > last `created_at`".
-  Any difference → STOP.
-- **G3:** against the local branch, record a 0.45.4 unique violation's `name`, own `code`/`constraint`, and
-  `cause.code`/`cause.constraint`.
-- **G4:** record `db.execute(sql\`SELECT id, occurred_at FROM search_documents LIMIT 1\`)` on 0.29.5 vs 0.45.4:
-  the top-level shape (`.rows` vs array) and the JS type of `occurred_at`. This decides the backfill line.
-- **G5:** drizzle-kit 0.31.11 `--version` and `check` (read-only) accept the existing `drizzle.config.js`
-  without demanding `up`.
+**Ledger query** (used locally, on staging and on prod):
+
+```sql
+-- full listing (record it)
+SELECT id, hash, created_at FROM drizzle.__drizzle_migrations ORDER BY id;
+-- fingerprint + quick check (compare)
+SELECT count(*) AS n, max(created_at) AS max_created,
+       md5(string_agg(id::text || ':' || hash || ':' || created_at::text, ',' ORDER BY id)) AS fingerprint
+FROM drizzle.__drizzle_migrations;
+```
+
+Pass = the fingerprint is equal before and after. `n` and `max_created` are only a quick check: they cannot
+pass on their own.
+
+**Pre-bump gates (record in §11 before Red):**
+- **G1:** TASK-070 is on `staging`. Baselines recorded for every AC4 command and for test:db. The local ledger
+  listing and fingerprint recorded (the "before" of AC6).
+- **G2 (migrator, scratch dir outside the repo):** install 0.29.5 and 0.45.4 side by side and trace the full
+  `migrate()` path for neon-http (`neon-http/migrator`, `migrator.readMigrationFiles`, pg-core dialect
+  `migrate()`). Record, for each version, how it handles:
+  1. migration discovery: reading `meta/_journal.json`, folder resolution, `migrationsFolder` option;
+  2. ordering: journal order vs filename;
+  3. hashing: algorithm, and what is hashed (raw file text, statement-breakpoint split);
+  4. ledger creation: schema `drizzle`, table `__drizzle_migrations`, columns `id`/`hash`/`created_at`, and
+     `migrationsSchema`/`migrationsTable` defaults;
+  5. existing-ledger lookup: which row it reads as "last applied" (by `created_at` or by `id`), and the query;
+  6. the apply rule: compare `folderMillis`/`when` against the last `created_at`; `>` vs `>=`;
+  7. execution: per-statement vs batched, and inside a transaction or not (neon-http);
+  8. schema qualification of the ledger table and of the migration SQL.
+  Expected: identical decisions on all 8 against our existing ledger. **STOP** on any unexplained semantic
+  difference in discovery, ordering, ledger interpretation or execution. A refactor that provably makes the same
+  decisions is recorded with its reasoning and does not stop the task.
+- **G5:** drizzle-kit 0.31.11 `--version` and `check` (read-only, scratch install) accept the existing
+  `drizzle.config.js` without demanding `up`.
 - **G6:** Connor records the Vercel project Node version in CONVENTIONS.md.
 
-**Order:** Red (AC2, AC3) → Green on 0.29.5 → bump → full suites + test:db → G4 fix, if any.
+**Post-bump gates (record in §11 after step 7 below):**
+- **G3:** against the local branch on 0.45.4, record a unique violation's `name`, its own `code`/`constraint`,
+  and `cause.code`/`cause.constraint`. This documents the wrapping AC3 depends on. Nothing branches on it,
+  because `isUniqueViolation` handles both shapes.
+- **G4 (controlled comparison):** run the same query, `db.execute(sql\`SELECT id, occurred_at FROM
+  search_documents ORDER BY id LIMIT 1\`)`, on 0.29.5 (value recorded at pre-bump, step 5) and on 0.45.4, and
+  record two properties separately: (A) the top-level return shape (`{rows}` vs array) and (B) the JS type of
+  `occurred_at`. Then fill in this decision table in §11. Every row needs an explicit outcome ("no change" is
+  an outcome):
+
+  | Consumer | (A) return-shape handling | (B) timestamp handling | Outcome |
+  |---|---|---|---|
+  | `indexer.js` (×12) | `rowsOf()` | existing conversion | |
+  | `searchService.js` (×3) | `rowsOf()` | `toIso()` | |
+  | `backfillSearchDocuments.js:84` | `.rows ?? []` | existing handling | |
+
+**Order (one sequence):**
+1. G1 · 2. G2 · 3. G5 · 4. G6 (Connor; may run in parallel, but must be done before TASK-073/074)
+5. Record G4's 0.29.5 half (shape + `occurred_at` type).
+6. Red: AC2 and AC3a–d, which fail because `pgError.js` does not exist. On 0.29.5, AC3b–d are behavior locks:
+   the inline check already sees unwrapped errors, so they cannot fail for the wrapping reason until the bump.
+   Record that in §11. Green on 0.29.5: all of AC2 and AC3 pass.
+7. Bump drizzle-orm and drizzle-kit (lockfile regenerated by npm).
+8. G3, then G4's 0.45.4 half and the decision table. Apply a G4 fix only if the table requires one.
+9. AC3 again on 0.45.4, the full test:db suite (AC5), AC4, the AC6 "after" ledger listing and fingerprint, and AC1.
 
 **Staging smoke** (verifier subagent via Claude-in-Chrome, or Connor):
-1. Connor runs `SELECT count(*), max(created_at) FROM drizzle.__drizzle_migrations` on the staging branch
-   before the push and again after the first load of the new Preview. They must be equal. (Staging's 0022 was
-   hand-applied, ledger row 7; only before == after matters.)
+1. Connor runs the ledger query on the staging branch before the push and again after the first load of the
+   new Preview. The fingerprints must be equal. (Staging's 0022 was hand-applied, ledger row 7; only
+   before == after matters.)
 2. Pantry: add, edit, consume (meal_logs), delete.
 3. Recipes: list, create from text, delete. Shopping: generate from a recipe, tick an item.
 4. Chat: one `search_recipes_and_meals` turn (`db.execute` + `occurred_at`) and one tool-driven pantry add.
 5. Household page shows the join code; dietary profile saves.
 6. Sentry staging: no new server issues within 30 minutes.
 
-**Production:** the step 1 count on the prod branch before the merge to `main` and after first load, plus
-smoke steps 2 and 4. After a push exits 0 the session stops; live checks are Connor's.
+**Production:** the ledger query on the prod branch before the merge to `main` and after first load (the
+fingerprints must be equal), plus smoke steps 2 and 4. After a push exits 0 the session stops; live checks are
+Connor's.
 
 **Migration/deploy:** there is no migration file and no expected ledger row. The deploy is still DB-sensitive,
-because `migrate.js` runs the new migrator at boot in every environment, and the count check is the guard.
-Before each push, check the ledger for ❌ rows on the target (currently none). An unexpected count change
-counts as an incident: revert the drizzle commit on that branch and append a ledger row recording what was
-applied. Never hand-edit `__drizzle_migrations` without a reviewed plan. Rollback is a plain revert
-(no data depends on the version).
+because `migrate.js` runs the new migrator at boot in every environment, and the ledger fingerprint is the
+guard. Before each push, check the ledger for ❌ rows on the target (currently none). A fingerprint change
+counts as an incident: revert the drizzle commit on that branch, record the before/after listings, and append
+a ledger row recording what was applied. Never hand-edit `__drizzle_migrations` without a reviewed plan.
+Rollback is a plain revert, valid only while the fingerprint is unchanged (no data depends on the version).
 
-## 10. Follow-on tasks (each gets its own TASK file once this is approved)
+## 10. Follow-on tasks
 
-**TASK-072: zod 4.6.7 + openai 6.49.x.** Allowed: `server/package*.json`; zod files only where v4 forces
-changes; `transcribe.js`, `openaiProvider.js`, `aiService.js`. Gates: `.refine(fn,'string')` in v4; `toFile`
-root export in 6.x; embeddings still a length-1536 `number[]`; client reliance on zod message text
-(`client/src/api/index.js:104`). Draft ACs: zod and openai are cleared from the audit; the existing route tests
-are green; one pinned 400 message per `validate.js` path (custom messages unchanged, default text explicitly
-accepted as changed); a 200k-element failing array to `POST /api/recipes` → 400 within a stated heap bound.
-Smoke: streaming chat with a tool call, recipe/receipt parse, transcription, semantic search.
-
-**TASK-073: @vercel/blob 2.8.x.** Allowed: `server/package*.json`, `recipeService.js` if needed,
-SYSTEM_OVERVIEW. Draft ACs: undici 5 and @fastify/busboy are gone from `npm ls` and the audit; `put` keeps
-`{access:'public', contentType}`. Smoke: upload, replace (the old blob is deleted), delete a recipe, delete a
-recipe whose image URL predates the upgrade.
-
-**TASK-074: react-router-dom 7.18.5.** Allowed: `client/package*.json`, `App.jsx` (drop the now-default
-flags), the 8 router files only if forced. Draft ACs: client audit 0; tests and build green. Smoke: every
-`App.jsx` route, the `/chat` → `/` redirect, the join flow, NavLink active state, back/forward, the PWA
-offline shell.
+Scopes, gates and draft ACs for TASK-072/073/074 (and TASK-075 if Q1 is accepted) are in
+`ai/plans/dependency-phase-b-followons.md`. Each gets its own TASK file once this one is approved. TASK-073 and
+TASK-074 require G6.
 
 ## 11. Gate Results / Baseline Records
 
-(empty: filled during implementation)
+(empty: filled during implementation. Required entries: G1 baselines + "before" ledger listing/fingerprint;
+G2 8-point table per version; G5; G6; G4 0.29.5 half; G3; G4 0.45.4 half + decision table; "after" ledger
+listing/fingerprint; staging and prod before/after fingerprints.)
 
 ## 12. Dependency Chain
 
-Editing: server manifests and lockfile; `pgError.js` (+ unit test, + dbtest); 2 lines in `householdService.js`;
-maybe 1 line in `backfillSearchDocuments.js`; docs.
-Requires: TASK-070 landed; local branch with 0022 (for test:db); Connor for the staging/prod migration counts
-and the Node version.
+Editing: server manifests and lockfile; `pgError.js` (+ unit test, + dbtest); 2 expressions + 1 import in
+`householdService.js`; maybe 1 line in `backfillSearchDocuments.js`; docs.
+Requires: TASK-070 landed; local branch with 0022 (for test:db); Connor for the staging/prod ledger
+fingerprints and the Node version; the Q1 decision recorded (it does not block TASK-071 itself).
 Irrelevant: client; zod/openai/blob paths; migrations; Vercel config.
