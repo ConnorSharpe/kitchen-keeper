@@ -1,17 +1,22 @@
 # Task
 
-No implementation in progress. TASK-071 (drizzle-orm 0.29.5 → 0.45.4) is at **DRAFT-2, waiting for architect
-re-review**. TASK-072 (production health) is still at DRAFT-1, waiting for review.
+No implementation in progress. TASK-071 (drizzle-orm 0.29.5 → 0.45.4) is at **DRAFT-3, waiting for architect
+round-3 review** (round 2 said "close to approval"). TASK-072 (production health) is still at DRAFT-1, waiting for review.
 
 # Current Status
 
-- [TASK-071](../tasks/TASK-071-dependency-security-phase-b.md) DRAFT-2 addresses every round-1 finding (B1–B4,
+- TASK-071 DRAFT-3 (round 2): B1: the fingerprint-change "auto-revert" was replaced with a 6-step incident
+  procedure (❌ row in MIGRATION_LEDGER.md, preserve listings, find the SQL that executed, no hand edits, no
+  revert without a reviewed plan). B2: the Order list was reformatted one step per line, because markdown had
+  renumbered it so "step 7" looked missing. N1: the Q1 status was split out. N2: `COALESCE` in the fingerprint,
+  and the listing is authoritative. N3: AC3 cleanup contract incl. the onboarding flow row.
+- [TASK-071](../tasks/TASK-071-dependency-security-phase-b.md) DRAFT-2 addressed every round-1 finding (B1–B4,
   N2–N5); the change table is in its Architect Review History. Key changes: pre-bump and post-bump gates in one
   order; the migration ledger is verified by an md5 fingerprint of all `(id, hash, created_at)` rows instead of
   count/max; AC3b–d test the join-code retry itself, using a mocked `crypto.randomBytes` against the real DB;
   the `isUniqueViolation` walk order, try/catch and depth are pinned; G2 is an 8-point migrator checklist.
 - The zod/blob/react-router investigation, the full advisory table and the TASK-072/073/074 scopes moved to
-  [dependency-phase-b-followons.md](../plans/dependency-phase-b-followons.md). TASK-071 is ~21KB, over the
+  [dependency-phase-b-followons.md](../plans/dependency-phase-b-followons.md). TASK-071 is ~24KB, over the
   15KB spec budget; what's left is ACs and gates.
 - Q1 (an interim zod `.max()` task, TASK-075): **Connor said hold off (2026-11-03).** It stays open: the zod
   exposure is deferred, not accepted. Don't create TASK-075 unless asked.
@@ -19,8 +24,7 @@ re-review**. TASK-072 (production health) is still at DRAFT-1, waiting for revie
 
 # Files Modified
 
-- `ai/tasks/TASK-071-dependency-security-phase-b.md` (DRAFT-2), new `ai/plans/dependency-phase-b-followons.md`,
-  this file. Docs only; no code changed.
+- `ai/tasks/TASK-071-dependency-security-phase-b.md` (DRAFT-3), this file. Docs only; no code changed.
 
 # Files Required Next
 
@@ -34,7 +38,7 @@ re-review**. TASK-072 (production health) is still at DRAFT-1, waiting for revie
 
 # Remaining Work
 
-- Connor: send TASK-071 DRAFT-2 for architect re-review; review TASK-072 and answer its open questions (4xx in
+- Connor: send TASK-071 DRAFT-3 for architect round-3 review; review TASK-072 and answer its open questions (4xx in
   Sentry, `www`, downtime window for the password rotation, Fly.io).
 - Connor: run `vercel login` (the CLI token is invalid). Rotate the Neon `neondb_owner` password (TASK-072 Phase 3).
 - Connor: record the Vercel project Node version in CONVENTIONS.md (TASK-071 G6; blocks TASK-073/074).
@@ -53,7 +57,7 @@ re-review**. TASK-072 (production health) is still at DRAFT-1, waiting for revie
 
 # Recommended Next Action
 
-When the TASK-071 re-review comes back, critically assess each finding, then produce DRAFT-3 or mark it approved.
+When the TASK-071 round-3 review comes back, critically assess each finding, then produce DRAFT-3 or mark it approved.
 Implementation starts at §9 Order step 1 (G1), after TASK-070 is confirmed on `staging`.
 
 # Forbidden Exploration
@@ -64,7 +68,7 @@ Implementation starts at §9 Order step 1 (G1), after TASK-070 is confirmed on `
 
 - Branch: `staging`. No worktree. Stray untracked `ai/.claude/tdd-state/` is TDD-hook state created when a
   shell ran from `ai/`. It is safe to delete and is not committed.
-- Context pressure at handoff: high (~130K). Start the re-review in a fresh session.
+- Context pressure at handoff: low.
 - TDD enforcement kit is installed. Pre-existing unrelated uncommitted changes:
   `.claude/settings.local.json`, `ai/tasks/TASK-059-smoke-tests.md`.
 - Gotcha: `npm audit fix --omit=dev` prunes devDependencies from `node_modules`. Run `npm install` afterwards.
@@ -74,7 +78,7 @@ Implementation starts at §9 Order step 1 (G1), after TASK-070 is confirmed on `
 
 ## Archived History
 
-- TASK-071 DRAFT-1 + TASK-072 spec-drafting: see commit `2f444d6`
+- TASK-071 DRAFT-2: see commit `9a13de8`. DRAFT-1 + TASK-072 spec-drafting: see commit `2f444d6`
 - TASK-070 (non-breaking dependency fixes, shipped 2026-11-03): see [TASK-070](../tasks/TASK-070-dependency-security.md)
 - TASK-069 (semantic retrieval: pgvector + hybrid search + eval harness, shipped to production): see [archive/TASK-069.md](archive/TASK-069.md)
 

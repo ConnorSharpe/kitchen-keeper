@@ -1,6 +1,6 @@
 # TASK-071 — Dependency Security Update (Phase B: breaking upgrades)
 
-Version: DRAFT-2 (2026-11-03). Spec only; nothing implemented. For architect re-review.
+Version: DRAFT-3 (2026-11-03). Spec only; nothing implemented. For architect re-review (round 3).
 
 Phase A is TASK-070 (non-breaking `npm audit` fixes). Every production advisory still open needs a major
 upgrade. This file recommends the split (§2) and fully specifies **TASK-071 = drizzle-orm 0.29.5 → 0.45.4**
@@ -21,6 +21,16 @@ upgrade. This file recommends the split (§2) and fully specifies **TASK-071 = d
 | N3 server suite implicit | AC4 lists `npm test --prefix server` explicitly |
 | N4 file limit ambiguous | §6: ≤5 production source files; tests/manifests/lockfile/docs excluded |
 | N5 G4 decision record | §9 G4 per-consumer decision table |
+
+**Round 2 (DRAFT-2 → DRAFT-3): request changes, close to approval.**
+
+| # | Assessment | Fix in DRAFT-3 |
+|---|---|---|
+| B1 incident recovery | Accepted. "Ledger row" meant MIGRATION_LEDGER.md, not `__drizzle_migrations`, so the two sentences didn't literally conflict. But the real point stands: a code revert doesn't undo SQL that already ran, so it can't be the default recovery | §9 Migration/deploy: a 6-step incident procedure; no revert without a reviewed plan once the ledger changed |
+| B2 "step 7 doesn't exist" | Partly accepted. Step 7 (the bump) exists in the source, but `1. G1 · 2. G2 · …` on one line made markdown renumber the list so it showed 6 items | §9 Order: one step per line; gates now name the step ("Order step 7, the dependency bump") |
+| N1 Q1 status | Accepted | §2 and §12 state the deferral/exposure/acceptance status separately |
+| N2 fingerprint | Accepted | `COALESCE` for an empty ledger; the listing is authoritative and the fingerprint is a comparison aid |
+| N3 cleanup | Accepted. Checked: `create()` writes only `households`; `getOrCreate()` writes `households` + an onboarding flow row (`onboardingService.upsertFlow`) | AC3 cleanup contract with identifiers and a post-cleanup zero-row check |
 
 ## 0. Baseline (2026-11-03, `npm audit --omit=dev`, after TASK-070)
 
@@ -75,7 +85,7 @@ blob 2 and RR7 need Node ≥20.
 Split them. The upgrades share no source files, and each has a distinct failure mode (DB boot, validation,
 uploads, routing) and needs its own smoke. Bundling would make a staging failure ambiguous and a rollback coarse.
 
-0. **(Recommended, pending owner decision: Q1) TASK-075 interim zod array bounds.** Add `.max()` to the five
+0. **(Recommended; deferred by owner, see Q1) TASK-075 interim zod array bounds.** Add `.max()` to the five
    unbounded arrays (`recipes.js` ingredients/steps/tags, `ai.js` steps, `shopping.js` recipeIds) on zod 3,
    with one route test per bound. It shares no files with TASK-071, so it can run before or alongside it.
    It closes the only exposure we can show while the zod 4 + openai 6 upgrade is done carefully.
@@ -86,7 +96,12 @@ uploads, routing) and needs its own smoke. Bundling would make a staging failure
 
 **Q1 (owner decision, open):** accept TASK-075 as above (architect and author both recommend it), or explicitly
 accept the zod exposure until TASK-072 lands. Not deciding is not an option: the choice is recorded here.
-*2026-11-03, Connor: hold off on TASK-075 for now. Q1 stays open; the zod exposure is deferred, not accepted.*
+*2026-11-03, Connor: hold off on TASK-075 for now.* Status:
+- TASK-075: **deferred by owner** (not cancelled; it stays on the backlog as open security work).
+- zod GHSA-mrhx exposure: **known and unresolved**.
+- Risk acceptance: **not granted**. Q1 stays open until TASK-075 runs or Connor explicitly accepts the risk.
+- TASK-071: not blocked by Q1. TASK-072 is still what clears the advisory. Finishing TASK-071 does **not** mean
+  the production dependency-security backlog is resolved.
 **Q2 (resolved, architect agrees):** blob 2 and RR7 need Node ≥20. Record the Vercel project Node version in
 CONVENTIONS.md (G6) and do not add `engines`. This must be done before TASK-073/074 start.
 
@@ -167,8 +182,13 @@ must return a 4-byte `Buffer`.
    k. a match at depth 5 (`err.cause` ×5 is the matching object) → true; the same match at depth 6 → false
    l. `{code:'23505', constraint:'households_join_code_unique', get cause() { throw … }}` → true (match is
       checked before `cause` is read)
-3. `joinCodeCollision.dbtest.js` (opt-in, local branch; every row it creates, including the onboarding-flow row
-   `getOrCreate` writes, is deleted in `finally`). Setup: insert a household with join code `C1` =
+3. `joinCodeCollision.dbtest.js` (opt-in, local branch). **Cleanup contract:** the test leaves the branch as it
+   found it, even when an assertion fails partway. It deletes, in `finally` and children before parents, every
+   row the tested flows create, including dependent rows: `households` rows whose `join_code` is C1 or C2 or
+   whose id was returned by a call under test; the onboarding flow row(s) for the synthetic `clerkUserId`
+   (`getOrCreate` → `onboardingService.upsertFlow`); and any other row referencing those household ids or that
+   `clerkUserId`. The synthetic `clerkUserId` is unique per run (e.g. `t071_<random>`). After cleanup the test
+   asserts zero remaining rows for those join codes, household ids and `clerkUserId`. Setup: insert a household with join code `C1` =
    `randomBytes`-shaped 8-char uppercase hex chosen by the test (e.g. from `Buffer.from([0xde,0xad,0xbe,0xef])`),
    and pick a distinct fresh `C2`.
    a. **Error shape:** a drizzle `db.insert(households)` with `joinCode: C1` rejects with an error satisfying
@@ -202,12 +222,15 @@ must return a 4-byte `Buffer`.
 SELECT id, hash, created_at FROM drizzle.__drizzle_migrations ORDER BY id;
 -- fingerprint + quick check (compare)
 SELECT count(*) AS n, max(created_at) AS max_created,
-       md5(string_agg(id::text || ':' || hash || ':' || created_at::text, ',' ORDER BY id)) AS fingerprint
+       md5(COALESCE(string_agg(id::text || ':' || hash || ':' || created_at::text, ',' ORDER BY id), ''))
+         AS fingerprint
 FROM drizzle.__drizzle_migrations;
 ```
 
-Pass = the fingerprint is equal before and after. `n` and `max_created` are only a quick check: they cannot
-pass on their own.
+The full ordered listing is the **authoritative record**; the fingerprint is a comparison aid (an
+accidental-change detector, not a security control). Pass = identical listing before and after; in practice
+compare fingerprints first, and any fingerprint difference is a fail. `n` and `max_created` are only a quick
+check: they cannot pass on their own. `COALESCE` makes an empty ledger fingerprint deterministic.
 
 **Pre-bump gates (record in §11 before Red):**
 - **G1:** TASK-070 is on `staging`. Baselines recorded for every AC4 command and for test:db. The local ledger
@@ -231,12 +254,12 @@ pass on their own.
   `drizzle.config.js` without demanding `up`.
 - **G6:** Connor records the Vercel project Node version in CONVENTIONS.md.
 
-**Post-bump gates (record in §11 after step 7 below):**
+**Post-bump gates (record in §11 after Order step 7, the dependency bump):**
 - **G3:** against the local branch on 0.45.4, record a unique violation's `name`, its own `code`/`constraint`,
   and `cause.code`/`cause.constraint`. This documents the wrapping AC3 depends on. Nothing branches on it,
   because `isUniqueViolation` handles both shapes.
 - **G4 (controlled comparison):** run the same query, `db.execute(sql\`SELECT id, occurred_at FROM
-  search_documents ORDER BY id LIMIT 1\`)`, on 0.29.5 (value recorded at pre-bump, step 5) and on 0.45.4, and
+  search_documents ORDER BY id LIMIT 1\`)`, on 0.29.5 (value recorded before the bump, Order step 5) and on 0.45.4, and
   record two properties separately: (A) the top-level return shape (`{rows}` vs array) and (B) the JS type of
   `occurred_at`. Then fill in this decision table in §11. Every row needs an explicit outcome ("no change" is
   an outcome):
@@ -248,7 +271,10 @@ pass on their own.
   | `backfillSearchDocuments.js:84` | `.rows ?? []` | existing handling | |
 
 **Order (one sequence):**
-1. G1 · 2. G2 · 3. G5 · 4. G6 (Connor; may run in parallel, but must be done before TASK-073/074)
+1. G1.
+2. G2.
+3. G5.
+4. G6 (Connor; may run in parallel, but must be done before TASK-073/074).
 5. Record G4's 0.29.5 half (shape + `occurred_at` type).
 6. Red: AC2 and AC3a–d, which fail because `pgError.js` does not exist. On 0.29.5, AC3b–d are behavior locks:
    the inline check already sees unwrapped errors, so they cannot fail for the wrapping reason until the bump.
@@ -273,10 +299,21 @@ Connor's.
 
 **Migration/deploy:** there is no migration file and no expected ledger row. The deploy is still DB-sensitive,
 because `migrate.js` runs the new migrator at boot in every environment, and the ledger fingerprint is the
-guard. Before each push, check the ledger for ❌ rows on the target (currently none). A fingerprint change
-counts as an incident: revert the drizzle commit on that branch, record the before/after listings, and append
-a ledger row recording what was applied. Never hand-edit `__drizzle_migrations` without a reviewed plan.
-Rollback is a plain revert, valid only while the fingerprint is unchanged (no data depends on the version).
+guard. Before each push, check MIGRATION_LEDGER.md for ❌ rows on the target (currently none).
+
+**Ledger-change incident** (any environment where the before/after listing differs):
+1. Stop further deployments to that environment. Record a ❌ row in **MIGRATION_LEDGER.md** (the repo doc)
+   describing the incident; the existing ❌ rule then blocks deploys there until it is resolved.
+2. Preserve the before/after `__drizzle_migrations` listings and fingerprints in §11.
+3. Capture the deployment/boot logs and establish exactly which SQL executed.
+4. Do not modify `drizzle.__drizzle_migrations` by hand.
+5. Do not assume a dependency revert reverses database changes. Reverting to 0.29.5 against a changed ledger
+   may itself make the old migrator act differently.
+6. Change no application or database state until a separately reviewed recovery plan exists. If production is
+   impaired, Connor decides how urgent that review is; this session does not act on its own.
+
+**Rollback** without an incident: a plain revert of the drizzle commit, valid only while the listing is
+confirmed unchanged (no data depends on the version).
 
 ## 10. Follow-on tasks
 
@@ -295,5 +332,6 @@ listing/fingerprint; staging and prod before/after fingerprints.)
 Editing: server manifests and lockfile; `pgError.js` (+ unit test, + dbtest); 2 expressions + 1 import in
 `householdService.js`; maybe 1 line in `backfillSearchDocuments.js`; docs.
 Requires: TASK-070 landed; local branch with 0022 (for test:db); Connor for the staging/prod ledger
-fingerprints and the Node version; the Q1 decision recorded (it does not block TASK-071 itself).
+fingerprints and the Node version. Not required: Q1 (TASK-075 deferred by owner; zod exposure unresolved and
+not accepted; TASK-072 still required to clear it).
 Irrelevant: client; zod/openai/blob paths; migrations; Vercel config.
