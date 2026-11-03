@@ -11,6 +11,7 @@ export default [
       'server/data/**',
       '.vercel/**',
       'uploads/**',
+      '.claude/**',
     ],
   },
   js.configs.recommended,
