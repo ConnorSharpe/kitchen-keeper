@@ -1,6 +1,13 @@
 # TASK-072 — Production Health Check and Outstanding Updates
 
-Version: DRAFT-1 (2026-11-03). Not yet reviewed.
+Version: DRAFT-3 (2026-11-03). Addresses architect rounds 1–2; see "Changes" at the end.
+**No implementation until Connor approves this draft and answers the questions marked as gates.**
+
+**Found at handoff (2026-11-03), unresolved, for DRAFT-4:**
+- Phase 4 is likely moot: `npm run lint` already exits 0, because commit `e3fe613` added an ESLint ignore for
+  `.claude/` (the approach Phase 4 forbade). Drop Phase 4, or replace the ignore with the Phase 4 blocks.
+- TASK-071 is already in progress (Green committed in `11d8417`; next is its dependency bump), so "TASK-072 →
+  TASK-071" order and the Phase 5 baseline handoff no longer hold as written. Re-order around TASK-071's state.
 
 ## Goal
 
@@ -10,155 +17,264 @@ this task; they live in TASK-071 (see Dependency Chain).
 
 ---
 
-## 0. Investigation findings (read-only, 2026-11-03 ~18:54–19:05 UTC)
+## 0. Investigation findings (read-only, 2026-11-03 ~19:00 UTC)
 
-**Verdict: production is up and serving `9e243da`. No production errors from real users in the last 14 days.**
-The only production error issue is KITCHEN-KEEPER-SERVER-2, and it is noise: expected 401s from
-unauthenticated requests are reported to Sentry as errors.
+Production is up and serving `9e243da` (client bundle release + Sentry server release). `/api/health` → 200
+(it touches no DB/Clerk/OpenAI); `/api/pantry` without a session → 401 `{"error":"Authentication required"}`.
+Sentry, 30 d: client 0 unresolved issues; server 1, KITCHEN-KEEPER-SERVER-2 (`Authentication required`,
+`server/middleware/clerkAuth.js:7`, 504 events, 0 users, since 2026-08-17); its only 14-day events were this
+investigation's `curl` probes. 4 clean `app-boot` → `auth-settled` sessions in 14 d. `www.` is NXDOMAIN (no
+repo references).
 
-| Check | Evidence |
-|---|---|
-| `GET https://kitchenkeeper.kitchen/` | 200, served by Vercel (`X-Vercel-Id: pdx1::…`) |
-| `GET /api/health` | 200 `{"status":"ok"}`; 3.4 s cold, 0.35 s warm. This route does not touch the DB, Clerk or OpenAI |
-| `GET /api/pantry` (no session) | 401 `{"error":"Authentication required"}` (correct) |
-| Deployed commit | Production client bundle `/assets/index-Dd7UtryX.js` embeds release `9e243dac39e7…`. A Sentry server event at 18:58:31 UTC has release `9e243da`; one at 18:54:58 still had `bd5c5f4`. So the `9e243da` push (origin/main updated 18:53 UTC) went live between those times. Staging bundle `/assets/index-Bi1Ene9W.js` is also `9e243da` |
-| Sentry issues, `kitchen-keeper-server`, unresolved, 30 d | 1: KITCHEN-KEEPER-SERVER-2 (`Error: Authentication required`, `GET /api/pantry`, `server/middleware/clerkAuth.js:7`). 504 events in total, 0 users, first seen 2026-08-17, last seen 2026-11-03 18:58. The last 3 events were this investigation's own `curl` probes (browser tag `curl 8.12.1`) |
-| Sentry issues, `kitchen-keeper-client`, unresolved, 30 d | 0 |
-| Sentry error events, all projects, 14 d | 3, all KITCHEN-KEEPER-SERVER-2, all from this investigation |
-| Sentry logs, 14 d | 8 `info` logs in production: 4 `app-boot` → `auth-settled` pairs (2026-10-23, 10-25, 11-02 ×2). Real sessions booted and signed in without errors |
-| `www.kitchenkeeper.kitchen` | DNS NXDOMAIN. Nothing in the repo references it (observation, not a regression) |
+**Root cause of KITCHEN-KEEPER-SERVER-2** (`server/app.js:73-83`): the error handler calls
+`captureExceptionSafely(err)` and `await flush(2000)` for **every** error, so each 401 creates a Sentry
+error event and delays the response by up to 2 s.
 
-**Root cause of KITCHEN-KEEPER-SERVER-2** (`server/app.js:73-83`): the global error handler calls
-`captureExceptionSafely(err)` and `await flush(2000)` for **every** error, including 4xx such as the
-401 thrown by `clerkAuth`. Every unauthenticated or expired-session API call therefore creates a Sentry
-error event and waits up to 2 s for a flush before it responds.
-
-**Not verified** (and why):
-- Authenticated flows (pantry/recipes/chat/OpenAI, Blob uploads, DB reads through a real session): no
-  production credentials were used, and the investigation was read-only. The 4 clean `auth-settled`
-  sessions are indirect evidence only.
-- Vercel deployment state, function logs, and the daily `/api/push/cron` run: the `vercel` CLI token is
-  invalid (`The specified token is not valid. Use vercel login`), so this was skipped as instructed.
-- Neon compute quota / suspend state: no Neon console access. The app answers, and recent sessions
-  authenticated, so the DB is not hard-stopped as of 2026-11-02, but this is inferred, not observed.
-- Whether a 2nd production Sentry environment or project exists beyond the two listed: not checked.
+**Not verified:** authenticated flows (no production credentials used); Vercel deployments, logs and the
+`/api/push/cron` run (`vercel` CLI token invalid); Neon quota/suspend state (no console access); whether
+other Sentry projects/environments exist. Phase 1 covers these.
 
 ---
 
-## Phases (in order)
+## Phases (strict order)
 
 | Phase | What | Kind | Gate to start |
 |---|---|---|---|
-| 1 | Production health verification checklist | manual (Connor) + read-only | none |
-| 2 | Stop reporting 4xx errors to Sentry (closes KITCHEN-KEEPER-SERVER-2) | code (TDD) | Phase 1 done |
-| 3 | Rotate the Neon `neondb_owner` password and update Vercel env vars | manual (Connor) | Phase 1 done; nothing else mid-deploy |
-| 4 | Lint config: clear the 30 pre-existing `.claude/hooks/tdd/*.mjs` errors | config (lint run is the test) | none |
-| 5 | Non-breaking minor/patch dependency bumps | `package*.json` only (TDD-exempt) | Phase 2 shipped; before TASK-071 |
-| 6 | Remove legacy Fly.io/Docker files and stale local SQLite files | file deletion | none |
+| 1 | Production smoke test (limited, intentional writes) | manual (Connor) | none |
+| 2 | Stop reporting 4xx errors to Sentry (closes KITCHEN-KEEPER-SERVER-2) | code (TDD) | Phase 1 passed; **Q1 answered** |
+| 3 | Rotate the Neon `neondb_owner` password and update Vercel env vars | manual (Connor) | Phase 1 passed; Phase 2 promoted to `main` (or explicitly paused by Connor); no deploy in progress; **Q3 answered**; Phase 3 stop/go gates G1–G3 pass |
+| 4 | Lint config: clear the 30 pre-existing `.claude/hooks/tdd/*.mjs` errors | config (lint run is the test) | Phase 3 complete |
+| 5 | Non-breaking minor/patch dependency bumps | `package*.json` only (TDD-exempt) | Phases 2 and 4 complete; **Q5 answered** |
+| 6 | Remove legacy Fly.io/Docker files from the repo | file deletion | Phase 5 complete; **Q6 answered** |
 
-Phases 2, 4, 5 and 6 can each be their own commit. Each goes to `staging` first and is promoted to `main`
-(fast-forward) only after its staging check passes. Phase 3 does not change the repo.
+Phases run one at a time; no phase starts while an earlier phase is unfinished or a deploy is in flight.
+Each phase ends **COMPLETE** (its criteria pass) or **PAUSED** (Connor says so in conversation, recorded in its
+Results with the phase(s) it unblocks). A PAUSED phase unblocks only the phase Connor names; it does not count
+as complete for any later gate. Only Connor can pause a phase or relax the order; an agent may not. Phases 2, 4, 5 and 6 are each
+their own commit. Each goes to `staging` first and is promoted to `main` (fast-forward) only after its
+staging check passes. Phase 3 does not change the repo except to record results in this file.
+
+**Every phase:** the only repo file an agent may edit besides the phase's own allowed files is this TASK
+file, and within it only that phase's **Results** block. Never record credentials, connection strings or
+tokens in this file.
 
 ---
 
-## Phase 1 — Production health verification (checklist)
+## Phase 1 — Production smoke test (Connor, limited intentional writes)
 
-Production looks healthy (§0), so this phase confirms the parts §0 could not check.
+Production looks healthy (§0), so this phase confirms the parts §0 could not check. Steps 3–5 **write to
+production** (a chat turn, an AI usage count, a test pantry item, a Blob object). That is intended.
 
-**Allowed files:** none (read-only). **Forbidden:** everything.
+**Allowed files:** this TASK file, Phase 1 Results block only. **Forbidden:** all application source,
+configuration, manifests, lockfiles, env files and credentials.
 
-**Acceptance criteria**
-1. `curl -s -o /dev/null -w '%{http_code}' https://kitchenkeeper.kitchen/api/health` → `200`.
-2. Connor signs in at `https://kitchenkeeper.kitchen` and the pantry list loads (proves Clerk + Neon `main`).
-3. One chat message gets an AI reply (proves OpenAI key + rate limit + `search_documents`).
-4. One photo upload (any Blob-backed upload flow) succeeds (proves `BLOB_READ_WRITE_TOKEN`).
-5. Vercel dashboard: the current Production deployment is `9e243da`, status Ready. The latest
-   `/api/push/cron` invocation (daily 08:00 UTC) is not an error.
-6. Neon console: project not suspended for quota; record compute-hours used vs. the plan limit this month.
-7. Sentry: no new unresolved issue in either project after steps 2–4.
+**Test-data rules**
+- Use clearly marked content: pantry item `TASK-072 smoke test`, chat text starting `TASK-072 smoke:`.
+- Upload a non-personal image (e.g. a photo of a generic product or a plain test image). No people, no
+  documents, no location-bearing photos.
+- After the checks, Connor deletes the test pantry item and the uploaded image through the app. The chat
+  turn may stay (it is Connor's own history).
+- One chat message only. It counts against Connor's own AI rate limit and OpenAI usage; one message is
+  within both (billing risk was accepted 2026-08-11).
 
-**Verification:** Connor records pass/fail for each item in this file. Any failure stops the task:
-debug that failure first (load the `smoke-testing` skill) and re-scope before going on.
+**Before step 2: Sentry baseline (N1).** Record in Results: the list of unresolved issue IDs in
+`kitchen-keeper-server` and `kitchen-keeper-client`, and the event count of KITCHEN-KEEPER-SERVER-2.
+
+**Acceptance criteria (health matrix)**
+
+| # | Component | Check | Pass |
+|---|---|---|---|
+| 1 | Vercel routing | `curl -s -o /dev/null -w '%{http_code}' https://kitchenkeeper.kitchen/api/health` | `200` |
+| 2 | Clerk + Neon `main` | Connor signs in at `https://kitchenkeeper.kitchen`; the pantry list loads | list renders with real items |
+| 3 | Neon write | Add pantry item `TASK-072 smoke test`, reload | item persists |
+| 4 | OpenAI + retrieval | Chat: `TASK-072 smoke: what's in my <name of a recipe Connor has saved>?` | reply names that recipe's actual ingredients |
+| 5 | Blob | Upload the test image through any Blob-backed upload flow | upload succeeds and the image displays |
+| 6 | Vercel deploy | Dashboard: current Production deployment | commit `9e243da` (or later promoted SHA), status Ready |
+| 7 | Cron | Dashboard: latest `/api/push/cron` invocation (daily 08:00 UTC) | not an error |
+| 8 | Neon quota | Console: project state and compute-hours this month | not suspended; record used vs. limit |
+| 9 | Sentry | Compare with the baseline after steps 2–5: list every event since the baseline, in new **and** existing issues | no new issue IDs; every new event classified in Results. The only accepted unexpected-looking events are 401s on KITCHEN-KEEPER-SERVER-2 from this session (the Phase 2 noise); any other event = fail |
+
+Criterion 4 is **indirect** evidence for `search_documents`: the reply can only be right if the agent
+retrieved that recipe, but the tool call itself is not logged (logging the search-tool args is a deferred
+TASK-069 follow-up). Pick a recipe whose ingredients the model could not guess from its name.
+
+**Verification:** Connor records pass/fail per row in Results. Any failure stops the task: debug that
+failure first (load the `smoke-testing` skill) and re-scope before going on.
+
+**Results:** _(empty)_
 
 ---
 
 ## Phase 2 — Don't report expected 4xx to Sentry
 
-**Allowed files:** `server/instrument.js`, `server/instrument.test.js`, `server/app.js`, this TASK file.
+**Gate:** Q1 answered. The contract below assumes the recommended answer (no Sentry exception for any 4xx;
+5xx and status-less errors keep being reported; no warning-level or sampled reporting). If Connor picks
+warning or sampling instead, this phase is re-specced before Red.
+
+**Allowed files:** `server/instrument.js`, `server/instrument.test.js`, `server/app.js`, this TASK file (Results).
 **Forbidden files:** `server/middleware/clerkAuth.js` (the 401 itself is correct), the client, all other
 server files, `package*.json`.
 
-**Constraints:** TDD applies (`server/**` is a sensitive path). No new dependencies. The response
-status and body for every error must stay exactly as they are now.
+**Constraints:** TDD applies (`server/**` is a sensitive path). No new dependencies.
 
 **Interface contract**
 - New export in `server/instrument.js`: `shouldReportError(err) → boolean`.
-  - Returns `true` when `(err?.status ?? err?.statusCode ?? 500) >= 500`, and `false` otherwise.
-  - Never throws. With `undefined`/`null`/a non-object, it returns `true` (the status defaults to 500).
+  - It uses **the same status the error handler responds with**: `status = err?.status || 500`
+    (`server/app.js` uses `err.status || 500` and ignores `statusCode`). Returns `status >= 500`.
+  - Never throws, for any input: the whole status read **and** comparison sit inside one `try`; the `catch`
+    returns `true` (if classification fails, report rather than suppress). `undefined`/`null`/non-object/a
+    throwing getter/a Symbol status/a throwing Proxy → `true`.
 - In `server/app.js`, the error handler calls `captureExceptionSafely(err)` **and** `await flush(2000)` only
-  when `shouldReportError(err)` is `true`. `console.error(err.stack)` and the response logic stay unchanged.
+  when `shouldReportError(err)` is `true`. Nothing else in the handler changes: `console.error(err.stack)` still
+  runs for every error, the status, body (`error`, optional `code`), headers (the handler sets none of its
+  own) and control flow (it always responds, never calls `next`) stay as they are.
+
+Why not `statusCode` (DRAFT-1 had `err?.status ?? err?.statusCode`): an error with only `statusCode: 403` gets
+a **500** response from the current handler. Skipping Sentry for it would hide a real 500. (body-parser sets
+both `status` and `statusCode`, so it is covered by `status`.)
 
 **Acceptance criteria**
 1. `shouldReportError({ status: 401 })` → `false`; `{ status: 400 }`, `{ status: 404 }`, `{ status: 429 }` → `false`.
 2. `shouldReportError({ status: 500 })`, `{ status: 503 }`, `new Error('x')` (no status) → `true`.
-3. `shouldReportError({ statusCode: 403 })` → `false` (body-parser and multer errors set `statusCode`).
-4. `shouldReportError(undefined)` / `(null)` / `('str')` → `true`, and none of these throw.
-5. On staging, after deploy: one unauthenticated `curl` to `/api/pantry` → 401 with the same body as now,
-   and **no** new KITCHEN-KEEPER-SERVER-2 event with the staging release SHA in Sentry within 5 minutes.
-6. After promotion to production: the same probe → 401, and no new event for release = the promoted SHA.
-   Connor then resolves KITCHEN-KEEPER-SERVER-2 in Sentry (manual).
+3. `shouldReportError({ statusCode: 403 })` → `true` (the handler answers it with 500).
+4. `const e = new Error('x'); e.status = 401;` → `false` (a real `Error` instance, not only a plain object).
+5. `shouldReportError(undefined)` / `(null)` / `('str')` / `(42)` → `true`, and none of these throw.
+6. An object whose `status` getter throws → `true`, and the call does not throw.
+6a. `{ status: Symbol('x') }` → `true` (a bare `>=` on a Symbol throws `TypeError`); a `Proxy` whose `get` trap
+    throws → `true`. Neither call throws.
+7. On staging, after deploy: one unauthenticated `curl` to `/api/pantry` → 401 with body
+   `{"error":"Authentication required"}` (unchanged), and **no** new KITCHEN-KEEPER-SERVER-2 event with the
+   staging release SHA in Sentry within 5 minutes.
+8. After promotion to production: the same probe → same 401 and body, and no new event for release = the
+   promoted SHA. Connor then resolves KITCHEN-KEEPER-SERVER-2 in Sentry (manual).
 
-Open question Q1 applies: confirm that 4xx should not be reported at all, rather than sampled or
-reported as a warning.
+**Verification:** Red (criteria 1–6a fail, because the export is missing) → Green → `npm test` (root, which
+runs the server tests) and `npm run lint` show no new failures → push `staging` → stop ("pushed") →
+criterion 7 when Connor triggers it → fast-forward `main` → stop ("pushed") → criterion 8 when Connor triggers it.
 
-**Verification:** Red (criteria 1–4 fail, because the export is missing) → Green → `npm test` (root, which
-runs the server tests) and `npm run lint` show no new failures → push `staging` → criterion 5 → fast-forward
-`main` → criterion 6.
+**Results:** _(empty)_
 
 ---
 
-## Phase 3 — Rotate the Neon `neondb_owner` password (manual, Connor)
+## Phase 3 — Rotate the Neon `neondb_owner` password (Connor)
 
 The staging and production connection strings were pasted into chat during TASK-069.
-**Allowed files:** this TASK file (record the outcome only, never credentials). **Forbidden:** committing
-any connection string anywhere.
+**Allowed files:** this TASK file (Results only; never credentials). **Forbidden:** committing or writing
+any connection string, password or token anywhere in the repo, including this file.
 
-**Facts the order depends on**
+**Facts the order depends on** (verified 2026-11-03 by `grep` of the repo, names only)
 - The only Postgres variable the code reads is `DATABASE_URL` (`server/db/client.js`, `drizzle.config.js`).
-  Vercel scopes: Production → Neon `main`; Preview → Neon `staging` (CONVENTIONS.md "Known gap"). The
-  Neon-integration variables (`DATABASE_URL_UNPOOLED`, `PG*`, `POSTGRES_*`; the full list of names is in the
-  gitignored `server/.env.vercel`) point at production in **all** scopes. No code reads them, but they hold the old password.
+  No code reads `PG*`, `POSTGRES_*`, `DATABASE_URL_UNPOOLED` or `NEON_*`.
 - A running Vercel deployment keeps the env values it was built with. Changing a variable has no effect until
-  a **redeploy**. So production breaks from the moment its password is reset until a redeploy with the new
-  `DATABASE_URL` is Ready.
-- **Unverified:** whether a Neon role password is per-branch (so resetting it on `main` leaves `staging` and
-  `local` alone) or shared. Check this in the Neon console before step 1. If it is shared, staging and
-  production must be done in one window and `server/.env.local` must be updated too.
-- **Unverified:** whether the Neon-Vercel integration rewrites these variables itself after a reset. If it
-  does, it can overwrite the per-scope `DATABASE_URL` mapping. Check after each step.
+  a **redeploy**. Vercel Instant Rollback to an older deployment brings back the **old** env values, so after
+  the reset it is not a recovery path (see Recovery).
 
-**Order**
-1. Staging (rehearsal): reset `neondb_owner` on Neon branch `staging` → copy the new pooled connection
-   string → Vercel Preview scope (branch `staging`) `DATABASE_URL` = new string → Redeploy the latest
-   `staging` deployment → sign in on the staging URL and load the pantry.
-2. Production, in one sitting: reset on Neon branch `main` → Vercel Production `DATABASE_URL` = new string,
-   plus the integration variables above (same new password and host values) → Redeploy the current Production
-   deployment (do not push new code in the same step) → sign in on `kitchenkeeper.kitchen` and load the pantry.
-   Expected outage: from the reset until the redeploy is Ready (a few minutes). Do it at a quiet time.
-3. Local copies: replace or delete the stale copies in the gitignored `server/.env.vercel` (pulled 2026-07-14)
-   and the root `.env`, if they hold `staging`/`main` strings. `server/.env.local` (Neon `local`) needs a change
-   only if the password turns out to be shared across branches.
+**Credential handling (whole phase).** Never put a credential-bearing string on a command line (`psql "<url>"`
+exposes it to process listings and shell history). Never print, echo or log a connection string or password;
+no shell tracing (`set -x`, `Set-PSDebug -Trace`) while handling them; never paste them into Results, chat,
+Sentry notes, error reports or screenshots. Close any shell that held one when the phase ends.
+
+**Connection test** (used in S2, P2 and criterion 4). The Neon SQL editor does **not** test the password (it
+runs as the console user), so it is not sufficient. In a fresh PowerShell window:
+`$env:PGHOST`, `$env:PGUSER`, `$env:PGDATABASE` = the host/role/database (not secret), `$env:PGSSLMODE='require'`,
+`$env:PGPASSWORD = Read-Host -MaskInput` (paste the password), then `psql -c 'select 1'` → `1`. libpq reads
+these from the environment, so nothing secret is in the arguments or history. Close the window afterwards.
+
+### Stop/go gates (all must pass before any reset; any mismatch = STOP and re-spec)
+
+**G1 — Branch independence (N3).** In the Neon console, establish whether `neondb_owner`'s password is
+per-branch or shared across `main`/`staging`/`local`. Record the finding and how it was established (the
+console's own statement or docs, not branch names or connection-string shape). **If it is shared:** STOP.
+The staging-first rehearsal below would break production, so the order must be re-specced. (Neon's docs say
+roles and password resets are branch-scoped; that is the expected answer, but G1 checks this project's actual state.)
+
+**G2 — Env-var inventory (B4).** Connor fills this table from the Vercel dashboard (Settings → Environment
+Variables), **names and targets only, no values**. The names are pre-filled from the gitignored
+`server/.env.vercel` (pulled 2026-07-14; may be stale). "Consumer" is from the repo grep above.
+
+**`DATABASE_URL` — one row per effective configuration.** Vercel can hold several values for one name: a
+Production value, an all-branches Preview value, branch-specific Preview overrides, and a Development value.
+List **every** one shown in the dashboard; do not assume every Preview deployment uses `staging`.
+
+| Scope | Branch restriction | DB target | Managed by | Planned action |
+|---|---|---|---|---|
+| Production | — | expected `main` | | update in P2 with the new `main` string |
+| Preview | `staging` | expected `staging` | | update in S3 with the new `staging` string |
+| Preview | all other branches (if a value exists) | | | if `main` or `staging`: update with that branch's new string, in the same step as that branch; if absent, record "none" |
+| Development | — | | | if `main` or `staging`: update with that branch's new string, in the same step; if Neon `local` or absent: leave unchanged (G1: `local` is not rotated). Local dev reads `server/.env.local`, not this value |
+| _(any other row found)_ | | | | STOP |
+
+**Other variables** (scopes P/Pv/D, each with its branch restriction if any):
+
+| Variable | Scopes present | DB target per scope | Managed by (Neon integration / manual) | Runtime consumer | Planned action |
+|---|---|---|---|---|---|
+| `DATABASE_URL_UNPOOLED` | | expected: `main` in all | | none | see rule below |
+| `PGHOST`, `PGHOST_UNPOOLED`, `PGUSER`, `PGDATABASE`, `PGPASSWORD` | | expected: `main` in all | | none | see rule below |
+| `POSTGRES_URL`, `POSTGRES_URL_NON_POOLING`, `POSTGRES_URL_NO_SSL`, `POSTGRES_PRISMA_URL`, `POSTGRES_HOST`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DATABASE` | | expected: `main` in all | | none | see rule below |
+| `NEON_PROJECT_ID`, `NEON_AUTH_BASE_URL`, `VITE_NEON_AUTH_URL` | | n/a (no password) | | none | leave unchanged |
+
+Rule for the no-consumer integration variables: if they are **integration-managed**, leave them to the
+integration and observe what it does after the reset (G3). If they are **manual**, update them in step P2
+alongside `DATABASE_URL` so no stale password is left in Vercel. Never remove a variable in this phase.
+STOP if: the table has a DB-related variable not listed here, a `DATABASE_URL` row's target differs from its
+expected/planned value, a `DATABASE_URL` configuration exists that has no row, or any other project/deployment/external tool turns out to consume these variables.
+
+**G3 — Integration behaviour.** From the Neon and Vercel docs or integration settings, establish whether the
+Neon–Vercel integration rewrites env vars after a password reset, and whether it would overwrite the
+per-scope `DATABASE_URL` mapping. If unknown, the staging rehearsal (S1–S4) is the test: check every row of
+the G2 table again right after S1. Any variable that changed without Connor changing it = STOP.
+
+### Order
+
+**Staging rehearsal**
+- S1. Reset `neondb_owner` on Neon branch `staging`. Re-check the G2 table (G3).
+- S2. Run the connection test with the new staging password → `1`.
+- S3. Set every `DATABASE_URL` row planned for `staging` (at least Preview / `staging`) to the new string →
+  Redeploy the latest `staging` deployment.
+- S4. Sign in on the staging URL and load the pantry.
+
+**Production (one sitting, at a quiet time)**
+- P0. Before the reset, record in Results: current Production deployment ID and commit SHA, the time, and
+  that the Vercel env-var edit page and the deployment's Redeploy action are open and available. Confirm no
+  other deploy is building.
+- P1. Reset `neondb_owner` on Neon branch `main`. **The outage starts here.**
+- P2. Run the connection test with the new production password → `1`. Then set every `DATABASE_URL` row
+  planned for `main` (at least Production), and any manual integration variables per the G2 rule, to the new values.
+- P3. Redeploy the deployment recorded in P0 (no new code in the same step).
+- P4. Sign in on `kitchenkeeper.kitchen` and load the pantry. **The outage ends here.**
+
+**Local copies (after production passes)**
+- L1. Replace or delete the stale copies in the gitignored `server/.env.vercel` and the root `.env`, if they hold
+  `staging`/`main` strings. `server/.env.local` (Neon `local`) is untouched (G1 established branch independence).
+
+### Recovery (B5)
+
+There is no "undo": a reset password cannot be restored, and rolling back to an older deployment restores
+the old (now invalid) env values. Recovery is always **forward**:
+- P2's direct test fails → do not touch Vercel. Re-copy the string from the Neon console and retest; if it
+  still fails, reset again and retest. Production stays down; record the state in Results.
+- P3's redeploy fails or the deployment errors → check the build log; retry the redeploy once. If it fails
+  again, STOP and record in Results: deployment ID, error, which env vars were changed, Neon reset time.
+  Any further step (another reset, a second role, a code change) needs Connor's explicit decision.
+- P4 fails after a Ready deploy → check Sentry for `password authentication failed` (wrong value in Vercel)
+  vs. other errors; fix the value and redeploy. Anything other than a wrong value = STOP, as above.
+- An agent assisting with this phase never decides on its own to reset, roll back or create roles.
 
 **Acceptance criteria**
-1. Neon console shows a password reset on `neondb_owner` for `staging` and `main`, dated in this task.
-2. Staging and production each: sign-in + pantry load succeed after the redeploy, and there is no new
-   `NeonDbError`/`password authentication failed` issue in Sentry within 15 minutes.
-3. The old production connection string fails to authenticate (Connor tests it once with `psql` or the
-   Neon SQL editor's connection test, then deletes it).
-4. MIGRATION_LEDGER.md is unchanged: no schema change happens in this phase.
+1. G1–G3 results recorded in Results.
+2. Neon console shows a password reset on `neondb_owner` for `staging` and `main`, dated in this task.
+3. Staging and production each: the direct test returns `1`, sign-in + pantry load succeed after the
+   redeploy, and there is no new `NeonDbError`/`password authentication failed` issue in Sentry within 15 minutes.
+4. The old production password fails the connection test (run once, then Connor deletes every copy of it).
+5. The G2 table re-checked after P4 matches the planned actions (no variable changed unexpectedly).
+6. MIGRATION_LEDGER.md is unchanged: no schema change happens in this phase.
 
 Alternative if any downtime is unacceptable (Q3): create a 2nd role, point Vercel at it, redeploy, then
-drop or rotate `neondb_owner`. That involves more steps and role grants, so it isn't the default.
+rotate `neondb_owner`. The new role needs exactly the privileges the app uses (table read/write, sequence
+usage, and for migrations, ownership or DDL rights on the `public` schema objects). Do not assume a fresh role
+can replace `neondb_owner`. Choosing this means re-speccing Phase 3 first.
+
+**Results:** _(empty)_
 
 ---
 
@@ -169,20 +285,37 @@ drop or rotate `neondb_owner`. That involves more steps and role grants, so it i
 `tdd_record_result.mjs` and `tdd_stop_gate.mjs`, plus 1 `no-control-regex` (`lib_tdd_common.mjs`, an
 intentional ANSI-escape strip `/\x1b\[[0-9;]*m/g`).
 
-**Allowed files:** `eslint.config.js`. **Forbidden:** `.claude/hooks/**` (these are TDD-kit files; editing
-them would make the copy here drift from the kit's source), all other files.
+**Allowed files:** `eslint.config.js`, this TASK file (Results). **Forbidden:** `.claude/hooks/**` (these are
+TDD-kit files; editing them would make the copy here drift from the kit's source), all other files.
 
-**Change:** add one config block: `files: ['.claude/hooks/**/*.mjs']`, `sourceType: 'module'`,
-`globals: { ...globals.node }`, `rules: { 'no-control-regex': 'off' }`. Don't add ignores, don't add
-eslint-disable comments.
+**Change:** add exactly these two blocks, using the existing `languageOptions` shape the file already uses:
+
+```js
+{
+  files: ['.claude/hooks/**/*.mjs'],
+  languageOptions: {
+    sourceType: 'module',
+    globals: { ...globals.node },
+  },
+},
+{
+  // Intentional ANSI-escape strip in the TDD kit (/\x1b\[[0-9;]*m/g); kit files are not edited here.
+  files: ['.claude/hooks/tdd/lib_tdd_common.mjs'],
+  rules: { 'no-control-regex': 'off' },
+},
+```
+
+Don't add ignores, don't add eslint-disable comments, don't change other blocks.
 
 **Acceptance criteria**
 1. Before the change, `npm run lint` exits non-zero with exactly 30 errors (this is Red; already observed).
 2. After the change, `npm run lint` exits 0 with 0 errors and no new warnings.
-3. `git diff --stat` touches only `eslint.config.js`.
+3. `git diff --stat` touches only `eslint.config.js` (plus this file's Results).
 
 **Kind:** config only. `eslint.config.js` is not in `alwaysExemptPatterns`, so the lint run itself is the
-Red/Green check (Q4: confirm this is acceptable, or add the file to the exemptions in STABLE_CONTEXT + tdd-config).
+Red/Green check (Q4; recommended: yes, no formal exemption).
+
+**Results:** _(empty)_
 
 ---
 
@@ -195,7 +328,7 @@ From `npm outdated` (2026-11-03), the packages where "Wanted" is newer than "Cur
 | root (dev) | globals | 17.7.0 → 17.14.0 | lint only |
 | root (dev) | prettier | 3.9.5 → 3.9.10 | formatting tool. Do **not** reformat the repo |
 | server | @clerk/express | 1.7.81 → 1.7.84 | auth path: staging sign-in required |
-| server | resend | 6.12.4 → 6.37.0 | big minor jump: check the household-invite email on staging |
+| server | resend | 6.12.4 → 6.37.0 | big minor jump: **only if Q5 = yes**; otherwise held back and listed as deferred |
 | client | @clerk/clerk-react | 5.61.8 → 5.61.11 | auth path: staging sign-in required |
 | client | autoprefixer | 10.5.0 → 10.6.2 | build only |
 | client | driver.js | 1.8.0 → 1.10.2 | onboarding tour: check it on staging |
@@ -206,44 +339,72 @@ as one compatibility decision (TASK-068), and drizzle-kit 0.21→0.31 belongs to
 **out of scope**. Majors not covered by TASK-071 (express 5, React 19, Vite 8, Tailwind 4, etc.) are listed
 under Deferred.
 
-**Allowed files:** `package.json`/`package-lock.json` in root, `server/`, `client/`; this TASK file.
-**Forbidden:** all source and test files, and any change to a version range in a manifest unless npm writes it.
+**Allowed files:** `package.json`/`package-lock.json` in root, `server/`, `client/`; this TASK file (Results).
+**Forbidden:** all source and test files, and any change to a version range in a manifest.
 
-**Constraints:** `npm update <pkg>` by name only, staying in the existing ranges. No new direct dependencies.
-No `npm audit fix --force`. Use a plain `npm install` afterwards: the TASK-070 gotcha was that `--omit=dev`
-prunes vite. TDD-exempt (`**/package*.json`); the existing suite is the regression check.
+**Procedure (B8)**
+1. Baseline, recorded in Results: the current commit SHA, `npm outdated` output for each directory, and the
+   baseline test/build/audit numbers (criterion 3–4 figures).
+2. Update only the approved packages: `npm update <pkg> [<pkg>…]` by name, in the directory that owns them.
+   No `npm audit fix` (forced or not), no new direct dependencies.
+3. Run a plain `npm install` in each changed directory (the TASK-070 gotcha: `--omit=dev` prunes vite).
+4. Inspect `git diff` of every `package.json`: **no changes at all** to dependency ranges. (npm may not need to
+   write a manifest for an in-range update; any manifest change = STOP.)
+5. Inspect every lockfile diff. List each package whose resolved version changed. Allowed: the approved
+   packages, plus transitive deps pulled **only** by those packages' new versions. Establish this with a tree
+   comparison (`npm ls --all` saved before step 2 and after step 3, diffed: every changed node must sit under an
+   approved package); use `npm explain <dep>` only for nodes the diff leaves unclear. Any other change (e.g. an unrelated transitive bump, a removed
+   package, a changed `resolved` registry) = revert that directory's lockfile and STOP.
+6. Run the full regression set (criteria 3–4), then push `staging` and stop ("pushed").
 
 **Acceptance criteria**
-1. `npm outdated` in each directory shows Current == Wanted for the 8 packages above.
-2. `npm test` (root, which includes the server tests), `npm test --prefix client` and `npm run build` give the
-   same pass counts as the baseline (TASK-070: server/shared 118+225, client 75; build OK). `npm run lint` = 0
-   errors if Phase 4 is done, or 30 if it isn't.
-3. `npm audit --omit=dev` in `server/` and `client/` reports no advisories beyond TASK-070's remaining list.
-4. Staging: sign-in, pantry load, onboarding tour step, and one invite email (if Q5 = yes) all work.
-5. `git diff --stat` touches only the allowed lockfiles and manifests.
+1. `npm outdated` in each directory shows Current == Wanted for every approved package (7 if Resend is held back).
+2. The lockfile change list from procedure step 5 is recorded in Results and contains only allowed changes; no
+   manifest range changed.
+3. `npm test` (root, which includes the server tests), `npm test --prefix client` and `npm run build` give the
+   same pass counts as the baseline (TASK-070: server/shared 118+225, client 75, plus whatever Phase 2 added;
+   build OK). `npm run lint` = 0 errors (Phase 4 is done by the gate).
+4. `npm audit --omit=dev` in `server/` and `client/` reports no advisories beyond TASK-070's remaining list.
+5. Staging (when Connor triggers it): sign-in, pantry load, the onboarding tour's first step, and, if Resend
+   was updated, one real invite email to a Connor-controlled address arrives and its link works.
+6. `git diff --stat` touches only the allowed lockfiles and manifests (plus this file's Results).
+
+**TASK-071 baseline handoff (N6).** On promotion to `main`, record in Results: the promoted commit SHA (this is
+TASK-071's starting lockfile), the final versions of the approved packages, the test/build/audit results, and
+any package held back (e.g. Resend). TASK-071 starts from exactly that SHA.
+
+**Results:** _(empty)_
 
 ---
 
-## Phase 6 — Remove legacy deploy files and stale SQLite files
+## Phase 6 — Remove legacy deploy files from the repo
 
 - `fly.toml`, `Dockerfile`, `.dockerignore`: tracked; from the Fly.io/SQLite era (Apr 2026). `git grep` finds
   references only in `docs/` (historical spec / extracted text). No script, CI file, `vercel.json` or `server/` code
   uses them. The `Dockerfile` would run `server/index.js` with SQLite env vars that no longer exist.
-- `kitchen-keeper.db`, `-shm`, `-wal` in the repo root: **untracked**, gitignored (`*.db*`), last modified
-  2026-04-23/24. These are local-only leftovers, and deleting them does not change the repo.
 
-**Allowed files:** delete `fly.toml`, `Dockerfile`, `.dockerignore`. Delete the three local `.db` files from disk
-(Connor or Claude; not a git change). **Forbidden:** `docs/**` (historical record), `.gitignore` (its `*.db`
-rules are harmless).
+**Scope is repository cleanup only (N4).** Deleting these files does not touch any Fly.io infrastructure.
+Before deleting, Connor inventories Fly.io (`fly apps list`, `fly volumes list` per app, or the Fly dashboard)
+and records what exists in Results (Q6). Nothing on Fly.io is destroyed in this task; if anything exists,
+decommissioning gets its own task.
+
+**Allowed files:** delete `fly.toml`, `Dockerfile`, `.dockerignore`; this TASK file (Results). **Forbidden:**
+`docs/**` (historical record), `.gitignore` (its `*.db` rules are harmless).
 
 **Acceptance criteria**
 1. `git ls-files fly.toml Dockerfile .dockerignore` → empty.
-2. `ls kitchen-keeper.db*` → no such file.
-3. `npm run build` OK; staging deploy Ready (proves Vercel doesn't use the Dockerfile).
-4. `git grep -nE "fly\.toml|Dockerfile"` outside `docs/` and `ai/` → no matches.
+2. `npm run build` OK; staging deploy Ready (proves Vercel doesn't use the Dockerfile).
+3. `git grep -nE "fly\.toml|Dockerfile"` outside `docs/` and `ai/` → no matches.
+4. Fly.io inventory recorded in Results.
 
-**Kind:** deletion, TDD-exempt (no logic). Q6: confirm there is no Fly.io app still running that should be
-destroyed first (`fly apps list`; not checked).
+**Kind:** deletion, TDD-exempt (no logic).
+
+**Local SQLite files (N5, optional, Connor only).** `kitchen-keeper.db`, `-shm`, `-wal` in the repo root are
+untracked and gitignored (`*.db*`), last modified 2026-04-23/24. They are not part of this phase's diff. An agent
+does not delete them. If Connor wants them gone: confirm no local process has them open and that the data isn't
+wanted (or copy them somewhere outside the repo first), then delete them by hand.
+
+**Results:** _(empty)_
 
 ---
 
@@ -252,8 +413,10 @@ destroyed first (`fly apps list`; not checked).
 - TASK-071's breaking upgrades (drizzle-orm/drizzle-kit, zod 4 + openai, @vercel/blob 2, react-router 7).
 - Other major bumps with no task yet (express 5, React 19, Vite 8, Tailwind 4, Sentry 11, eslint 10, etc.; see
   `npm outdated`). Each one needs its own spec.
+- `resend` 6.37 if Q5 = no.
 - TASK-069 follow-ups: log the agent's search-tool args; agent ignoring correct hits (chickpeas) and missing synonyms.
 - Upstreaming the two TDD-kit fixes to the kit's source project (a different repo).
+- Fly.io decommissioning, if Phase 6's inventory finds anything.
 - `www.kitchenkeeper.kitchen` DNS (Q2).
 - Pre-existing uncommitted `.claude/settings.local.json` and `ai/tasks/TASK-059-smoke-tests.md`: leave untouched.
 
@@ -264,31 +427,51 @@ destroyed first (`fly apps list`; not checked).
 - No new direct npm dependencies (project convention). This task declares no exceptions.
 - Staging before production for every deployable phase (2, 4, 5, 6). Promote with a fast-forward of `staging` → `main`.
   After a push exits 0, report "pushed" and stop. Live checks happen in a separate step that Connor triggers.
-- Don't commit credentials or connection strings.
+- Don't commit or record credentials, connection strings or tokens.
+- Any STOP condition in a phase ends the agent's work on the task until Connor re-scopes.
 
-## Open questions for Connor
+## Open questions for Connor (gates marked)
 
-- Q1: Should 4xx stay out of Sentry completely (proposed), or be reported at `warning` level or sampled?
-- Q2: Should `www.kitchenkeeper.kitchen` resolve (redirect to the apex), or is apex-only intended?
-- Q3: Is a few minutes of production downtime during the password rotation acceptable, or use the 2nd-role approach?
-- Q4: Is the lint run an acceptable Red/Green for the `eslint.config.js` change, or should it get a formal exemption?
-- Q5: Can we send one real invite email on staging to check `resend`, or should `resend` be held back?
-- Q6: Is any Fly.io app or volume still provisioned?
-- Q7: Please re-authenticate the `vercel` CLI (`vercel login`) so future sessions can read deployments and logs.
+| Q | Question | Gate for | Recommendation |
+|---|---|---|---|
+| Q1 | Should 4xx stay out of Sentry completely, or be reported at `warning` level or sampled? | Phase 2 | Out completely (the Phase 2 contract) |
+| Q2 | Should `www.kitchenkeeper.kitchen` resolve (redirect to the apex), or is apex-only intended? | nothing | Defer; apex-only |
+| Q3 | Is a few minutes of production downtime during the rotation acceptable, or use the 2nd-role approach? | Phase 3 | Accept a short, quiet-time outage |
+| Q4 | Is the lint run an acceptable Red/Green for the `eslint.config.js` change? | Phase 4 | Yes, no formal exemption |
+| Q5 | Can we send one real invite email on staging to a controlled address to check `resend`? | Phase 5 (Resend only) | Yes; otherwise Resend is held back |
+| Q6 | Is any Fly.io app or volume still provisioned? (answered by the Phase 6 inventory) | Phase 6 | Inventory only; decommission separately |
+| Q7 | Re-authenticate the `vercel` CLI (`vercel login`) when convenient | nothing | Not a prerequisite |
 
 ## Verification Steps
 
-These are listed under each phase. Record results under each phase in this file.
+Listed under each phase. Record results in each phase's **Results** block in this file.
 
 ## Dependency Chain
 
 Editing: `server/instrument.js`, `server/instrument.test.js`, `server/app.js` (P2); `eslint.config.js` (P4);
-root/`server`/`client` `package*.json` (P5); deleting `fly.toml`, `Dockerfile`, `.dockerignore` (P6).
-Requires: Vercel dashboard + Neon console access for Connor (P1, P3); Sentry MCP (P2 verification).
+root/`server`/`client` `package*.json` (P5); deleting `fly.toml`, `Dockerfile`, `.dockerignore` (P6); this TASK
+file's Results blocks (all phases).
+Requires: Vercel dashboard + Neon console access for Connor (P1, P3); Sentry MCP (P1 baseline, P2 verification);
+Fly.io access for Connor (P6 inventory).
 Relation to TASK-071: **not a blocker for production health.** Production is up, with no real-user errors.
 The drizzle-orm advisory (GHSA-gpj5-g38j-94v9, identifier escaping) and the react-router open-redirect
-advisory are exposure risks that have not been exploited, not outages. Order: TASK-072 Phases 1–3 →
-Phases 4–6 → TASK-071. Doing Phase 5 first means TASK-071 starts from a lockfile that is current within
-ranges, and the rotated credentials are in place before TASK-071's staging verification. If Connor rates the
-drizzle advisory as urgent, TASK-071's drizzle step may run straight after Phase 3, ahead of Phases 4–6.
+advisory are exposure risks that have not been exploited, not outages. Order: TASK-072 Phases 1–6 in sequence →
+TASK-071, starting from the SHA recorded in Phase 5's baseline handoff. If Connor rates the drizzle advisory as
+urgent, Connor may explicitly move TASK-071's drizzle step to straight after Phase 3; it would then start from the
+current `main` SHA, recorded at that point.
 Irrelevant: database schema, migrations, client source, `vercel.json`, the TASK-071 file.
+
+---
+
+## Changes
+
+**DRAFT-2 (round 1):** all of B1–B8 and N1–N7 accepted (B3 as a Q1 gate; B5 adjusted to forward-only recovery,
+because a reset can't be undone and a Vercel rollback restores the old env). New fix found while addressing N2:
+DRAFT-1's `err.statusCode` fallback would have hidden real 500s, since the handler responds with
+`err.status || 500` and ignores `statusCode`. Phase 2 criterion 3 is now `true`.
+
+**DRAFT-3 (round 2):** B1 per-configuration `DATABASE_URL` inventory (branch-specific Preview, Development rule).
+B2 credential-handling rules; connection test via libpq env vars, not argv. Adjusted: the Neon SQL editor is
+**not** accepted as the test, because it doesn't authenticate with the role's password. B3 whole-body `try`,
+Symbol/Proxy criterion 6a. Also: COMPLETE/PAUSED phase semantics, Phase 1 Sentry per-event classification,
+Phase 5 tree-diff causality.

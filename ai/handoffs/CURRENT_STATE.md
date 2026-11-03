@@ -9,7 +9,9 @@ the dependency bump**.
   G2 (the migrator decides identically on all 8 points), G5 (pass), and the G4 0.29.5 half.
 - Red: confirmed against a stub `pgError.js` that Connor created, because the kit rejects a missing-module Red.
 - Green on 0.29.5: `isUniqueViolation` is implemented, and `householdService` uses it in both retry loops.
-- Still on 0.29.5: `server/package*.json` are untouched. Nothing is committed.
+- Still on 0.29.5: `server/package*.json` are untouched. Green work is committed (`11d8417`).
+- Side work this session: TASK-072 spec (production health + updates) went through architect rounds 1–2 and is
+  at DRAFT-3 (reviewer: approve after round-2 fixes, which DRAFT-3 makes). Not approved by Connor yet.
 
 # Files Modified
 
@@ -55,12 +57,17 @@ Editing: server manifests/lockfile, docs. Requires: G6 (Connor). Irrelevant: cli
    "after" ledger (must equal `4ece5377…`), AC1 (`npm ls` + audit), AC7 (`git diff --stat`). Docs updates.
 4. Then: commit, and the staging smoke (Connor runs the ledger query before/after). Load the `migrations` skill
    before any push.
-5. Connor: G6, `vercel login`, the Neon password rotation, the TASK-072 review.
+5. Connor: G6, `vercel login`, TASK-072 DRAFT-3 approval and its gate answers (Q1, Q3, Q4, Q5).
+6. TASK-072 DRAFT-4 (small): resolve the two notes at the top of the spec. Phase 4 is likely moot (lint is
+   already 0 via the `.claude/` ignore in `e3fe613`), and its "TASK-072 before TASK-071" order is stale because
+   TASK-071 is underway. The spec is ~32KB (budget 15KB); splitting Phase 3 out into its own TASK is the cleanest cut.
 
 # Known Risks / Open Questions
 
 - Local `search_documents` is empty, so G4(B) uses a typed `timestamptz` literal as a substitute (recorded in §11).
 - The zod GHSA-mrhx exposure is unmitigated (TASK-075 on hold). The TASK-071 spec is 32KB, over the 15KB budget.
+- TASK-072 Phase 3 (Neon password rotation) is a deliberate production outage. Only Connor runs it, and only after
+  its G1–G3 gates. Approving the spec doesn't authorize it, or the Phase 1 production smoke test.
 
 # Verification Results
 
@@ -90,6 +97,7 @@ In a fresh session, start at §9 Order step 7 (the bump), using the commands in 
 
 ## Archived History
 
+- TASK-072 spec drafting (DRAFT-1…3): see [TASK-072](../tasks/TASK-072-production-health-and-updates.md) "Changes"
 - TASK-071 spec drafting (DRAFT-1…5): commits `2f444d6`, `9a13de8`, `23c3f4d`, `da6666b`, `430972b`; round tables in TASK-071
 - TASK-070 (non-breaking dependency fixes, shipped 2026-11-03): see [TASK-070](../tasks/TASK-070-dependency-security.md)
 - TASK-069 (semantic retrieval, shipped to production): see [archive/TASK-069.md](archive/TASK-069.md)
