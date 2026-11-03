@@ -1,24 +1,22 @@
 # Task
 
-TASK-072: production health and outstanding updates (approved DRAFT-3). **Phase 1 is COMPLETE; next is Phase 2**
-(stop reporting 4xx errors to Sentry, TDD). TASK-071 is paused at §9 step 7 (see Archived History).
+TASK-072: production health and outstanding updates (approved DRAFT-3). Phase 1 is COMPLETE. **Phase 2 is Green
+and pushed to `staging`; AC7 (staging probe) is next, when Connor triggers it.** TASK-071 is paused at §9 step 7.
 
 # Current Status
 
-- Phase 1 (production smoke test) was run 2026-11-03 by Claude in Chrome as Connor's signed-in session, at Connor's
-  request. Rows 1–6, 8 and 9 pass. Connor marked it COMPLETE. Results are in the TASK-072 Phase 1 Results block.
-- Production's pantry and recipes are empty, and Connor says that's expected (an earlier chat "compost all" request
-  cleared the pantry). All test data was deleted, and the Blob image now returns 404.
-- No code changed this session.
+- Phase 1 (production smoke test, 2026-11-03): rows 1–6, 8 and 9 pass; Connor marked it COMPLETE.
+- Phase 2: `shouldReportError(err)` added to `server/instrument.js`. `server/app.js`'s error handler now captures
+  and flushes only when it returns true (5xx or no status). 4xx errors are no longer sent to Sentry.
 
 # Files Modified
 
-- `ai/tasks/TASK-072-production-health-and-updates.md` (Phase 1 Results only), this file,
-  new `ai/handoffs/archive/TASK-071-green-handoff.md` (TASK-071's handoff, moved unchanged).
+- `server/instrument.js` (new export), `server/app.js` (gated capture and flush), new `server/shouldReportError.test.js`.
+- `ai/tasks/TASK-072-production-health-and-updates.md` (Phase 1 and Phase 2 Results), this file.
 
 # Files Required Next
 
-- Phase 2: `server/instrument.js`, `server/instrument.test.js`, `server/app.js` (error handler, ~lines 73–83).
+- None for AC7/AC8 (manual probes plus a Sentry check).
 
 # Files Already Reviewed
 
@@ -26,7 +24,7 @@ TASK-072: production health and outstanding updates (approved DRAFT-3). **Phase 
 
 # Dependency Chain
 
-Editing (P2): `server/instrument.js`, `server/instrument.test.js`, `server/app.js`. Requires: Q1 answered.
+Edited (P2): `server/instrument.js`, `server/app.js`, `server/shouldReportError.test.js`. Q1 answered.
 Irrelevant: client, `clerkAuth.js` (forbidden), migrations, `package*.json`.
 
 # Architecture Notes
@@ -38,11 +36,15 @@ Irrelevant: client, `clerkAuth.js` (forbidden), migrations, `package*.json`.
 - Row 2's pass condition was relaxed to "renders, 200, correct account", because the account is empty by design.
 - Row 4 used a test recipe created in-session, since Connor had no saved recipes.
 - Phase 1 counts as COMPLETE with row 7 (cron) left as a carried-over check, not a failure.
+- Q1 = out completely (Connor: "nevermind, proceed", after first raising warning/sampled).
+- Phase 2 tests are in the new file `server/shouldReportError.test.js` (Connor: "New test file"), because
+  `server/instrument.test.js` is locked append-only. No `approve_test_rewrite.sh` was used.
 
 # Remaining Work
 
-1. **Q1 (gate for Phase 2):** Connor's answer is still needed. The recommendation is "out completely" (the spec's contract).
-2. Phase 2 per the spec: Red (AC 1–6a) → Green → `npm test` and lint → push `staging` → stop. AC 7/8 run when Connor triggers them.
+1. Phase 2 AC7 (Connor triggers): after the staging deploy, an unauthenticated `curl` to `/api/pantry` returns 401
+   `{"error":"Authentication required"}`, with no new SERVER-2 event for the staging SHA within 5 min. Then
+   fast-forward `main` → AC8 (same probe on production; Connor resolves KITCHEN-KEEPER-SERVER-2).
 3. Connor: check the `/api/push/cron` logs within about an hour after an 08:00Z run (Hobby log retention is about 1 h).
 4. TASK-072 DRAFT-4 items (still open): Phase 4 is likely moot (lint is already 0 via the `.claude/` ignore), and
    Phase 5 should be ordered after TASK-071's bump. The spec is 35KB against a 15KB budget.
@@ -51,7 +53,7 @@ Irrelevant: client, `clerkAuth.js` (forbidden), migrations, `package*.json`.
 
 # Known Risks / Open Questions
 
-- Q1, Q3, Q5 and Q6 are unanswered. Phase 3 is a deliberate production outage, run by Connor only.
+- Q3, Q5 and Q6 are unanswered. Phase 3 is a deliberate production outage, run by Connor only.
 - The zod GHSA-mrhx exposure is unmitigated (TASK-075 on hold).
 
 # Verification Results
@@ -59,10 +61,12 @@ Irrelevant: client, `clerkAuth.js` (forbidden), migrations, `package*.json`.
 - Phase 1: health 200; Neon write and reload OK; Blob 200 image/jpeg; chat retrieval returned the exact ingredients;
   production deploy `e3fe613` Ready; Neon 0.11 CU-hrs used (Free plan, Vercel-managed), not suspended; Sentry
   showed no new issues or events (SERVER-2 at 505).
+- Phase 2: Red 8/8 (`shouldReportError is not a function`) → Green 8/8. Root `npm test` exit 0 (118 + 245 pass,
+  0 skipped); `npm run lint` exit 0.
 
 # Recommended Next Action
 
-In a fresh session: get Connor's Q1 answer, then start TASK-072 Phase 2 Red (`server/instrument.test.js`, AC 1–6a).
+When Connor triggers it: run Phase 2 AC7 on staging, then fast-forward `main` and run AC8.
 
 # Forbidden Exploration
 
@@ -72,7 +76,7 @@ In a fresh session: get Connor's Q1 answer, then start TASK-072 Phase 2 Red (`se
 
 - Branch: `staging`. No worktree. The TDD enforcement kit is installed; run kit commands from the repo root.
 - Stray untracked `ai/.claude/` and `server/.claude/` hold TDD-hook state; they're safe to delete and not committed.
-- Context pressure: high (this session). Start fresh.
+- Context pressure: high (this session). Start fresh for anything after AC7/AC8.
 
 ---
 

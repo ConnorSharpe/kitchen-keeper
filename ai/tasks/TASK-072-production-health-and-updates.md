@@ -181,7 +181,15 @@ both `status` and `statusCode`, so it is covered by `status`.)
 runs the server tests) and `npm run lint` show no new failures → push `staging` → stop ("pushed") →
 criterion 7 when Connor triggers it → fast-forward `main` → stop ("pushed") → criterion 8 when Connor triggers it.
 
-**Results:** _(empty)_
+**Results** (2026-11-03):
+- Q1 answered by Connor ("nevermind, proceed" after first raising warning/sampled) = out completely, as contracted.
+- Tests are in a new file, `server/shouldReportError.test.js` (Connor: "New test file"), because
+  `server/instrument.test.js` is locked append-only and appending was denied by the hook. Same Sentry mock pattern.
+- Red: 8/8 tests (criteria 1–6a) failed with `TypeError: instrument.shouldReportError is not a function`.
+- Green: `shouldReportError` exported from `server/instrument.js`; `server/app.js` calls `captureExceptionSafely`
+  and `flush(2000)` only when it returns true. Nothing else in the handler changed.
+- Root `npm test`: exit 0 (118 + 245 pass, 0 fail, 0 skipped). `npm run lint`: exit 0.
+- Criteria 7 and 8: not run; they wait for Connor to trigger them after the staging deploy and the promotion to main.
 
 ---
 

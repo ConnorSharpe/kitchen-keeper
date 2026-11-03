@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { captureExceptionSafely, flush } from './instrument.js';
+import { captureExceptionSafely, flush, shouldReportError } from './instrument.js';
 import 'express-async-errors';
 import express from 'express';
 import cors from 'cors';
@@ -72,10 +72,12 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
 app.use(async (err, req, res, _next) => {
   console.error(err.stack);
-  captureExceptionSafely(err);
-  // Bounded wait so an already-degraded error response doesn't incur unbounded extra latency —
-  // see instrument.js's flush() for why this call exists here, not inside captureExceptionSafely().
-  await flush(2000);
+  if (shouldReportError(err)) {
+    captureExceptionSafely(err);
+    // Bounded wait so an already-degraded error response doesn't incur unbounded extra latency —
+    // see instrument.js's flush() for why this call exists here, not inside captureExceptionSafely().
+    await flush(2000);
+  }
   const status = err.status || 500;
   const message = (err.expose || status < 500) ? err.message : 'Internal server error';
   const body = { error: message };

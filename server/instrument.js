@@ -37,6 +37,19 @@ export function flush(timeoutMs) {
   return Sentry.flush(timeoutMs);
 }
 
+// TASK-072 Phase 2: decides whether app.js's error middleware captures and flushes. Reads the
+// same status the handler responds with (err.status || 500), so a statusCode-only error the
+// handler answers with 500 is still reported. 4xx responses are expected client errors and are
+// not sent to Sentry. Never throws: any failure reading or comparing the status reports (true).
+export function shouldReportError(err) {
+  try {
+    const status = err?.status || 500;
+    return status >= 500;
+  } catch {
+    return true;
+  }
+}
+
 // TASK-069 §2.11: server counterpart of the client's logEvent(). Same flat-primitive shape rule
 // as the client's validateTelemetryShape (strings truncated; nested objects/arrays dropped), and
 // the same never-throw contract as captureExceptionSafely(). Kept separate from the client
