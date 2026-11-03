@@ -1,10 +1,14 @@
 # Task
 
-No implementation in progress. TASK-071 (drizzle-orm 0.29.5 → 0.45.4) is at **DRAFT-3, waiting for architect
-round-3 review** (round 2 said "close to approval"). TASK-072 (production health) is still at DRAFT-1, waiting for review.
+No implementation in progress. TASK-071 (drizzle-orm 0.29.5 → 0.45.4) is at **DRAFT-4, waiting for architect
+round-4 review** (round 3: one blocker; the architect expects to approve). TASK-072 (production health) is still at DRAFT-1, waiting for review.
 
 # Current Status
 
+- TASK-071 DRAFT-4 (round 3, one blocker): the AC3 dbtest isolation contract. Codes are generated per run and
+  verified absent; cleanup is only by captured PKs, rows referencing them, or the synthetic `clerkUserId`
+  (never by join code); before/after counts are compared. Author additions: a separate C2 for 3b and 3c, and
+  the `clerkUserId` selector covers a `getOrCreate` that rejects after its insert.
 - TASK-071 DRAFT-3 (round 2): B1: the fingerprint-change "auto-revert" was replaced with a 6-step incident
   procedure (❌ row in MIGRATION_LEDGER.md, preserve listings, find the SQL that executed, no hand edits, no
   revert without a reviewed plan). B2: the Order list was reformatted one step per line, because markdown had
@@ -24,7 +28,7 @@ round-3 review** (round 2 said "close to approval"). TASK-072 (production health
 
 # Files Modified
 
-- `ai/tasks/TASK-071-dependency-security-phase-b.md` (DRAFT-3), this file. Docs only; no code changed.
+- `ai/tasks/TASK-071-dependency-security-phase-b.md` (DRAFT-4), this file. Docs only; no code changed.
 
 # Files Required Next
 
@@ -38,7 +42,7 @@ round-3 review** (round 2 said "close to approval"). TASK-072 (production health
 
 # Remaining Work
 
-- Connor: send TASK-071 DRAFT-3 for architect round-3 review; review TASK-072 and answer its open questions (4xx in
+- Connor: send TASK-071 DRAFT-4 for architect round-4 review; review TASK-072 and answer its open questions (4xx in
   Sentry, `www`, downtime window for the password rotation, Fly.io).
 - Connor: run `vercel login` (the CLI token is invalid). Rotate the Neon `neondb_owner` password (TASK-072 Phase 3).
 - Connor: record the Vercel project Node version in CONVENTIONS.md (TASK-071 G6; blocks TASK-073/074).
@@ -57,7 +61,7 @@ round-3 review** (round 2 said "close to approval"). TASK-072 (production health
 
 # Recommended Next Action
 
-When the TASK-071 round-3 review comes back, critically assess each finding, then produce DRAFT-3 or mark it approved.
+When the TASK-071 round-4 review comes back, critically assess each finding, then produce DRAFT-3 or mark it approved.
 Implementation starts at §9 Order step 1 (G1), after TASK-070 is confirmed on `staging`.
 
 # Forbidden Exploration
@@ -78,7 +82,7 @@ Implementation starts at §9 Order step 1 (G1), after TASK-070 is confirmed on `
 
 ## Archived History
 
-- TASK-071 DRAFT-2: see commit `9a13de8`. DRAFT-1 + TASK-072 spec-drafting: see commit `2f444d6`
+- TASK-071 DRAFT-3: `23c3f4d`; DRAFT-2: `9a13de8`. DRAFT-1 + TASK-072 spec-drafting: see commit `2f444d6`
 - TASK-070 (non-breaking dependency fixes, shipped 2026-11-03): see [TASK-070](../tasks/TASK-070-dependency-security.md)
 - TASK-069 (semantic retrieval: pgvector + hybrid search + eval harness, shipped to production): see [archive/TASK-069.md](archive/TASK-069.md)
 

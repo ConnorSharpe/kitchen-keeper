@@ -1,6 +1,6 @@
 # TASK-071 — Dependency Security Update (Phase B: breaking upgrades)
 
-Version: DRAFT-3 (2026-11-03). Spec only; nothing implemented. For architect re-review (round 3).
+Version: DRAFT-4 (2026-11-03). Spec only; nothing implemented. For architect re-review (round 4).
 
 Phase A is TASK-070 (non-breaking `npm audit` fixes). Every production advisory still open needs a major
 upgrade. This file recommends the split (§2) and fully specifies **TASK-071 = drizzle-orm 0.29.5 → 0.45.4**
@@ -31,6 +31,14 @@ upgrade. This file recommends the split (§2) and fully specifies **TASK-071 = d
 | N1 Q1 status | Accepted | §2 and §12 state the deferral/exposure/acceptance status separately |
 | N2 fingerprint | Accepted | `COALESCE` for an empty ledger; the listing is authoritative and the fingerprint is a comparison aid |
 | N3 cleanup | Accepted. Checked: `create()` writes only `households`; `getOrCreate()` writes `households` + an onboarding flow row (`onboardingService.upsertFlow`) | AC3 cleanup contract with identifiers and a post-cleanup zero-row check |
+
+**Round 3 (DRAFT-3 → DRAFT-4): request changes, one blocker.**
+
+| # | Assessment | Fix in DRAFT-4 |
+|---|---|---|
+| B1 cleanup can delete pre-existing rows | Accepted. `join_code` is unique, so if a chosen C1 already existed the seed insert would fail and the by-join-code cleanup would delete a household the test never created | AC3 isolation contract: per-run codes verified absent, cleanup only by captured PKs (+ the verified-absent synthetic `clerkUserId`), and a check that pre-existing rows are untouched |
+| (author) shared C2 | Found while revising: 3b and 3c both ended on one C2, so 3c would collide on C2 if 3b's row still existed and fail for the wrong reason | Each sub-test gets its own fresh C2 |
+| (author) uncaptured id | Found while revising: if `getOrCreate`'s insert succeeds and `upsertFlow` then throws, the household id is never returned | The synthetic `clerkUserId` (unique, verified absent) is an allowed cleanup selector |
 
 ## 0. Baseline (2026-11-03, `npm audit --omit=dev`, after TASK-070)
 
@@ -182,23 +190,36 @@ must return a 4-byte `Buffer`.
    k. a match at depth 5 (`err.cause` ×5 is the matching object) → true; the same match at depth 6 → false
    l. `{code:'23505', constraint:'households_join_code_unique', get cause() { throw … }}` → true (match is
       checked before `cause` is read)
-3. `joinCodeCollision.dbtest.js` (opt-in, local branch). **Cleanup contract:** the test leaves the branch as it
-   found it, even when an assertion fails partway. It deletes, in `finally` and children before parents, every
-   row the tested flows create, including dependent rows: `households` rows whose `join_code` is C1 or C2 or
-   whose id was returned by a call under test; the onboarding flow row(s) for the synthetic `clerkUserId`
-   (`getOrCreate` → `onboardingService.upsertFlow`); and any other row referencing those household ids or that
-   `clerkUserId`. The synthetic `clerkUserId` is unique per run (e.g. `t071_<random>`). After cleanup the test
-   asserts zero remaining rows for those join codes, household ids and `clerkUserId`. Setup: insert a household with join code `C1` =
-   `randomBytes`-shaped 8-char uppercase hex chosen by the test (e.g. from `Buffer.from([0xde,0xad,0xbe,0xef])`),
-   and pick a distinct fresh `C2`.
+3. `joinCodeCollision.dbtest.js` (opt-in, local branch). **Isolation contract:** the test leaves the branch
+   exactly as it found it, even when an assertion fails partway.
+   - **Identifiers, per run.** C1 and one C2 per sub-test (3b and 3c each get their own) are 8-char uppercase
+     hex generated fresh for each run, each from its own 4-byte `Buffer` (the mocked `randomBytes` returns those
+     buffers). The codes are generated without the mocked `randomBytes` (e.g. from `Math.random`). No fixed
+     literal codes. The synthetic `clerkUserId` is unique per run (e.g. `t071_<random>`).
+   - **Verified absent.** Before any insert, the test queries `households` for every generated join code and the
+     synthetic `clerkUserId`, and the onboarding flow table for that `clerkUserId`. If any match exists, it
+     regenerates that value and checks again (bounded, e.g. 5 tries, then fails with a clear message and writes
+     nothing).
+   - **Captured keys.** Each row the test inserts directly (the seed, and the 3a insert if it unexpectedly
+     succeeds) uses `.returning()` and its primary key is recorded. Every household id a call under test returns
+     is recorded the moment it resolves.
+   - **Cleanup selectors** (in `finally`, children before parents): only (i) the captured primary keys, (ii) rows
+     referencing those household ids, and (iii) rows keyed by the synthetic `clerkUserId`, which covers the
+     `getOrCreate` household and its onboarding flow row (`onboardingService.upsertFlow`) even if the call
+     rejects before returning an id. Rows are never deleted only because their join code matches a generated
+     code.
+   - **Post-cleanup checks.** Zero rows remain for the captured ids and the synthetic `clerkUserId`. Before setup
+     the test records `count(*)` of `households` and of the onboarding flow table. After cleanup both counts
+     are equal to those values. (Pre-existing rows are untouched; the local branch is single-user.)
+   Setup: insert the seed household with join code C1 (captured).
    a. **Error shape:** a drizzle `db.insert(households)` with `joinCode: C1` rejects with an error satisfying
       `isUniqueViolation(err, 'households_join_code_unique')`.
-   b. **Retry via `create(ownerName)`:** with `randomBytes` mocked to return the C1 bytes, then the C2 bytes,
-      `create('T071')` resolves to a household whose `joinCode === C2`. The mock was called exactly 2 times, and
-      exactly one new `households` row exists with `C2`.
-   c. **Retry via `getOrCreate(clerkUserId)`:** same mock sequence and a fresh synthetic `clerkUserId` with no
-      household: resolves to a household with `joinCode === C2` and `clerkUserId` equal to the input; mock called
-      2 times.
+   b. **Retry via `create(ownerName)`:** with `randomBytes` mocked to return the C1 bytes, then the 3b C2 bytes,
+      `create('T071')` resolves to a household whose `joinCode` is the 3b C2. The mock was called exactly 2
+      times, and exactly one `households` row has the 3b C2 (the captured one).
+   c. **Retry via `getOrCreate(clerkUserId)`:** the mock returns the C1 bytes, then the 3c C2 bytes, and the
+      synthetic `clerkUserId` has no household. It resolves to a household whose `joinCode` is the 3c C2 and
+      whose `clerkUserId` equals the input. The mock was called 2 times.
    d. **Exhaustion:** with the mock returning the C1 bytes on every call, `create('T071')` rejects with an error
       satisfying `isUniqueViolation`, after exactly 3 calls.
    All of 3a–d pass on 0.29.5 before the bump (with the Green `householdService`) and on 0.45.4 after. On 0.45.4,
